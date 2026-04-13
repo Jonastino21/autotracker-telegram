@@ -1,7 +1,3 @@
-"""
-tracker.py — Pipeline principal KAROKA avec émission WebSocket temps réel.
-"""
-
 import logging
 import os
 import sys
@@ -63,10 +59,10 @@ def ajouter_au_groupe(telegram_id, nom):
             )
             bot.send_message(
                 telegram_id,
-                f"✅ Bonjour *{nom}* !\n\n"
+                f"Bonjour *{nom}* !\n\n"
                 f"Voici votre lien personnel pour rejoindre le groupe de présence KAROKA :\n"
                 f"{invite.invite_link}\n\n"
-                f"⚠️ Ce lien est à usage unique et expire dans 24h."
+                f"Ce lien est à usage unique et expire dans 24h."
             )
             db.marquer_dans_groupe(telegram_id, True)
             logger.info("Lien invitation envoyé : telegram_id=%s (%s)", telegram_id, nom)
@@ -80,7 +76,7 @@ def ajouter_au_groupe(telegram_id, nom):
     logger.error("Impossible de créer le lien d'invitation pour %s", telegram_id)
     bot.send_message(
         telegram_id,
-        f"✅ Bonjour *{nom}* ! Votre compte est activé.\n\n"
+        f"Bonjour *{nom}* ! Votre compte est activé.\n\n"
         f"Votre responsable RH va vous ajouter dans le groupe *Présence KAROKA* manuellement.\n"
         f"Une fois ajouté(e), pointez avec *Bonjour* et *Au revoir* chaque jour."
     )
@@ -125,7 +121,7 @@ def process_group_message(message):
         try:
             bot.send_message(
                 telegram_id,
-                "⚠️ Compte non activé.\nEnvoyez votre *PRNO* en message privé pour l'activer."
+                "Compte non activé.\nEnvoyez votre *PRNO* en message privé pour l'activer."
             )
         except Exception:
             pass
@@ -147,7 +143,7 @@ def process_group_message(message):
     if inserted:
         type_label    = "Arrivée" if type_pointage == "arrivee" else "Départ"
         session_label = "matin" if session == "matin" else "après-midi"
-        logger.info("✅ %s — %s [%s] %s à %s", prno, type_label, session_label, date_local, heure_locale)
+        logger.info("%s — %s [%s] %s à %s", prno, type_label, session_label, date_local, heure_locale)
 
         # Émettre l'événement WebSocket temps réel
         payload = {
@@ -183,12 +179,12 @@ def process_private_message(message):
         liaison = db.get_liaison(telegram_id)
         if liaison:
             bot.send_message(telegram_id,
-                f"✅ Déjà enregistré(e) : *{liaison['nom_complet']}*\nPRNO : `{liaison['prno']}`\n\n"
+                f"Déjà enregistré(e) : *{liaison['nom_complet']}*\nPRNO : `{liaison['prno']}`\n\n"
                 f"Pointez avec *Bonjour* et *Au revoir* dans le groupe.")
         else:
             bot.send_message(telegram_id,
-                f"👋 Bienvenue sur le système de présence *KAROKA*{', '+prenom if prenom else ''} !\n\n"
-                f"Envoyez votre *PRNO* (code fourni par le RH) pour activer votre compte.\nEx : `pira`")
+                f"Bienvenue sur le système de présence *KAROKA*{', '+prenom if prenom else ''} !\n\n"
+                f"Envoyez votre *PRNO* (code fourni par le RH) pour activer votre compte.")
         return
 
     resultat = db.creer_liaison(telegram_id, text, username)
