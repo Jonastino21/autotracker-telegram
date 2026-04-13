@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KAROKA — Dashboard Présences</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+:root{
+  /* Sidebar dark */
+  --sidebar-bg:#1A1F2E;--sidebar-text:#E8EDF2;--sidebar-muted:#7B8BA8;--sidebar-active:#FFFFFF;--sidebar-hover:rgba(255,255,255,0.07);
+  /* Main area light */
+  --main-bg:#F0F2F8;--main-bg2:#E8EBF4;--card-bg:#FFFFFF;--card-shadow:0 2px 12px rgba(0,0,0,0.07);
+  /* Content text */
+  --text:#1A1F2E;--text-dim:#5A6A82;--text-muted:#9AAABB;
+  /* Accent */
+  --teal:#00BFA5;--teal-dark:#00897B;--teal-glow:rgba(0,191,165,0.15);
+  /* Status */
+  --amber:#FFB300;--amber-soft:rgba(255,179,0,0.12);
+  --red:#EF5350;--red-soft:rgba(239,83,80,0.12);
+  --green:#4CAF50;--green-soft:rgba(76,175,80,0.12);
+  --purple:#9C27B0;--purple-soft:rgba(156,39,176,0.12);
+  /* Borders */
+  --border:rgba(0,0,0,0.07);--border-mid:rgba(0,191,165,0.2);
+  /* Periods */
+  --navy-mid:#2A3347;
+  --radius:12px;--radius-lg:18px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--main-bg);color:var(--text);min-height:100vh;display:flex;overflow-x:hidden;}
+
+/* ── SIDEBAR ─────────────────────────────────────────────── */
+.sidebar{width:220px;min-height:100vh;background:var(--sidebar-bg);display:flex;flex-direction:column;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto;padding:28px 0 24px;}
+.sidebar-logo{display:flex;align-items:center;gap:10px;padding:0 24px 28px;}
+.logo-mark{width:38px;height:38px;background:linear-gradient(135deg,var(--teal),var(--teal-dark));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:white;box-shadow:0 0 16px rgba(0,191,165,0.35);flex-shrink:0;}
+.logo-text{font-size:17px;font-weight:700;color:var(--sidebar-text);}
+.logo-sub{font-size:10px;color:var(--sidebar-muted);letter-spacing:1.5px;text-transform:uppercase;}
+.sidebar-profile{display:flex;flex-direction:column;align-items:center;padding:0 24px 28px;border-bottom:1px solid rgba(255,255,255,0.07);margin-bottom:20px;}
+.profile-avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--teal-dark),var(--teal));display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:white;margin-bottom:12px;position:relative;box-shadow:0 0 0 3px rgba(0,191,165,0.3);}
+.profile-badge{position:absolute;top:-2px;right:-2px;width:18px;height:18px;background:var(--red);border-radius:50%;font-size:9px;font-weight:700;color:white;display:flex;align-items:center;justify-content:center;border:2px solid var(--sidebar-bg);}
+.profile-name{font-size:15px;font-weight:600;color:var(--sidebar-active);margin-bottom:3px;}
+.profile-email{font-size:11px;color:var(--sidebar-muted);}
+.sidebar-nav{display:flex;flex-direction:column;gap:2px;padding:0 12px;flex:1;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:500;color:var(--sidebar-muted);text-decoration:none;cursor:pointer;transition:all 0.2s;border:none;background:transparent;font-family:'DM Sans',sans-serif;width:100%;text-align:left;}
+.nav-item:hover{color:var(--sidebar-active);background:var(--sidebar-hover);}
+.nav-item.active{color:var(--sidebar-active);background:rgba(255,255,255,0.1);font-weight:600;}
+.nav-icon{font-size:15px;width:20px;text-align:center;flex-shrink:0;}
+.sidebar-footer{padding:16px 12px 0;border-top:1px solid rgba(255,255,255,0.07);margin-top:auto;display:flex;flex-direction:column;gap:6px;}
+.live-badge{display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;font-size:11px;color:var(--teal);background:var(--teal-glow);}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--teal);animation:pulse 1.5s infinite;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.3;transform:scale(0.6);}}
+
+/* ── MAIN WRAPPER ────────────────────────────────────────── */
+.page-body{flex:1;display:flex;flex-direction:column;min-width:0;}
+header{display:none;}/* header replaced by sidebar */
+
+/* ── TOP BAR ────────────────────────────────────────────── */
+.topbar{display:flex;align-items:center;gap:12px;padding:20px 28px 0;flex-shrink:0;}
+.topbar-title{font-size:22px;font-weight:700;color:var(--text);flex:1;}
+.topbar-sub{font-size:12px;color:var(--text-dim);}
+.date-picker-wrap{display:flex;align-items:center;gap:8px;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:7px 14px;box-shadow:var(--card-shadow);}
+.date-picker-wrap label{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;}
+input[type="date"]{background:transparent;border:none;color:var(--teal);font-family:'DM Mono',monospace;font-size:13px;outline:none;cursor:pointer;}
+input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1) hue-rotate(130deg);cursor:pointer;}
+.btn-excel{background:linear-gradient(135deg,#2E7D32,#43A047);color:white;border:none;border-radius:var(--radius);padding:8px 16px;font-size:12px;font-family:'DM Sans',sans-serif;font-weight:600;cursor:pointer;text-decoration:none;transition:opacity 0.2s;box-shadow:0 2px 8px rgba(46,125,50,0.3);}
+.btn-excel:hover{opacity:0.88;}
+.nav-btn{display:flex;align-items:center;gap:6px;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:8px 14px;font-size:12px;font-weight:500;color:var(--text-dim);text-decoration:none;transition:all 0.2s;cursor:pointer;box-shadow:var(--card-shadow);}
+.nav-btn:hover{color:var(--teal);border-color:var(--border-mid);}
+
+/* ── STAT CARDS ─────────────────────────────────────────── */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding:20px 28px 0;position:relative;z-index:1;}
+.stat-card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px 22px;position:relative;overflow:hidden;transition:transform 0.2s,box-shadow 0.2s;box-shadow:var(--card-shadow);}
+.stat-card:hover{transform:translateY(-2px);box-shadow:0 6px 24px rgba(0,0,0,0.1);}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;border-radius:var(--radius-lg) var(--radius-lg) 0 0;}
+.stat-card.total::before{background:linear-gradient(90deg,var(--teal),var(--teal-dark));}
+.stat-card.complet::before{background:linear-gradient(90deg,var(--green),#388E3C);}
+.stat-card.incomplet::before{background:linear-gradient(90deg,var(--amber),#F57F17);}
+.stat-card.absent::before{background:linear-gradient(90deg,var(--red),#C62828);}
+.stat-label{font-size:11px;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-dim);margin-bottom:8px;font-weight:600;}
+.stat-value{font-size:36px;font-weight:700;line-height:1;letter-spacing:-1px;}
+.stat-card.total .stat-value{color:var(--teal);}
+.stat-card.complet .stat-value{color:var(--green);}
+.stat-card.incomplet .stat-value{color:var(--amber);}
+.stat-card.absent .stat-value{color:var(--red);}
+.stat-icon{position:absolute;right:18px;top:18px;font-size:22px;opacity:0.12;}
+
+/* ── TABS ────────────────────────────────────────────────── */
+.tabs-wrap{padding:20px 28px 0;position:relative;z-index:1;}
+.tabs{display:flex;gap:4px;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:5px;width:fit-content;box-shadow:var(--card-shadow);}
+.tab-btn{background:transparent;border:none;color:var(--text-dim);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;padding:8px 18px;border-radius:10px;cursor:pointer;transition:all 0.2s;white-space:nowrap;}
+.tab-btn:hover{color:var(--text);background:rgba(0,0,0,0.05);}
+.tab-btn.active{background:linear-gradient(135deg,var(--teal-dark),var(--teal));color:white;font-weight:600;box-shadow:0 2px 12px rgba(0,191,165,0.3);}
+
+/* ── TABLE CARD ─────────────────────────────────────────── */
+.main-content{padding:20px 28px 40px;position:relative;z-index:1;}
+.table-card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--card-shadow);}
+.table-header{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.table-title{font-size:15px;font-weight:700;color:var(--text);}
+.table-subtitle{font-size:12px;color:var(--text-dim);margin-top:2px;}
+.search-box{background:var(--main-bg);border:1px solid var(--border);border-radius:8px;padding:8px 14px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;width:200px;transition:border-color 0.2s;}
+.search-box:focus{border-color:var(--teal);}
+.search-box::placeholder{color:var(--text-muted);}
+
+/* ── DATA TABLE ─────────────────────────────────────────── */
+.data-table{width:100%;border-collapse:collapse;font-size:13px;}
+.data-table th{background:var(--main-bg);color:var(--text-dim);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.8px;padding:10px 14px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--border);}
+.data-table td{padding:10px 14px;border-bottom:1px solid var(--border);font-family:'DM Mono',monospace;font-size:12px;white-space:nowrap;color:var(--text);}
+.data-table tr:last-child td{border-bottom:none;}
+.data-table tr:hover td{background:rgba(0,191,165,0.04);}
+.td-name{font-family:'DM Sans',sans-serif !important;font-weight:500;color:var(--text);}
+.td-prno{color:var(--teal);font-weight:600;}
+.td-time{color:var(--text);}
+.td-empty{color:var(--text-muted);}
+.td-dur{color:var(--text-dim);}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;font-family:'DM Sans',sans-serif;letter-spacing:0.3px;}
+.badge-complet{background:var(--green-soft);color:#2E7D32;border:1px solid rgba(76,175,80,0.3);}
+.badge-incomplet{background:var(--amber-soft);color:#E65100;border:1px solid rgba(255,179,0,0.3);}
+.badge-absent{background:var(--red-soft);color:#C62828;border:1px solid rgba(239,83,80,0.3);}
+.badge-ferie{background:var(--purple-soft);color:#6A1B9A;border:1px solid rgba(156,39,176,0.3);}
+
+/* ── PERIOD TABLE ────────────────────────────────────────── */
+.periode-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.periode-table{width:100%;border-collapse:collapse;font-size:12px;min-width:600px;}
+.periode-table th{background:var(--main-bg);color:var(--text-dim);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;padding:8px 10px;border:1px solid var(--border);white-space:nowrap;cursor:pointer;text-align:center;}
+.periode-table th:hover{color:var(--teal);}
+.periode-table th.th-ferie{background:rgba(156,39,176,0.08);color:var(--purple);}
+.periode-table td{border:1px solid var(--border);padding:7px 8px;text-align:center;font-size:11px;transition:filter 0.15s;}
+.periode-table td:hover{filter:brightness(0.95);cursor:pointer;}
+.periode-table .td-prno-col{font-family:'DM Mono',monospace;color:var(--teal);font-weight:500;font-size:11px;text-align:left;padding-left:14px;background:var(--main-bg);white-space:nowrap;}
+.periode-table .td-nom-col{font-family:'DM Sans',sans-serif;color:var(--text);font-weight:500;text-align:left;padding-left:10px;background:var(--main-bg);white-space:nowrap;min-width:140px;}
+.cel-complet{background:rgba(76,175,80,0.14);color:#2E7D32;font-weight:600;}
+.cel-incomplet{background:rgba(255,179,0,0.14);color:#E65100;font-weight:600;}
+.cel-absent{background:rgba(239,83,80,0.1);color:#C62828;font-weight:600;}
+.cel-ferie{background:rgba(156,39,176,0.1);color:#6A1B9A;font-weight:600;}
+/* period summary columns */
+.periode-table td[style*="navy-mid"]{background:var(--main-bg2) !important;}
+
+/* ── MODAL ───────────────────────────────────────────────── */
+.loading-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px;gap:16px;color:var(--text-dim);}
+.spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--teal);border-radius:50%;animation:spin 0.8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(6px);z-index:500;align-items:center;justify-content:center;padding:20px;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-lg);width:100%;max-width:960px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,0.18);animation:modalIn 0.2s ease;}
+@keyframes modalIn{from{opacity:0;transform:scale(0.96) translateY(10px);}to{opacity:1;transform:none;}}
+.modal-header{padding:20px 26px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;flex-shrink:0;}
+.modal-date-badge{background:var(--teal-glow);border:1px solid var(--border-mid);border-radius:8px;padding:4px 12px;font-family:'DM Mono',monospace;font-size:13px;color:var(--teal);font-weight:600;}
+.modal-title{font-size:17px;font-weight:700;color:var(--text);}
+.modal-close{margin-left:auto;background:var(--main-bg);border:1px solid var(--border);border-radius:8px;color:var(--text-dim);width:32px;height:32px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all 0.15s;}
+.modal-close:hover{background:var(--red-soft);color:var(--red);}
+.modal-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:16px 26px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.modal-stat{background:var(--main-bg);border:1px solid var(--border);border-radius:10px;padding:12px 16px;text-align:center;}
+.modal-stat-label{font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-dim);font-weight:600;}
+.modal-stat-value{font-size:26px;font-weight:700;margin-top:4px;}
+.modal-stat.total .modal-stat-value{color:var(--teal);}
+.modal-stat.complet .modal-stat-value{color:var(--green);}
+.modal-stat.incomplet .modal-stat-value{color:var(--amber);}
+.modal-stat.absent .modal-stat-value{color:var(--red);}
+.modal-body{overflow-y:auto;flex:1;padding:0;}
+#toast{position:fixed;bottom:24px;right:24px;z-index:999;display:flex;flex-direction:column;gap:8px;pointer-events:none;}
+.toast-item{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;font-size:13px;display:flex;align-items:center;gap:10px;transform:translateX(120px);opacity:0;transition:all 0.3s;pointer-events:none;max-width:320px;box-shadow:0 4px 20px rgba(0,0,0,0.12);}
+.toast-item.show{transform:none;opacity:1;}
+.toast-item.pointage{border-left:3px solid var(--teal);}
+.toast-avatar{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--teal-dark),var(--teal));display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:white;flex-shrink:0;}
+.toast-content{flex:1;}
+.toast-name{font-weight:600;color:var(--text);font-size:13px;}
+.toast-detail{font-size:11px;color:var(--text-dim);margin-top:2px;}
+.ferie-banner{background:rgba(156,39,176,0.07);border:1px solid rgba(156,39,176,0.25);border-radius:var(--radius);padding:10px 16px;margin:12px 16px 0;display:flex;align-items:center;gap:10px;font-size:13px;color:#6A1B9A;}
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.15);border-radius:3px;}
+@media(max-width:900px){
+  .sidebar{width:64px;}
+  .sidebar-profile,.profile-name,.profile-email,.nav-item span,.logo-text,.logo-sub,.sidebar-footer .live-badge span{display:none;}
+  .nav-item{justify-content:center;padding:12px;}
+  .nav-icon{width:auto;}
+}
+@media(max-width:640px){
+  .stats-row{grid-template-columns:repeat(2,1fr);}
+  .stats-row,.tabs-wrap,.main-content,.topbar{padding-left:16px;padding-right:16px;}
+  .modal-stats{grid-template-columns:repeat(2,1fr);}
+}
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-mark">K</div>
+    <div><div class="logo-text">KAROKA</div><div class="logo-sub">Présences</div></div>
+  </div>
+  <div class="sidebar-profile">
+    <div class="profile-avatar">
+      {{ username[0]|upper if username else 'U' }}
+      <div class="profile-badge">4</div>
+    </div>
+    <div class="profile-name">{{ username or 'Utilisateur' }}</div>
+    <div class="profile-email">{{ username or '' }}@karoka.mg</div>
+  </div>
+  <nav class="sidebar-nav">
+    <a href="#" class="nav-item active" onclick="return false"><span class="nav-icon">◉</span><span>Présences</span></a>
+    <a href="/admin" class="nav-item"><span class="nav-icon">◎</span><span>Admin</span></a>
+  </nav>
+  <div class="sidebar-footer">
+
+    <a href="/logout" class="nav-item"><span class="nav-icon">←</span><span>Déconnexion</span></a>
+  </div>
+</aside>
+
+<!-- PAGE BODY -->
+<div class="page-body">
+
+<!-- hidden header kept for compatibility but not shown -->
+<header style="display:none">
+    <div><div class="logo-text">KAROKA</div><div class="logo-sub">Présences</div></div>
+
+  <div class="header-right">
+    <div class="date-picker-wrap">
+      <label>Date</label>
+      <input type="date" id="globalDate" onchange="onDateChange(this.value)">
+    </div>
+    <div class="live-badge"><div class="live-dot"></div><span>Temps réel</span></div>
+    <a href="/admin" class="nav-btn">Admin</a>
+    <a href="/api/download_excel" class="btn-excel">Exporter Excel</a>
+    <a href="/logout" class="nav-btn">{{ username }}</a>
+  </div>
+</header>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div>
+    <div class="topbar-title">Présences</div>
+  </div>
+  <div class="date-picker-wrap">
+    <label>Date</label>
+    <input type="date" id="globalDate" onchange="onDateChange(this.value)">
+  </div>
+  <a href="/api/download_excel" class="btn-excel">Exporter Excel</a>
+</div>
+
+<div class="stats-row">
+  <div class="stat-card total"><div class="stat-label">Total</div><div class="stat-value" id="statTotal">—</div></div>
+  <div class="stat-card complet"><div class="stat-label">Complets</div><div class="stat-value" id="statComplets">—</div></div>
+  <div class="stat-card incomplet"><div class="stat-label">Incomplets</div><div class="stat-value" id="statIncomplets">—</div></div>
+  <div class="stat-card absent"><div class="stat-label">Absents</div><div class="stat-value" id="statAbsents">—</div></div>
+</div>
+
+<div class="tabs-wrap">
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('jour')">Jour</button>
+    <button class="tab-btn" onclick="switchTab('semaine')">Semaine</button>
+    <button class="tab-btn" onclick="switchTab('mois')">Mois</button>
+    <button class="tab-btn" onclick="switchTab('trimestre')">Trimestre</button>
+    <button class="tab-btn" onclick="switchTab('semestre')">Semestre</button>
+    <button class="tab-btn" onclick="switchTab('annee')">Année</button>
+  </div>
+</div>
+
+<div class="main-content">
+  <div class="table-card" id="tableCard">
+    <div class="table-header">
+      <div><div class="table-title" id="tableTitle">Présences du jour</div><div class="table-subtitle" id="tableSubtitle">Chargement...</div></div>
+      <input type="text" class="search-box" id="searchBox" placeholder="Rechercher..." oninput="filterTable()">
+    </div>
+    <div id="ferierBanner"></div>
+    <div id="tableBody"><div class="loading-state"><div class="spinner"></div><span>Chargement...</span></div></div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModalOnBg(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-date-badge" id="modalDate">—</div>
+      <div class="modal-title" id="modalTitle">Détail du jour</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-stats">
+      <div class="modal-stat total"><div class="modal-stat-label">Total</div><div class="modal-stat-value" id="mStatTotal">—</div></div>
+      <div class="modal-stat complet"><div class="modal-stat-label">Complets</div><div class="modal-stat-value" id="mStatComplets">—</div></div>
+      <div class="modal-stat incomplet"><div class="modal-stat-label">Incomplets</div><div class="modal-stat-value" id="mStatIncomplets">—</div></div>
+      <div class="modal-stat absent"><div class="modal-stat-label">Absents</div><div class="modal-stat-value" id="mStatAbsents">—</div></div>
+    </div>
+    <div class="modal-body" id="modalBody"><div class="loading-state"><div class="spinner"></div></div></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+</div><!-- /page-body -->
+
+<script>
+const socket = io();
+let currentTab = 'jour';
+let currentDate = '{{ date_param }}' || new Date().toISOString().split('T')[0];
+let allRowsData = [];
+
+document.getElementById('globalDate').value = currentDate;
+// sync topbar sub with table subtitle
+const _origSetTableSub = (v) => {
+  const el = document.getElementById('tableSubtitle');
+  const el2 = document.getElementById('topbarSub');
+  if(el) el.textContent = v;
+  if(el2) el2.textContent = v;
+};
+
+const urlParams = new URLSearchParams(window.location.search);
+const dateParam = urlParams.get('date');
+if (dateParam) {
+  currentDate = dateParam;
+  document.getElementById('globalDate').value = dateParam;
+  setTimeout(() => openModal(dateParam), 600);
+}
+
+// ─── WebSocket temps réel ──────────────────────────────────────────────────
+socket.on('nouveau_pointage', function(data) {
+  showPointageToast(data);
+  if (currentTab === 'jour' && data.date === currentDate) {
+    loadData();
+    loadStats();
+  }
+  playBeep();
+});
+
+function showPointageToast(data) {
+  const container = document.getElementById('toast');
+  const icon = data.type_pointage === 'arrivee' ? "▲" : "▼";
+  const initials = data.nom_complet.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  const div = document.createElement('div');
+  div.className = 'toast-item pointage';
+  div.innerHTML = `
+    <div class="toast-avatar">${initials}</div>
+    <div class="toast-content">
+      <div class="toast-name">${data.nom_complet}</div>
+      <div class="toast-detail">${icon} ${data.type_label} ${data.session_label} — ${data.heure}</div>
+    </div>`;
+  container.appendChild(div);
+  setTimeout(() => div.classList.add('show'), 50);
+  setTimeout(() => { div.classList.remove('show'); setTimeout(() => div.remove(), 400); }, 4000);
+}
+
+function playBeep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    osc.start(); osc.stop(ctx.currentTime + 0.3);
+  } catch(e) {}
+}
+
+// ─── Navigation ────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach((b,i) => {
+    const tabs=['jour','semaine','mois','trimestre','semestre','annee'];
+    b.classList.toggle('active', tabs[i]===tab);
+  });
+  loadData();
+}
+
+function onDateChange(val) {
+  currentDate = val;
+  history.replaceState(null,'',`?date=${val}`);
+  loadData(); loadStats();
+}
+
+// ─── Stats ─────────────────────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const r = await fetch(`/api/stats?date=${currentDate}`);
+    const d = await r.json();
+    document.getElementById('statTotal').textContent     = d.total ?? '—';
+    document.getElementById('statComplets').textContent  = d.complets ?? '—';
+    document.getElementById('statIncomplets').textContent= d.incomplets ?? '—';
+    document.getElementById('statAbsents').textContent   = d.absents ?? '—';
+  } catch(e) {}
+}
+
+// ─── Table ─────────────────────────────────────────────────────────────────
+async function loadData() {
+  document.getElementById('tableBody').innerHTML = '<div class="loading-state"><div class="spinner"></div><span>Chargement...</span></div>';
+  try {
+    if (currentTab === 'jour') await loadJour();
+    else await loadPeriode();
+  } catch(e) {
+    document.getElementById('tableBody').innerHTML = '<div class="loading-state">Erreur de chargement</div>';
+  }
+}
+
+async function loadJour() {
+  const r = await fetch(`/api/jour_horaires?date=${currentDate}`);
+  const data = await r.json();
+  allRowsData = data;
+  const dt = new Date(currentDate+'T12:00:00');
+  document.getElementById('tableTitle').textContent = 'Présences du jour';
+  document.getElementById('tableSubtitle').textContent = dt.toLocaleDateString('fr-FR',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  // Bannière jour férié
+  const bannerEl = document.getElementById('ferierBanner');
+  if (data.length > 0 && data[0].ferie) {
+    bannerEl.innerHTML = '<div class="ferie-banner">Jour férié — les absences ne sont pas comptabilisées</div>';
+  } else { bannerEl.innerHTML = ''; }
+  renderJourTable(data);
+}
+
+function renderJourTable(data) {
+  const body = document.getElementById('tableBody');
+  if (!data.length) { body.innerHTML = '<div class="loading-state">📭 Aucune donnée</div>'; return; }
+  const dur = m => m ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty">—</span>';
+  const t   = v => v ? `<span class="td-time">${v.slice(0,5)}</span>` : '<span class="td-empty">—</span>';
+  const bc  = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie'}[s]||'');
+  let html = `<div style="overflow-x:auto"><table class="data-table"><thead><tr>
+    <th>PRNO</th><th>Nom Prénom</th><th>Arr. Matin</th><th>Dép. Matin</th><th>Arr. AM</th><th>Dép. AM</th>
+    <th>Dur. Matin</th><th>Dur. AM</th><th>Réel</th><th>Théorique</th><th>Écart</th><th>Statut</th>
+  </tr></thead><tbody>`;
+  data.forEach(r => {
+    const ecartColor = r.ecart_type==='manquant'?'var(--red)':r.ecart_type==='ok'?'var(--green)':'var(--text-muted)';
+    html += `<tr${r.ferie?' style="opacity:0.6"':''}>
+      <td class="td-prno">${r.prno}</td><td class="td-name">${r.nom_prenom}</td>
+      <td>${t(r.arr_mat)}</td><td>${t(r.dep_mat)}</td><td>${t(r.arr_apm)}</td><td>${t(r.dep_apm)}</td>
+      <td class="td-dur">${dur(r.dur_mat)}</td><td class="td-dur">${dur(r.dur_apm)}</td>
+      <td class="td-dur">${r.reel_label||dur(r.dur_tot)}</td>
+      <td class="td-dur" style="color:var(--teal)">${r.theorique_label||'—'}</td>
+      <td class="td-dur" style="color:${ecartColor};font-weight:600">${r.ecart_label||'—'}</td>
+      <td><span class="badge ${bc(r.statut)}">${r.statut}</span></td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+  body.innerHTML = html;
+}
+
+async function loadPeriode() {
+  const r = await fetch(`/api/periode?periode=${currentTab}&date=${currentDate}`);
+  const data = await r.json();
+  allRowsData = data.employes || [];
+  const labels={semaine:'Semaine',mois:'Mois',trimestre:'Trimestre',semestre:'Semestre',annee:'Année'};
+  document.getElementById('tableTitle').textContent = `Vue ${labels[currentTab]}`;
+  document.getElementById('tableSubtitle').textContent = `${data.date_debut} → ${data.date_fin}`;
+  document.getElementById('ferierBanner').innerHTML = '';
+  renderPeriodeTable(data);
+}
+
+function renderPeriodeTable(data) {
+  const body = document.getElementById('tableBody');
+  const employes = data.employes || [];
+  if (!employes.length) { body.innerHTML='<div class="loading-state">📭 Aucune donnée</div>'; return; }
+  const datesSet = new Set();
+  employes.forEach(e => Object.keys(e.dates||{}).forEach(d => datesSet.add(d)));
+  const dates = [...datesSet].sort();
+
+  let html = `<div class="periode-scroll"><table class="periode-table"><thead><tr>
+    <th style="text-align:left;padding-left:14px">PRNO</th>
+    <th style="text-align:left;padding-left:10px;min-width:150px">Nom Prénom</th>`;
+  dates.forEach(d => {
+    const dt = new Date(d+'T12:00:00');
+    const label = dt.toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit',month:'2-digit'});
+    const isFerie = employes.length > 0 && (employes[0].dates||{})[d] === 'Férié';
+    html += `<th class="${isFerie?'th-ferie':''}" onclick="openModal('${d}')" title="${d}">${label}${isFerie?' ★':''}</th>`;
+  });
+  html += `
+    <th style="background:var(--main-bg2);color:var(--teal);min-width:75px;border-left:2px solid var(--border-mid)">Théorique</th>
+    <th style="background:var(--main-bg2);color:var(--text-dim);min-width:75px">Réel</th>
+    <th style="background:var(--main-bg2);min-width:75px">Écart</th>
+    <th style="background:var(--main-bg2);color:var(--green);min-width:36px" title="Complets">✓</th>
+    <th style="background:var(--main-bg2);color:var(--amber);min-width:36px" title="Incomplets">◑</th>
+    <th style="background:var(--main-bg2);color:var(--red);min-width:36px" title="Absents">✕</th>
+    <th style="background:var(--main-bg2);min-width:36px" title="Fériés payés">★</th>`;
+  html += '</tr></thead><tbody>';
+
+  employes.forEach(emp => {
+    html += `<tr><td class="td-prno-col">${emp.prno}</td><td class="td-nom-col">${emp.nom_prenom}</td>`;
+    dates.forEach(d => {
+      const s = (emp.dates||{})[d]||'Absent';
+      const cls = {Complet:'cel-complet',Incomplet:'cel-incomplet',Absent:'cel-absent',Férié:'cel-ferie'}[s]||'';
+      const lbl = {Complet:'✓',Incomplet:'◑',Absent:'✕',Férié:'★'}[s]||'—';
+      html += `<td class="${cls}" onclick="openModal('${d}')" title="${s} — ${d}">${lbl}</td>`;
+    });
+    const ecartColor = emp.ecart_type==='manquant'?'var(--red)':emp.ecart_type==='ok'?'var(--green)':'var(--text-muted)';
+    html += `
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--teal);background:var(--main-bg2);border-left:2px solid var(--border-mid);font-weight:600">${emp.theorique_label||'—'}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-dim);background:var(--main-bg2)">${emp.reel_label||'—'}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:${ecartColor};background:var(--main-bg2);font-weight:600">${emp.ecart_label||'—'}</td>
+      <td style="color:var(--green);font-weight:700;text-align:center;background:var(--main-bg2)">${emp.nb_complet||0}</td>
+      <td style="color:var(--amber);font-weight:700;text-align:center;background:var(--main-bg2)">${emp.nb_incomplet||0}</td>
+      <td style="color:var(--red);font-weight:700;text-align:center;background:var(--main-bg2)">${emp.nb_absent||0}</td>
+      <td style="text-align:center;background:var(--main-bg2)">${emp.nb_ferie||0}</td>`;
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+  body.innerHTML = html;
+}
+
+
+function filterTable() {
+  const q = document.getElementById('searchBox').value.toLowerCase();
+  if (currentTab === 'jour') { renderJourTable(allRowsData.filter(r=>(r.prno+r.nom_prenom).toLowerCase().includes(q))); return; }
+  document.querySelectorAll('.periode-table tbody tr').forEach(row => {
+    row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+// ─── Modal ─────────────────────────────────────────────────────────────────
+async function openModal(dateStr) {
+  document.getElementById('modalOverlay').classList.add('open');
+  document.getElementById('modalDate').textContent = dateStr;
+  const dt = new Date(dateStr+'T12:00:00');
+  document.getElementById('modalTitle').textContent = dt.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  document.getElementById('modalBody').innerHTML = '<div class="loading-state"><div class="spinner"></div></div>';
+  ['mStatTotal','mStatComplets','mStatIncomplets','mStatAbsents'].forEach(id => document.getElementById(id).textContent='—');
+  try {
+    const r = await fetch(`/api/detail_jour?date=${dateStr}`);
+    const data = await r.json();
+    document.getElementById('mStatTotal').textContent     = data.stats.total;
+    document.getElementById('mStatComplets').textContent  = data.stats.complets;
+    document.getElementById('mStatIncomplets').textContent= data.stats.incomplets;
+    document.getElementById('mStatAbsents').textContent   = data.stats.absents;
+    const dur = m => m ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty">—</span>';
+    const t   = v => v ? `<span class="td-time">${v.slice(0,5)}</span>` : '<span class="td-empty">—</span>';
+    const bc  = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie'}[s]||'');
+    let html = '';
+    if (data.stats.ferie) html += '<div class="ferie-banner" style="margin:12px 16px 0">Jour férié</div>';
+    html += `<div style="overflow-x:auto"><table class="data-table"><thead><tr>
+      <th>PRNO</th><th>Nom Prénom</th><th>Arr. Matin</th><th>Dép. Matin</th><th>Arr. AM</th><th>Dép. AM</th>
+      <th>Dur. Matin</th><th>Dur. AM</th><th>Réel</th><th>Théorique</th><th>Écart</th><th>Statut</th>
+    </tr></thead><tbody>`;
+    (data.employes||[]).forEach(r => {
+      html += `<tr${r.ferie?' style="opacity:0.6"':''}>
+        <td class="td-prno">${r.prno}</td><td class="td-name">${r.nom_prenom}</td>
+        <td>${t(r.arr_mat)}</td><td>${t(r.dep_mat)}</td><td>${t(r.arr_apm)}</td><td>${t(r.dep_apm)}</td>
+        <td class="td-dur">${dur(r.dur_mat)}</td><td class="td-dur">${dur(r.dur_apm)}</td>
+        <td class="td-dur">${r.reel_label||dur(r.dur_tot)}</td>
+        <td class="td-dur" style="color:var(--teal)">${r.theorique_label||'—'}</td>
+        <td class="td-dur" style="color:${r.ecart_type==='manquant'?'var(--red)':r.ecart_type==='ok'?'var(--green)':'var(--text-muted)'}">${r.ecart_label||'—'}</td>
+        <td><span class="badge ${bc(r.statut)}">${r.statut}</span></td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+    document.getElementById('modalBody').innerHTML = html;
+  } catch(e) { document.getElementById('modalBody').innerHTML='<div class="loading-state">Erreur</div>'; }
+}
+
+function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); }
+function closeModalOnBg(e) { if(e.target===document.getElementById('modalOverlay')) closeModal(); }
+document.addEventListener('keydown', e => { if(e.key==='Escape') closeModal(); });
+
+// ─── Init ──────────────────────────────────────────────────────────────────
+loadStats();
+loadData();
+// Auto-refresh stats toutes les 2 minutes (backup si WebSocket déconnecté)
+setInterval(() => { loadStats(); if(currentTab==='jour') loadData(); }, 120000);
+</script>
+</body>
+</html>

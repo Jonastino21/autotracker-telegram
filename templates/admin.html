@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KAROKA — Administration</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --sidebar-bg:#1A1F2E;--sidebar-text:#E8EDF2;--sidebar-muted:#7B8BA8;--sidebar-active:#FFFFFF;--sidebar-hover:rgba(255,255,255,0.07);
+  --main-bg:#F0F2F8;--main-bg2:#E8EBF4;--card-bg:#FFFFFF;--card-shadow:0 2px 12px rgba(0,0,0,0.07);
+  --text:#1A1F2E;--text-dim:#5A6A82;--text-muted:#9AAABB;
+  --teal:#00BFA5;--teal-dark:#00897B;--teal-glow:rgba(0,191,165,0.15);
+  --amber:#FFB300;--amber-soft:rgba(255,179,0,0.12);
+  --red:#EF5350;--red-soft:rgba(239,83,80,0.12);
+  --green:#4CAF50;--green-soft:rgba(76,175,80,0.12);
+  --purple:#9C27B0;
+  --border:rgba(0,0,0,0.07);--border-mid:rgba(0,191,165,0.2);
+  --radius:10px;--radius-lg:16px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--main-bg);color:var(--text);min-height:100vh;display:flex;overflow-x:hidden;}
+
+/* ── SIDEBAR ─────────────────────────────────────────────── */
+.sidebar{width:220px;min-height:100vh;background:var(--sidebar-bg);display:flex;flex-direction:column;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto;padding:28px 0 24px;}
+.sidebar-logo{display:flex;align-items:center;gap:10px;padding:0 24px 28px;}
+.logo-mark{width:38px;height:38px;background:linear-gradient(135deg,var(--teal),var(--teal-dark));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:white;box-shadow:0 0 16px rgba(0,191,165,0.35);flex-shrink:0;}
+.logo-text{font-size:17px;font-weight:700;color:var(--sidebar-text);}
+.logo-sub{font-size:10px;color:var(--sidebar-muted);letter-spacing:1.5px;text-transform:uppercase;}
+.sidebar-profile{display:flex;flex-direction:column;align-items:center;padding:0 24px 28px;border-bottom:1px solid rgba(255,255,255,0.07);margin-bottom:20px;}
+.profile-avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--teal-dark),var(--teal));display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:white;margin-bottom:12px;position:relative;box-shadow:0 0 0 3px rgba(0,191,165,0.3);}
+.profile-name{font-size:15px;font-weight:600;color:var(--sidebar-active);margin-bottom:3px;}
+.profile-email{font-size:11px;color:var(--sidebar-muted);}
+.sidebar-nav{display:flex;flex-direction:column;gap:2px;padding:0 12px;flex:1;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:500;color:var(--sidebar-muted);text-decoration:none;cursor:pointer;transition:all 0.2s;border:none;background:transparent;font-family:'DM Sans',sans-serif;width:100%;text-align:left;}
+.nav-item:hover{color:var(--sidebar-active);background:var(--sidebar-hover);}
+.nav-item.active{color:var(--sidebar-active);background:rgba(255,255,255,0.1);font-weight:600;}
+.nav-icon{font-size:14px;width:20px;text-align:center;flex-shrink:0;font-style:normal;}
+.sidebar-footer{padding:16px 12px 0;border-top:1px solid rgba(255,255,255,0.07);margin-top:auto;display:flex;flex-direction:column;gap:6px;}
+
+/* ── PAGE BODY ───────────────────────────────────────────── */
+.page-body{flex:1;display:flex;flex-direction:column;min-width:0;}
+
+/* ── TOP BAR ────────────────────────────────────────────── */
+.topbar{display:flex;align-items:center;gap:12px;padding:24px 28px 0;flex-shrink:0;}
+.topbar-title{font-size:22px;font-weight:700;color:var(--text);flex:1;}
+.topbar-sub{font-size:13px;color:var(--text-dim);margin-top:2px;}
+
+/* ── ADMIN TABS ──────────────────────────────────────────── */
+.tabs-admin-wrap{padding:20px 28px 0;}
+.tabs-admin{
+  display:flex;gap:4px;
+  background:var(--card-bg);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  padding:5px;
+  width:fit-content;
+  box-shadow:var(--card-shadow);
+  flex-wrap:wrap;
+}
+.tab-admin{
+  background:transparent;border:none;
+  color:var(--text-dim);
+  font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;
+  padding:8px 18px;border-radius:10px;cursor:pointer;
+  transition:all 0.18s;white-space:nowrap;
+}
+.tab-admin:hover{color:var(--text);background:rgba(0,0,0,0.05);}
+.tab-admin.active{
+  background:linear-gradient(135deg,var(--teal-dark),var(--teal));
+  color:white;font-weight:600;
+  box-shadow:0 2px 12px rgba(0,191,165,0.3);
+}
+
+.section{display:none;}
+.section.active{display:block;}
+
+/* ── PAGE CONTENT ────────────────────────────────────────── */
+.page{padding:20px 28px 40px;}
+
+/* ── GRID ────────────────────────────────────────────────── */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-bottom:24px;}
+
+/* ── CARDS ───────────────────────────────────────────────── */
+.card{
+  background:var(--card-bg);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  padding:22px;
+  box-shadow:var(--card-shadow);
+}
+.card-title{
+  font-size:13.5px;font-weight:700;
+  margin-bottom:18px;
+  display:flex;align-items:center;gap:8px;
+  color:var(--text);
+}
+
+/* ── FORMS ───────────────────────────────────────────────── */
+.form-group{margin-bottom:15px;}
+label{
+  display:block;
+  font-size:10.5px;text-transform:uppercase;letter-spacing:1px;
+  color:var(--text-dim);margin-bottom:7px;font-weight:600;
+}
+input[type="text"],input[type="date"],select,textarea{
+  width:100%;
+  background:var(--main-bg);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:10px 13px;
+  color:var(--text);
+  font-family:'DM Sans',sans-serif;font-size:13px;
+  outline:none;
+  transition:border-color 0.2s,box-shadow 0.2s;
+}
+input:focus,select:focus,textarea:focus{
+  border-color:var(--teal);
+  box-shadow:0 0 0 3px var(--teal-glow);
+}
+input::placeholder,textarea::placeholder{color:var(--text-muted);}
+input[type="date"]{color:var(--teal);font-family:'DM Mono',monospace;font-size:12px;}
+input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1) hue-rotate(130deg);}
+input[type="checkbox"]{width:16px;height:16px;accent-color:var(--teal);cursor:pointer;}
+textarea{resize:vertical;min-height:70px;font-family:'DM Mono',monospace;font-size:12px;line-height:1.6;}
+.checkbox-row{display:flex;align-items:center;gap:8px;font-size:13px;}
+
+/* ── BUTTONS ─────────────────────────────────────────────── */
+.btn{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:9px 18px;
+  border-radius:var(--radius);border:none;
+  font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;
+  cursor:pointer;
+  transition:opacity 0.2s,transform 0.15s;
+}
+.btn:hover{opacity:0.86;transform:translateY(-1px);}
+.btn:active{transform:translateY(0);}
+.btn-primary{background:linear-gradient(135deg,var(--teal-dark),var(--teal));color:white;box-shadow:0 3px 14px rgba(0,191,165,0.25);}
+.btn-danger{background:var(--red-soft);color:var(--red);border:1px solid rgba(239,83,80,0.25);}
+.btn-ghost{background:var(--teal-glow);color:var(--teal);border:1px solid var(--border-mid);}
+.btn-amber{background:var(--amber-soft);color:var(--amber);border:1px solid rgba(255,179,0,0.25);}
+.btn-full{width:100%;justify-content:center;}
+.btn-sm{padding:5px 11px;font-size:11px;}
+
+/* ── FILE DROP ───────────────────────────────────────────── */
+.file-drop{
+  border:2px dashed var(--border-mid);
+  border-radius:var(--radius);
+  padding:28px 24px;
+  text-align:center;
+  cursor:pointer;
+  transition:all 0.2s;
+  color:var(--text-dim);font-size:13px;
+}
+.file-drop:hover{border-color:var(--teal);color:var(--teal);background:var(--teal-glow);}
+.file-drop input{display:none;}
+.file-drop-icon{font-size:24px;margin-bottom:10px;color:var(--text-muted);}
+
+/* ── TABLES ──────────────────────────────────────────────── */
+.table-card{
+  background:var(--card-bg);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  overflow:hidden;
+  margin-bottom:24px;
+  box-shadow:var(--card-shadow);
+}
+.table-header{
+  padding:16px 22px;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  background:var(--main-bg);
+}
+.table-title{font-size:13.5px;font-weight:700;color:var(--text);}
+.search-box{
+  background:var(--card-bg);
+  border:1px solid var(--border);
+  border-radius:8px;padding:7px 13px;
+  color:var(--text);
+  font-family:'DM Sans',sans-serif;font-size:13px;
+  outline:none;width:210px;
+  transition:border-color 0.2s;
+}
+.search-box:focus{border-color:var(--teal);}
+.search-box::placeholder{color:var(--text-muted);}
+
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{
+  background:var(--main-bg);
+  color:var(--text-dim);font-size:10.5px;font-weight:600;
+  text-transform:uppercase;letter-spacing:0.9px;
+  padding:11px 15px;text-align:left;
+  border-bottom:1px solid var(--border);
+}
+td{
+  padding:11px 15px;
+  border-bottom:1px solid var(--border);
+  font-size:12px;color:var(--text);
+}
+tr:last-child td{border-bottom:none;}
+tbody tr:hover td{background:rgba(0,191,165,0.04);}
+.td-prno{font-family:'DM Mono',monospace;color:var(--teal);font-weight:600;}
+.td-nom{font-weight:500;color:var(--text);}
+.td-code{font-family:'DM Mono',monospace;font-size:11px;color:var(--teal-dark);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+/* ── BADGES ──────────────────────────────────────────────── */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;}
+.badge-lie{background:var(--green-soft);color:#2E7D32;border:1px solid rgba(76,175,80,0.3);}
+.badge-nonlie{background:var(--amber-soft);color:#E65100;border:1px solid rgba(255,179,0,0.3);}
+.badge-inactif{background:var(--red-soft);color:#C62828;border:1px solid rgba(239,83,80,0.3);}
+.badge-ferie{background:rgba(156,39,176,0.1);color:#6A1B9A;border:1px solid rgba(156,39,176,0.25);}
+
+/* ── ALERTS ──────────────────────────────────────────────── */
+.alert{padding:11px 16px;border-radius:var(--radius);font-size:13px;margin-bottom:16px;display:none;}
+.alert-success{background:var(--green-soft);border:1px solid rgba(76,175,80,0.3);color:#2E7D32;}
+.alert-error{background:var(--red-soft);border:1px solid rgba(239,83,80,0.3);color:#C62828;}
+.alert.show{display:block;}
+
+/* ── STATS MINI ──────────────────────────────────────────── */
+.stats-mini{display:flex;gap:12px;margin-bottom:22px;flex-wrap:wrap;}
+.stat-mini{
+  background:var(--card-bg);
+  border:1px solid var(--border);
+  border-radius:12px;padding:14px 20px;
+  display:flex;align-items:center;gap:12px;
+  box-shadow:var(--card-shadow);
+}
+.stat-mini-val{font-size:26px;font-weight:700;letter-spacing:-0.5px;}
+.stat-mini-label{font-size:10.5px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-top:2px;}
+.stat-mini.total .stat-mini-val{color:var(--teal);}
+.stat-mini.lies .stat-mini-val{color:var(--green);}
+.stat-mini.nonlies .stat-mini-val{color:var(--amber);}
+
+.empty-state{padding:44px;text-align:center;color:var(--text-muted);font-size:13px;}
+
+/* ── HORAIRE PREVIEW ─────────────────────────────────────── */
+.horaire-preview{
+  background:var(--main-bg);
+  border:1px solid var(--border);
+  border-radius:var(--radius);padding:14px;
+  margin-top:10px;font-size:12px;
+}
+.horaire-preview.valid{border-color:rgba(76,175,80,0.4);}
+.horaire-preview.invalid{border-color:rgba(239,83,80,0.4);}
+.horaire-row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);}
+.horaire-row:last-child{border-bottom:none;}
+.horaire-total{display:flex;justify-content:space-between;padding:8px 0 0;margin-top:4px;font-weight:700;font-size:13px;}
+.horaire-error{color:var(--red);font-size:12px;margin-top:6px;}
+
+/* ── MODELES ─────────────────────────────────────────────── */
+.modeles-grid{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:11px;}
+.modele-chip{
+  background:var(--main-bg);
+  border:1px solid var(--border-mid);
+  border-radius:8px;padding:6px 12px;
+  font-size:12px;color:var(--teal);
+  cursor:pointer;transition:all 0.18s;
+  font-family:'DM Mono',monospace;
+}
+.modele-chip:hover{background:var(--teal-glow);border-color:var(--teal);}
+
+/* ── FERIES LIST ─────────────────────────────────────────── */
+.feries-list{font-size:12px;color:var(--text-dim);line-height:2.4;}
+.feries-list span{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--teal);margin-right:8px;vertical-align:middle;}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.15);border-radius:3px;}
+
+/* ── RESPONSIVE ──────────────────────────────────────────── */
+@media(max-width:900px){
+  .grid-2,.grid-3{grid-template-columns:1fr;}
+  .sidebar{width:64px;}
+  .sidebar-profile,.profile-name,.profile-email,.nav-item span,.logo-text,.logo-sub{display:none;}
+  .nav-item{justify-content:center;padding:12px;}
+  .nav-icon{width:auto;}
+}
+@media(max-width:640px){
+  .page,.topbar,.tabs-admin-wrap{padding-left:16px;padding-right:16px;}
+}
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-mark">K</div>
+    <div><div class="logo-text">KAROKA</div><div class="logo-sub">Présences</div></div>
+  </div>
+  <div class="sidebar-profile">
+    <div class="profile-avatar">{{ username[0]|upper if username else 'A' }}</div>
+    <div class="profile-name">{{ username or 'Admin' }}</div>
+    <div class="profile-email">{{ username or '' }}@karoka.mg</div>
+  </div>
+  <nav class="sidebar-nav">
+    <a href="/" class="nav-item"><i class="nav-icon">◈</i><span>Présences</span></a>
+    <a href="/admin" class="nav-item active"><i class="nav-icon">◎</i><span>Admin</span></a>
+  </nav>
+  <div class="sidebar-footer">
+    <a href="/logout" class="nav-item"><i class="nav-icon">←</i><span>Déconnexion</span></a>
+  </div>
+</aside>
+
+<!-- PAGE BODY -->
+<div class="page-body">
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">Administration</div>
+      <div class="topbar-sub">Gestion des employés, horaires, jours fériés et liaisons Telegram.</div>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs-admin-wrap">
+    <div class="tabs-admin">
+      <button class="tab-admin active" onclick="showSection('employes',this)">Employés</button>
+      <button class="tab-admin" onclick="showSection('feries',this)">Jours fériés</button>
+      <button class="tab-admin" onclick="showSection('liaisons',this)">Liaisons</button>
+      <button class="tab-admin" onclick="showSection('modeles',this)">Modèles horaires</button>
+    </div>
+  </div>
+
+  <div class="page">
+
+    <!-- ═══════════════════════════════════
+         SECTION EMPLOYÉS
+    ════════════════════════════════════ -->
+    <div class="section active" id="sec-employes">
+      <div class="stats-mini">
+        <div class="stat-mini total"><div><div class="stat-mini-val" id="sTotal">—</div><div class="stat-mini-label">Total</div></div></div>
+        <div class="stat-mini lies"><div><div class="stat-mini-val" id="sLies">—</div><div class="stat-mini-label">Liés Telegram</div></div></div>
+        <div class="stat-mini nonlies"><div><div class="stat-mini-val" id="sNonLies">—</div><div class="stat-mini-label">Non liés</div></div></div>
+      </div>
+
+      <div class="grid-2">
+        <!-- Formulaire ajout -->
+        <div class="card">
+          <div class="card-title">Ajouter un employé</div>
+          <div id="alertAjout" class="alert"></div>
+
+          <div class="form-group">
+            <label>PRNO (code RH unique)</label>
+            <input type="text" id="inputPrno" placeholder="ex: pira" maxlength="20">
+          </div>
+          <div class="form-group">
+            <label>Nom complet</label>
+            <input type="text" id="inputNom" placeholder="ex: Rakotonandrasana Jean Pierre">
+          </div>
+          <div class="form-group">
+            <label>Code horaire</label>
+            <div class="modeles-grid" id="modelesRapides">
+              <div class="modele-chip" onclick="appliquerModeleRapide('0800tj1200;1400tj1700;(1000tj1010);(1600tj1610);(0800di1200);(1400di1700)')">Standard 40h</div>
+            </div>
+            <textarea id="inputHoraire"
+              placeholder="0800tj1200;1400tj1700;(1000tj1010);(1600tj1610);(0800di1200);(1400di1700)"
+              oninput="validerHoraireFormulaire()"
+              rows="3"></textarea>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+              Format : <code style="color:var(--teal)">HHMMcodeHHMM</code> — codes : lu ma me je ve sa di tj &nbsp;|&nbsp; (entre parenthèses = pause/exclusion)
+            </div>
+            <div id="horairePreviewForm" class="horaire-preview" style="display:none"></div>
+          </div>
+          <div class="form-group">
+            <label>Date d'effet de l'horaire</label>
+            <input type="date" id="inputDateEffet">
+          </div>
+
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary btn-full" onclick="ajouterEmploye()">Ajouter l'employé</button>
+            <button class="btn btn-ghost btn-sm" onclick="sauvegarderModele()" title="Sauvegarder ce code comme modèle">Sauv.</button>
+          </div>
+        </div>
+
+        <!-- Import CSV -->
+        <div class="card">
+          <div class="card-title">Import CSV</div>
+          <div id="alertCsv" class="alert"></div>
+          <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px">
+            Format requis :<br>
+            <code style="color:var(--teal)">prno,nom_complet,code_horaire</code><br>
+            <code style="color:var(--text-muted)">pira,Rakotonandrasana JP,0800tj1200;...</code>
+          </p>
+          <div class="file-drop" onclick="document.getElementById('csvFile').click()">
+            <input type="file" id="csvFile" accept=".csv" onchange="importCsv(this)">
+            <div class="file-drop-icon">↑</div>
+            <div>Cliquez pour sélectionner un fichier CSV</div>
+            <div style="font-size:11px;margin-top:5px;color:var(--text-muted)">UTF-8 recommandé</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Liste employés -->
+      <div class="table-card">
+        <div class="table-header">
+          <div class="table-title">Liste des employés</div>
+          <input type="text" class="search-box" id="searchEmp" placeholder="Rechercher..." oninput="filterEmp()">
+        </div>
+        <div id="tableEmployes"><div class="empty-state">Chargement...</div></div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════
+         SECTION JOURS FÉRIÉS
+    ════════════════════════════════════ -->
+    <div class="section" id="sec-feries">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Ajouter un jour férié</div>
+          <div id="alertFerie" class="alert"></div>
+          <div class="form-group"><label>Date</label><input type="date" id="ferieDate"></div>
+          <div class="form-group"><label>Libellé</label><input type="text" id="ferieLibelle" placeholder="ex: Fête Nationale"></div>
+          <div class="form-group">
+            <div class="checkbox-row">
+              <input type="checkbox" id="ferieRecurrent">
+              <span style="font-size:13px;color:var(--text-dim)">Récurrent chaque année</span>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-full" onclick="ajouterFerie()">Ajouter</button>
+        </div>
+        <div class="card">
+          <div class="card-title">Jours fériés malgaches pré-chargés</div>
+          <div class="feries-list">
+            <div><span></span>1er Jan — Jour de l'An</div>
+            <div><span></span>29 Mar — Commémoration 1947</div>
+            <div><span></span>1er Mai — Fête du Travail</div>
+            <div><span></span>26 Jun — Fête de l'Indépendance</div>
+            <div><span></span>15 Aoû — Assomption</div>
+            <div><span></span>1er Nov — Toussaint</div>
+            <div><span></span>2 Nov — Fête des Morts</div>
+            <div><span></span>25 Déc — Noël</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-header">
+          <div class="table-title">Jours fériés enregistrés</div>
+          <select id="ferieAnnee" onchange="loadFeries()" style="background:var(--main-bg);border:1px solid var(--border);border-radius:8px;padding:7px 12px;color:var(--teal);font-family:'DM Mono',monospace;font-size:13px;outline:none;"></select>
+        </div>
+        <div id="tableFeries"><div class="empty-state">Chargement...</div></div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════
+         SECTION LIAISONS
+    ════════════════════════════════════ -->
+    <div class="section" id="sec-liaisons">
+      <div class="table-card">
+        <div class="table-header">
+          <div class="table-title">Liaisons Telegram — PRNO</div>
+          <div id="nonLiesAlert" style="font-size:12px;color:var(--amber)"></div>
+        </div>
+        <div id="tableLiaisons"><div class="empty-state">Chargement...</div></div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════
+         SECTION MODÈLES HORAIRES
+    ════════════════════════════════════ -->
+    <div class="section" id="sec-modeles">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Nouveau modèle</div>
+          <div id="alertModele" class="alert"></div>
+          <div class="form-group">
+            <label>Nom du modèle</label>
+            <input type="text" id="modeleNom" placeholder="ex: Gardien de nuit KAROKA">
+          </div>
+          <div class="form-group">
+            <label>Code horaire</label>
+            <textarea id="modeleCode" placeholder="2000tj0600;(2000di0600)" oninput="validerHoraireModele()" rows="3"></textarea>
+            <div id="modelePreview" class="horaire-preview" style="display:none;margin-top:8px"></div>
+          </div>
+          <button class="btn btn-primary btn-full" onclick="creerModele()">Sauvegarder le modèle</button>
+        </div>
+        <div class="card">
+          <div class="card-title">Modèles sauvegardés</div>
+          <div id="listeModeles"><div class="empty-state">Aucun modèle sauvegardé</div></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /page -->
+</div><!-- /page-body -->
+
+<script>
+// ─── État ────────────────────────────────────────────────────────────────────
+let allEmployes = [];
+let modeles = JSON.parse(localStorage.getItem('karoka_modeles') || '[]');
+
+const MODELE_STANDARD = {
+  nom: 'Standard 40h',
+  code: '0800tj1200;1400tj1700;(1000tj1010);(1600tj1610);(0800di1200);(1400di1700)',
+  builtin: true
+};
+
+// ─── Navigation ──────────────────────────────────────────────────────────────
+function showSection(name, btn) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab-admin').forEach(b => b.classList.remove('active'));
+  document.getElementById('sec-'+name).classList.add('active');
+  btn.classList.add('active');
+  if (name==='employes') loadEmployes();
+  if (name==='feries')   loadFeries();
+  if (name==='liaisons') loadLiaisons();
+  if (name==='modeles')  renderModeles();
+}
+
+// ─── Modèles rapides ─────────────────────────────────────────────────────────
+function appliquerModeleRapide(code) {
+  document.getElementById('inputHoraire').value = code;
+  validerHoraireFormulaire();
+}
+
+function renderModelesRapides() {
+  const el = document.getElementById('modelesRapides');
+  const tous = [MODELE_STANDARD, ...modeles];
+  el.innerHTML = tous.map(m =>
+    `<div class="modele-chip" onclick="appliquerModeleRapide('${m.code.replace(/'/g,"\\'")}')">
+      ${m.nom}
+    </div>`
+  ).join('');
+}
+
+function sauvegarderModele() {
+  const code = document.getElementById('inputHoraire').value.trim();
+  if (!code) { alert('Saisissez un code horaire d\'abord.'); return; }
+  const nom = prompt('Nom de ce modèle :');
+  if (!nom) return;
+  modeles.push({ nom, code });
+  localStorage.setItem('karoka_modeles', JSON.stringify(modeles));
+  renderModelesRapides();
+  alert(`Modèle "${nom}" sauvegardé.`);
+}
+
+function renderModeles() {
+  const el = document.getElementById('listeModeles');
+  const tous = [MODELE_STANDARD, ...modeles];
+  if (!tous.length) { el.innerHTML='<div class="empty-state">Aucun modèle</div>'; return; }
+  let html = '';
+  tous.forEach((m, i) => {
+    const codeCourt = m.code.length > 50 ? m.code.slice(0,50)+'...' : m.code;
+    html += `<div style="border:1px solid var(--border);border-radius:10px;padding:13px;margin-bottom:10px">
+      <div style="font-weight:600;font-size:13px;margin-bottom:4px">${m.nom}</div>
+      <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--teal);margin-bottom:10px" title="${m.code}">${codeCourt}</div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-ghost btn-sm" onclick="appliquerModeleDepuisListe('${m.code}')">Utiliser</button>
+        ${!m.builtin?`<button class="btn btn-danger btn-sm" onclick="supprimerModele(${i-1})">Supprimer</button>`:''}
+      </div>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+function appliquerModeleDepuisListe(code) {
+  showSection('employes', document.querySelector('.tab-admin'));
+  document.querySelector('.tab-admin').classList.add('active');
+  document.getElementById('inputHoraire').value = code;
+  validerHoraireFormulaire();
+}
+
+function supprimerModele(idx) {
+  if (!confirm('Supprimer ce modèle ?')) return;
+  modeles.splice(idx, 1);
+  localStorage.setItem('karoka_modeles', JSON.stringify(modeles));
+  renderModeles(); renderModelesRapides();
+}
+
+function creerModele() {
+  const nom  = document.getElementById('modeleNom').value.trim();
+  const code = document.getElementById('modeleCode').value.trim();
+  const alertEl = document.getElementById('alertModele');
+  if (!nom || !code) { showAlert(alertEl,'error','Nom et code obligatoires.'); return; }
+  modeles.push({ nom, code });
+  localStorage.setItem('karoka_modeles', JSON.stringify(modeles));
+  showAlert(alertEl,'success',`Modèle "${nom}" sauvegardé.`);
+  document.getElementById('modeleNom').value = '';
+  document.getElementById('modeleCode').value = '';
+  document.getElementById('modelePreview').style.display = 'none';
+  renderModeles(); renderModelesRapides();
+}
+
+// ─── VALIDATION HORAIRE ───────────────────────────────────────────────────────
+async function validerHoraireFormulaire() {
+  const code    = document.getElementById('inputHoraire').value.trim();
+  const preview = document.getElementById('horairePreviewForm');
+  if (!code) { preview.style.display='none'; return; }
+  await _validerEtAfficher(code, preview);
+}
+
+async function validerHoraireModele() {
+  const code    = document.getElementById('modeleCode').value.trim();
+  const preview = document.getElementById('modelePreview');
+  if (!code) { preview.style.display='none'; return; }
+  await _validerEtAfficher(code, preview);
+}
+
+async function _validerEtAfficher(code, previewEl) {
+  try {
+    const r = await fetch('/api/admin/horaires/valider', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({code_horaire: code})
+    });
+    const data = await r.json();
+    previewEl.style.display = 'block';
+
+    if (!data.ok) {
+      previewEl.className = 'horaire-preview invalid';
+      previewEl.innerHTML = `<div class="horaire-error">Code horaire invalide : ${data.error}</div>`;
+      return;
+    }
+
+    previewEl.className = 'horaire-preview valid';
+    let html = '';
+    data.detail.forEach(d => {
+      const color = d.travaille ? 'var(--text)' : 'var(--text-muted)';
+      const val   = d.travaille ? `<span style="color:var(--teal);font-family:'DM Mono',monospace">${d.theorique}</span>` : '<span style="color:var(--text-muted)">Repos</span>';
+      html += `<div class="horaire-row"><span style="color:${color}">${d.jour}</span>${val}</div>`;
+    });
+    html += `<div class="horaire-total"><span>Total semaine</span><span style="color:var(--teal)">${data.label_semaine}</span></div>`;
+    previewEl.innerHTML = html;
+  } catch(e) {
+    previewEl.style.display='none';
+  }
+}
+
+// ─── EMPLOYÉS ────────────────────────────────────────────────────────────────
+async function loadEmployes() {
+  const r = await fetch('/api/admin/employes');
+  allEmployes = await r.json();
+  const horaires = await fetch('/api/admin/horaires').then(r=>r.json());
+  const horMap = {};
+  horaires.forEach(h => horMap[h.prno] = h.code_horaire);
+
+  document.getElementById('sTotal').textContent   = allEmployes.filter(e=>e.actif).length;
+  document.getElementById('sLies').textContent    = allEmployes.filter(e=>e.lie&&e.actif).length;
+  document.getElementById('sNonLies').textContent = allEmployes.filter(e=>!e.lie&&e.actif).length;
+
+  renderEmpTable(allEmployes, horMap);
+}
+
+function renderEmpTable(data, horMap={}) {
+  const el = document.getElementById('tableEmployes');
+  if (!data.length) { el.innerHTML='<div class="empty-state">Aucun employé</div>'; return; }
+  let html = `<div style="overflow-x:auto"><table><thead><tr>
+    <th>PRNO</th><th>Nom complet</th><th>Code horaire</th><th>Liaison</th><th>Lié le</th><th>Action</th>
+  </tr></thead><tbody>`;
+  data.forEach(emp => {
+    const bc = !emp.actif?'badge-inactif':emp.lie?'badge-lie':'badge-nonlie';
+    const bl = !emp.actif?'Inactif':emp.lie?'Lié':'Non lié';
+    const code = horMap[emp.prno];
+    const codeCourt = code ? (code.length>40?code.slice(0,40)+'...':code) : '—';
+    const lieDate = emp.lie_le?emp.lie_le.slice(0,10):'—';
+    html += `<tr>
+      <td class="td-prno">${emp.prno}</td>
+      <td class="td-nom">${emp.nom_complet}</td>
+      <td class="td-code" title="${code||''}">${codeCourt}</td>
+      <td><span class="badge ${bc}">${bl}</span></td>
+      <td style="color:var(--text-dim)">${lieDate}</td>
+      <td style="display:flex;gap:6px">
+        ${emp.actif?`<button class="btn btn-danger btn-sm" onclick="supprimerEmploye('${emp.prno}')">Désactiver</button>`:'<span style="color:var(--text-muted)">Inactif</span>'}
+        ${emp.lie&&!emp.dans_groupe?`<button class="btn btn-amber btn-sm" onclick="renvoiLien('${emp.prno}',${emp.telegram_id})">Renvoi lien</button>`:''}
+      </td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+function filterEmp() {
+  const q = document.getElementById('searchEmp').value.toLowerCase();
+  renderEmpTable(allEmployes.filter(e=>(e.prno+e.nom_complet+(e.username||'')).toLowerCase().includes(q)));
+}
+
+async function ajouterEmploye() {
+  const prno       = document.getElementById('inputPrno').value.trim();
+  const nom        = document.getElementById('inputNom').value.trim();
+  const code       = document.getElementById('inputHoraire').value.trim();
+  const dateEffet  = document.getElementById('inputDateEffet').value;
+  const alertEl    = document.getElementById('alertAjout');
+
+  if (!prno || !nom) { showAlert(alertEl,'error','PRNO et nom complet obligatoires.'); return; }
+
+  if (code) {
+    const val = await fetch('/api/admin/horaires/valider',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({code_horaire:code})
+    }).then(r=>r.json());
+    if (!val.ok) { showAlert(alertEl,'error',`Code horaire invalide : ${val.error}`); return; }
+  }
+
+  const r1 = await fetch('/api/admin/employes',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({prno, nom_complet:nom})
+  });
+  const d1 = await r1.json();
+  if (!d1.ok) { showAlert(alertEl,'error',`${d1.error}`); return; }
+
+  if (code && dateEffet) {
+    await fetch(`/api/admin/horaires/${prno}`,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({code_horaire:code, date_effet:dateEffet})
+    });
+  }
+
+  showAlert(alertEl,'success',`Employé ${prno} ajouté${code?' avec horaire':'.'}`);
+  document.getElementById('inputPrno').value = '';
+  document.getElementById('inputNom').value  = '';
+  loadEmployes();
+}
+
+async function supprimerEmploye(prno) {
+  if (!confirm(`Désactiver ${prno} et le retirer du groupe Telegram ?`)) return;
+  const r = await fetch(`/api/admin/employes/${prno}`,{method:'DELETE'});
+  const d = await r.json();
+  if (d.ok) loadEmployes();
+}
+
+async function renvoiLien(prno, telegramId) {
+  const r = await fetch(`/api/admin/renvoi_lien/${prno}`,{method:'POST'});
+  const d = await r.json();
+  alert(d.ok ? 'Lien renvoyé !' : `${d.error}`);
+}
+
+async function importCsv(input) {
+  const alertEl = document.getElementById('alertCsv');
+  const file = input.files[0]; if (!file) return;
+  const form = new FormData(); form.append('file',file);
+  showAlert(alertEl,'success','Import en cours...');
+  const r = await fetch('/api/admin/import_csv',{method:'POST',body:form});
+  const d = await r.json();
+  showAlert(alertEl, d.ok?'success':'error', `${d.imported||0} employés importés${d.errors?.length?' — '+d.errors.length+' erreur(s)':''}`);
+  loadEmployes(); input.value='';
+}
+
+// ─── JOURS FÉRIÉS ────────────────────────────────────────────────────────────
+function initFerieAnnee() {
+  const sel = document.getElementById('ferieAnnee');
+  const cur = new Date().getFullYear();
+  sel.innerHTML = '';
+  for (let y=cur-1;y<=cur+2;y++) {
+    const o=document.createElement('option');
+    o.value=y;o.textContent=y;if(y===cur)o.selected=true;
+    sel.appendChild(o);
+  }
+}
+
+async function loadFeries() {
+  const annee = document.getElementById('ferieAnnee').value;
+  const data  = await fetch(`/api/jours_feries?annee=${annee}`).then(r=>r.json());
+  const el    = document.getElementById('tableFeries');
+  if (!data.length) { el.innerHTML='<div class="empty-state">Aucun jour férié pour cette année</div>'; return; }
+  let html = `<div style="overflow-x:auto"><table><thead><tr><th>Date</th><th>Libellé</th><th>Récurrent</th><th>Action</th></tr></thead><tbody>`;
+  data.forEach(f => {
+    html += `<tr>
+      <td><span class="badge badge-ferie">${f.date_str}</span></td>
+      <td class="td-nom">${f.libelle}</td>
+      <td style="color:var(--text-dim)">${f.recurrent?'Oui':'Non'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="supprimerFerie('${f.date_str}')">Supprimer</button></td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+async function ajouterFerie() {
+  const date_str=document.getElementById('ferieDate').value;
+  const libelle=document.getElementById('ferieLibelle').value.trim();
+  const recurrent=document.getElementById('ferieRecurrent').checked;
+  const alertEl=document.getElementById('alertFerie');
+  if(!date_str||!libelle){showAlert(alertEl,'error','Date et libellé obligatoires.');return;}
+  const d=await fetch('/api/jours_feries',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date_str,libelle,recurrent})}).then(r=>r.json());
+  if(d.ok){showAlert(alertEl,'success',`${libelle} (${date_str}) ajouté.`);document.getElementById('ferieDate').value='';document.getElementById('ferieLibelle').value='';loadFeries();}
+  else showAlert(alertEl,'error',`${d.error}`);
+}
+
+async function supprimerFerie(date_str) {
+  if(!confirm(`Supprimer le jour férié du ${date_str} ?`))return;
+  await fetch(`/api/jours_feries/${date_str}`,{method:'DELETE'});
+  loadFeries();
+}
+
+// ─── LIAISONS ────────────────────────────────────────────────────────────────
+async function loadLiaisons() {
+  const [liaisons, nonLies] = await Promise.all([
+    fetch('/api/admin/liaisons').then(r=>r.json()),
+    fetch('/api/admin/non_lies').then(r=>r.json()),
+  ]);
+  document.getElementById('nonLiesAlert').textContent = nonLies.length>0?`${nonLies.length} employé(s) sans liaison`:'';
+  const el = document.getElementById('tableLiaisons');
+  if(!liaisons.length){el.innerHTML='<div class="empty-state">Aucune liaison</div>';return;}
+  let html=`<div style="overflow-x:auto"><table><thead><tr><th>PRNO</th><th>Nom</th><th>Telegram ID</th><th>Username</th><th>Dans le groupe</th><th>Lié le</th></tr></thead><tbody>`;
+  liaisons.forEach(l=>{
+    html+=`<tr>
+      <td class="td-prno">${l.prno}</td><td class="td-nom">${l.nom_complet}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-dim)">${l.telegram_id}</td>
+      <td style="color:var(--text-dim)">${l.username?'@'+l.username:'—'}</td>
+      <td><span class="badge ${l.dans_groupe?'badge-lie':'badge-nonlie'}">${l.dans_groupe?'Oui':'Non'}</span></td>
+      <td style="color:var(--text-dim)">${l.lie_le?l.lie_le.slice(0,10):'—'}</td>
+    </tr>`;
+  });
+  html+='</tbody></table></div>';
+  el.innerHTML=html;
+}
+
+// ─── Utilitaires ─────────────────────────────────────────────────────────────
+function showAlert(el,type,msg){
+  el.className=`alert alert-${type} show`;el.textContent=msg;
+  setTimeout(()=>el.classList.remove('show'),5000);
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+initFerieAnnee();
+loadEmployes();
+renderModelesRapides();
+</script>
+</body>
+</html>
