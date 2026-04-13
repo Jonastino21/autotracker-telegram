@@ -55,6 +55,14 @@ def emit_pointage(payload):
         logger.error("Erreur emit WebSocket : %s", e)
 
 
+def emit_admin_update(event, payload=None):
+    """Émet un événement admin (ajout/modif employé, horaire, etc.)."""
+    try:
+        socketio.emit(event, payload or {})
+    except Exception as e:
+        logger.error("Erreur emit admin WebSocket : %s", e)
+
+
 def get_today():
     return datetime.now(ZoneInfo(TIMEZONE)).date().isoformat()
 
@@ -238,6 +246,8 @@ def api_employes():
 def api_ajouter_employe():
     data = request.get_json()
     result = db.ajouter_employe((data.get("prno") or "").strip(), (data.get("nom_complet") or "").strip())
+    if result["ok"]:
+        emit_admin_update("admin_employes_updated")
     return jsonify(result), (200 if result["ok"] else 400)
 
 
@@ -257,6 +267,7 @@ def api_desactiver_employe(prno):
             except Exception as e:
                 logger.error("Erreur retrait groupe : %s", e)
         threading.Thread(target=_retirer, daemon=True).start()
+    emit_admin_update("admin_employes_updated")
     return jsonify({"ok":True,"message":f"Employé {prno} désactivé."})
 
 
@@ -338,6 +349,7 @@ def api_set_horaire(prno):
     result = db.set_horaire(prno, code_horaire, date_effet)
     if result["ok"]:
         result["heures_semaine"] = validation["label_semaine"]
+        emit_admin_update("admin_employes_updated")
     return jsonify(result), (200 if result["ok"] else 400)
 
 

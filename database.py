@@ -425,6 +425,20 @@ def get_employes_non_lies():
 
 # ─── POINTAGES ───────────────────────────────────────────────────────────────
 
+def get_dernier_pointage_type(prno: str, date_local: str) -> str | None:
+    """Retourne le type du dernier pointage de l'employé pour ce jour, ou None."""
+    conn = get_connection()
+    try:
+        row = conn.execute("""
+            SELECT type_pointage FROM pointages
+            WHERE prno=? AND date_local=?
+            ORDER BY heure_locale DESC LIMIT 1
+        """, (prno, date_local)).fetchone()
+        return row["type_pointage"] if row else None
+    finally:
+        conn.close()
+
+
 def insert_pointage(message_id, telegram_id, prno, date_local, heure_locale,
                     type_pointage, session, raw_text):
     conn = get_connection()
@@ -754,24 +768,95 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
 
         ecart = format_ecart(theorique, reel)
 
-        # Arrivée/départ pour affichage (1er pointage et dernier)
-        arrivees = sorted([p["heure"] for p in pts if p["type"]=="arrivee"])
-        departs  = sorted([p["heure"] for p in pts if p["type"]=="depart"])
+        # Déterminer quelles sessions sont actives selon les plages de l'horaire
+        # Une plage est "matin" si elle se termine avant 13h30, "apm" si elle commence après 12h30
+        # Une plage peut couvrir les deux (ex: 0800-1700)
+        has_session_mat = False
+        has_session_apm = False
+        mat_plage_fin   = None   # heure de fin de la dernière plage matin (en minutes)
+        apm_plage_debut = None   # heure de début de la première plage apm (en minutes)
+
+        if code and plages_detail:
+            for plage in plages_detail:
+                pd_h = int(plage["plage_debut"].split(":")[0]) * 60 + int(plage["plage_debut"].split(":")[1])
+                pf_h = int(plage["plage_fin"].split(":")[0])   * 60 + int(plage["plage_fin"].split(":")[1])
+                # Plage matin : commence avant 13h
+                if pd_h < 780:
+                    has_session_mat = True
+                    if mat_plage_fin is None or pf_h > mat_plage_fin:
+                        mat_plage_fin = pf_h
+                # Plage apm : finit après 13h
+                if pf_h > 780:
+                    has_session_apm = True
+                    if apm_plage_debut is None or pd_h < apm_plage_debut:
+                        apm_plage_debut = pd_h
+
+        # Répartir les pointages selon les plages de l'horaire avec tolérance ±30 min
+        # Si pas d'horaire : on utilise le seuil fixe 13h
+        TOLERANCE = 30  # minutes
+
+        def appartient_matin(heure_str):
+            h = int(heure_str.split(":")[0]) * 60 + int(heure_str.split(":")[1])
+            if mat_plage_fin is not None:
+                # Appartient au matin si avant la fin de la plage matin + tolérance
+                return h <= mat_plage_fin + TOLERANCE
+            # Fallback seuil fixe
+            return h < 780
+
+        def appartient_apm(heure_str):
+            h = int(heure_str.split(":")[0]) * 60 + int(heure_str.split(":")[1])
+            if apm_plage_debut is not None:
+                # Appartient à l'apm si après le début de la plage apm - tolérance
+                return h >= apm_plage_debut - TOLERANCE
+            # Fallback seuil fixe
+            return h >= 780
+
+        # Un pointage peut appartenir aux deux sessions si la plage couvre tout
+        # Priorité : si has_session_mat ET has_session_apm → on sépare selon le milieu
+        # Sinon → tout va dans la session active
+        arrivees_mat, departs_mat, arrivees_apm, departs_apm = [], [], [], []
+        for p in pts:
+            h_str = p["heure"][:5]  # HH:MM
+            h_min = int(h_str.split(":")[0]) * 60 + int(h_str.split(":")[1])
+            if has_session_mat and has_session_apm:
+                # Les deux sessions : on coupe au milieu des deux plages
+                milieu = (mat_plage_fin + apm_plage_debut) // 2 if mat_plage_fin and apm_plage_debut else 780
+                if h_min <= milieu:
+                    (arrivees_mat if p["type"]=="arrivee" else departs_mat).append(p["heure"])
+                else:
+                    (arrivees_apm if p["type"]=="arrivee" else departs_apm).append(p["heure"])
+            elif has_session_mat:
+                (arrivees_mat if p["type"]=="arrivee" else departs_mat).append(p["heure"])
+            elif has_session_apm:
+                (arrivees_apm if p["type"]=="arrivee" else departs_apm).append(p["heure"])
+            else:
+                # Pas d'horaire : seuil fixe 13h
+                if h_min < 780:
+                    (arrivees_mat if p["type"]=="arrivee" else departs_mat).append(p["heure"])
+                else:
+                    (arrivees_apm if p["type"]=="arrivee" else departs_apm).append(p["heure"])
+                has_session_mat = bool(arrivees_mat or departs_mat)
+                has_session_apm = bool(arrivees_apm or departs_apm)
+
+        arrivees_mat.sort(); departs_mat.sort()
+        arrivees_apm.sort(); departs_apm.sort()
 
         result.append({
             "prno":              prno,
             "nom_prenom":        emp["nom_complet"],
             "date":              date_str,
-            "arr_mat":           arrivees[0]  if arrivees else None,
-            "dep_mat":           departs[-1]  if departs  else None,
-            "arr_apm":           None,
-            "dep_apm":           None,
+            "arr_mat":           arrivees_mat[0] if arrivees_mat else None,
+            "dep_mat":           departs_mat[-1] if departs_mat  else None,
+            "arr_apm":           arrivees_apm[0] if arrivees_apm else None,
+            "dep_apm":           departs_apm[-1] if departs_apm  else None,
             "dur_mat":           None,
             "dur_apm":           None,
             "dur_tot":           reel if reel > 0 else None,
             "statut":            statut,
             "ferie":             ferie,
             "code_horaire":      code,
+            "has_session_mat":   has_session_mat,
+            "has_session_apm":   has_session_apm,
             "minutes_theoriques": theorique,
             "minutes_reels":     reel,
             "theorique_label":   format_duree(theorique) if theorique else "—",

@@ -134,18 +134,22 @@ def process_group_message(message):
     heure_locale = msg_dt_local.strftime("%H:%M:%S")
     session      = get_session(heure_locale)
 
+    # Vérifier si c'est un doublon de type (même type que dernier pointage du jour)
+    dernier_type = db.get_dernier_pointage_type(prno, date_local)
+    is_type_doublon = (dernier_type == type_pointage)
+
     inserted = db.insert_pointage(
         message_id=message.message_id, telegram_id=telegram_id, prno=prno,
         date_local=date_local, heure_locale=heure_locale,
         type_pointage=type_pointage, session=session, raw_text=text[:500],
     )
 
-    if inserted:
+    if inserted and not is_type_doublon:
         type_label    = "Arrivée" if type_pointage == "arrivee" else "Départ"
         session_label = "matin" if session == "matin" else "après-midi"
         logger.info("%s — %s [%s] %s à %s", prno, type_label, session_label, date_local, heure_locale)
 
-        # Émettre l'événement WebSocket temps réel
+        # Émettre l'événement WebSocket temps réel (toast uniquement si pas doublon de type)
         payload = {
             "prno":          prno,
             "nom_complet":   nom_complet,
@@ -158,6 +162,7 @@ def process_group_message(message):
         }
         dashboard.emit_pointage(payload)
 
+    if inserted:
         threading.Thread(target=_regenerer_excel, args=(date_local,), daemon=True).start()
 
 
@@ -193,6 +198,7 @@ def process_private_message(message):
     if resultat.get("ok") and resultat.get("code") == "LIAISON_CREEE":
         employe = resultat["employe"]
         logger.info("Onboarding réussi : %s ↔ %s", telegram_id, text)
+        dashboard.emit_admin_update("admin_employes_updated")
         threading.Thread(target=ajouter_au_groupe, args=(telegram_id, employe["nom_complet"]), daemon=True).start()
 
 

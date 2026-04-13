@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>KAROKA — Administration</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
 <style>
 :root{
   --sidebar-bg:#1A1F2E;--sidebar-text:#E8EDF2;--sidebar-muted:#7B8BA8;--sidebar-active:#FFFFFF;--sidebar-hover:rgba(255,255,255,0.07);
@@ -269,6 +270,7 @@ tbody tr:hover td{background:rgba(0,191,165,0.04);}
 ::-webkit-scrollbar{width:5px;height:5px;}
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.15);border-radius:3px;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.3;transform:scale(0.6);}}
 
 /* ── RESPONSIVE ──────────────────────────────────────────── */
 @media(max-width:900px){
@@ -491,8 +493,18 @@ tbody tr:hover td{background:rgba(0,191,165,0.04);}
 
 <script>
 // ─── État ────────────────────────────────────────────────────────────────────
+const socket = io();
 let allEmployes = [];
 let modeles = JSON.parse(localStorage.getItem('karoka_modeles') || '[]');
+
+// ─── Temps réel ──────────────────────────────────────────────────────────────
+let _currentSection = 'employes';
+
+socket.on('admin_employes_updated', function() {
+  // Rafraîchir la section active si c'est employes ou liaisons
+  if (_currentSection === 'employes') loadEmployes();
+  if (_currentSection === 'liaisons') loadLiaisons();
+});
 
 const MODELE_STANDARD = {
   nom: 'Standard 40h',
@@ -502,6 +514,7 @@ const MODELE_STANDARD = {
 
 // ─── Navigation ──────────────────────────────────────────────────────────────
 function showSection(name, btn) {
+  _currentSection = name;
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.tab-admin').forEach(b => b.classList.remove('active'));
   document.getElementById('sec-'+name).classList.add('active');

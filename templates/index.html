@@ -294,18 +294,13 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1
 <script>
 const socket = io();
 let currentTab = 'jour';
-let currentDate = '{{ date_param }}' || new Date().toISOString().split('T')[0];
+// Date J injectée par le serveur (timezone Madagascar correcte)
+const todayStr = '{{ today }}';
+let currentDate = '{{ date_param }}' || todayStr;
+if (!currentDate || currentDate === 'None' || currentDate === '') currentDate = todayStr;
 let allRowsData = [];
 
 document.getElementById('globalDate').value = currentDate;
-// sync topbar sub with table subtitle
-const _origSetTableSub = (v) => {
-  const el = document.getElementById('tableSubtitle');
-  const el2 = document.getElementById('topbarSub');
-  if(el) el.textContent = v;
-  if(el2) el2.textContent = v;
-};
-
 const urlParams = new URLSearchParams(window.location.search);
 const dateParam = urlParams.get('date');
 if (dateParam) {
@@ -411,7 +406,7 @@ async function loadJour() {
 function renderJourTable(data) {
   const body = document.getElementById('tableBody');
   if (!data.length) { body.innerHTML = '<div class="loading-state">📭 Aucune donnée</div>'; return; }
-  const dur = m => m ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty">—</span>';
+  const dur = m => (m !== null && m !== undefined && m > 0) ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty">—</span>';
   const t   = v => v ? `<span class="td-time">${v.slice(0,5)}</span>` : '<span class="td-empty">—</span>';
   const bc  = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie'}[s]||'');
   let html = `<div style="overflow-x:auto"><table class="data-table"><thead><tr>
@@ -419,15 +414,34 @@ function renderJourTable(data) {
     <th>Dur. Matin</th><th>Dur. AM</th><th>Réel</th><th>Théorique</th><th>Écart</th><th>Statut</th>
   </tr></thead><tbody>`;
   data.forEach(r => {
-    const ecartColor = r.ecart_type==='manquant'?'var(--red)':r.ecart_type==='ok'?'var(--green)':'var(--text-muted)';
-    html += `<tr${r.ferie?' style="opacity:0.6"':''}>
+    const noHoraire = !r.code_horaire;
+    // Colonne Réel : priorité à minutes_reels si dispo, sinon dur_tot
+    const reelMin = (r.minutes_reels !== null && r.minutes_reels !== undefined) ? r.minutes_reels : r.dur_tot;
+    const reelLabel = noHoraire ? '<span class="td-empty">—</span>'
+      : (r.reel_label && r.reel_label !== '—' ? r.reel_label : dur(reelMin));
+    const theorLabel = noHoraire ? '<span class="td-empty">N/A</span>' : (r.theorique_label || '—');
+    const ecartLabel = noHoraire ? '<span class="td-empty">—</span>' : (r.ecart_label || '—');
+    const ecartColor = noHoraire ? 'var(--text-muted)'
+      : (r.ecart_type==='manquant'?'var(--red)':r.ecart_type==='ok'?'var(--green)':'var(--text-muted)');
+    // Ligne désactivée si pas d'horaire défini
+    const rowStyle = noHoraire
+      ? 'opacity:0.45;background:repeating-linear-gradient(135deg,transparent,transparent 4px,rgba(0,0,0,0.03) 4px,rgba(0,0,0,0.03) 8px);'
+      : (r.ferie ? 'opacity:0.6;' : '');
+    const rowTitle = noHoraire ? ' title="Aucun horaire défini — pointage non comptabilisé"' : '';
+    html += `<tr style="${rowStyle}"${rowTitle}>
       <td class="td-prno">${r.prno}</td><td class="td-name">${r.nom_prenom}</td>
-      <td>${t(r.arr_mat)}</td><td>${t(r.dep_mat)}</td><td>${t(r.arr_apm)}</td><td>${t(r.dep_apm)}</td>
-      <td class="td-dur">${dur(r.dur_mat)}</td><td class="td-dur">${dur(r.dur_apm)}</td>
-      <td class="td-dur">${r.reel_label||dur(r.dur_tot)}</td>
-      <td class="td-dur" style="color:var(--teal)">${r.theorique_label||'—'}</td>
-      <td class="td-dur" style="color:${ecartColor};font-weight:600">${r.ecart_label||'—'}</td>
-      <td><span class="badge ${bc(r.statut)}">${r.statut}</span></td>
+      <td>${noHoraire ? '<span class="td-empty">—</span>' : t(r.arr_mat)}</td>
+      <td>${noHoraire ? '<span class="td-empty">—</span>' : t(r.dep_mat)}</td>
+      <td>${noHoraire ? '<span class="td-empty">—</span>' : t(r.arr_apm)}</td>
+      <td>${noHoraire ? '<span class="td-empty">—</span>' : t(r.dep_apm)}</td>
+      <td class="td-dur">${noHoraire ? '<span class="td-empty">—</span>' : dur(r.dur_mat)}</td>
+      <td class="td-dur">${noHoraire ? '<span class="td-empty">—</span>' : dur(r.dur_apm)}</td>
+      <td class="td-dur">${reelLabel}</td>
+      <td class="td-dur" style="color:var(--teal)">${theorLabel}</td>
+      <td class="td-dur" style="color:${ecartColor};font-weight:600">${ecartLabel}</td>
+      <td>${noHoraire
+        ? '<span class="badge" style="background:rgba(0,0,0,0.06);color:var(--text-muted);border:1px solid var(--border)">Sans horaire</span>'
+        : `<span class="badge ${bc(r.statut)}">${r.statut}</span>`}</td>
     </tr>`;
   });
   html += '</tbody></table></div>';
@@ -519,7 +533,7 @@ async function openModal(dateStr) {
     document.getElementById('mStatComplets').textContent  = data.stats.complets;
     document.getElementById('mStatIncomplets').textContent= data.stats.incomplets;
     document.getElementById('mStatAbsents').textContent   = data.stats.absents;
-    const dur = m => m ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty">—</span>';
+    const dur = m => (m !== null && m !== undefined && m > 0) ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty">—</span>';
     const t   = v => v ? `<span class="td-time">${v.slice(0,5)}</span>` : '<span class="td-empty">—</span>';
     const bc  = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie'}[s]||'');
     let html = '';
@@ -529,14 +543,27 @@ async function openModal(dateStr) {
       <th>Dur. Matin</th><th>Dur. AM</th><th>Réel</th><th>Théorique</th><th>Écart</th><th>Statut</th>
     </tr></thead><tbody>`;
     (data.employes||[]).forEach(r => {
-      html += `<tr${r.ferie?' style="opacity:0.6"':''}>
+      const noHoraire = !r.code_horaire;
+      const reelMin = (r.minutes_reels !== null && r.minutes_reels !== undefined) ? r.minutes_reels : r.dur_tot;
+      const reelLabel = noHoraire ? '<span class="td-empty">—</span>'
+        : (r.reel_label && r.reel_label !== '—' ? r.reel_label : dur(reelMin));
+      const rowStyle = noHoraire
+        ? 'opacity:0.45;background:repeating-linear-gradient(135deg,transparent,transparent 4px,rgba(0,0,0,0.03) 4px,rgba(0,0,0,0.03) 8px);'
+        : (r.ferie ? 'opacity:0.6;' : '');
+      html += `<tr style="${rowStyle}" ${noHoraire ? 'title="Aucun horaire défini"' : ''}>
         <td class="td-prno">${r.prno}</td><td class="td-name">${r.nom_prenom}</td>
-        <td>${t(r.arr_mat)}</td><td>${t(r.dep_mat)}</td><td>${t(r.arr_apm)}</td><td>${t(r.dep_apm)}</td>
-        <td class="td-dur">${dur(r.dur_mat)}</td><td class="td-dur">${dur(r.dur_apm)}</td>
-        <td class="td-dur">${r.reel_label||dur(r.dur_tot)}</td>
-        <td class="td-dur" style="color:var(--teal)">${r.theorique_label||'—'}</td>
-        <td class="td-dur" style="color:${r.ecart_type==='manquant'?'var(--red)':r.ecart_type==='ok'?'var(--green)':'var(--text-muted)'}">${r.ecart_label||'—'}</td>
-        <td><span class="badge ${bc(r.statut)}">${r.statut}</span></td>
+        <td>${noHoraire ? '<span class="td-empty">—</span>' : t(r.arr_mat)}</td>
+        <td>${noHoraire ? '<span class="td-empty">—</span>' : t(r.dep_mat)}</td>
+        <td>${noHoraire ? '<span class="td-empty">—</span>' : t(r.arr_apm)}</td>
+        <td>${noHoraire ? '<span class="td-empty">—</span>' : t(r.dep_apm)}</td>
+        <td class="td-dur">${noHoraire ? '<span class="td-empty">—</span>' : dur(r.dur_mat)}</td>
+        <td class="td-dur">${noHoraire ? '<span class="td-empty">—</span>' : dur(r.dur_apm)}</td>
+        <td class="td-dur">${reelLabel}</td>
+        <td class="td-dur" style="color:var(--teal)">${noHoraire ? '<span class="td-empty">N/A</span>' : (r.theorique_label||'—')}</td>
+        <td class="td-dur" style="color:${noHoraire ? 'var(--text-muted)' : (r.ecart_type==='manquant'?'var(--red)':r.ecart_type==='ok'?'var(--green)':'var(--text-muted)')}">${noHoraire ? '<span class="td-empty">—</span>' : (r.ecart_label||'—')}</td>
+        <td>${noHoraire
+          ? '<span class="badge" style="background:rgba(0,0,0,0.06);color:var(--text-muted);border:1px solid var(--border)">Sans horaire</span>'
+          : `<span class="badge ${bc(r.statut)}">${r.statut}</span>`}</td>
       </tr>`;
     });
     html += '</tbody></table></div>';

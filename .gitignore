@@ -3,5 +3,5 @@ env.example
 README.md
 presences.db
 tracker.log
-presences.xslx
+presences.xlsx
 .idea/workspace.xml
