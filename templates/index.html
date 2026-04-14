@@ -27,6 +27,11 @@
   --navy-mid:#2A3347;
   --radius:12px;--radius-lg:18px;
 }
+.sidebar-logo img{
+  width:38px;
+  height:38px;
+  object-fit:contain;
+}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'DM Sans',sans-serif;background:var(--main-bg);color:var(--text);min-height:100vh;display:flex;overflow-x:hidden;}
 
@@ -188,7 +193,7 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1
 <!-- SIDEBAR -->
 <aside class="sidebar">
   <div class="sidebar-logo">
-    <div class="logo-mark">K</div>
+    <img src="{{ url_for('static', filename='assets/logo.png') }}" alt="logo">
     <div><div class="logo-text">KAROKA</div><div class="logo-sub">Présences</div></div>
   </div>
   <div class="sidebar-profile">

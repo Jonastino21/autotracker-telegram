@@ -127,6 +127,62 @@ def get_plages_jour(code: str, date_obj: date) -> list:
     return parse_code_horaire(code)[date_obj.weekday()]["plages_travail"]
 
 
+def est_dans_plage_horaire(code: str, date_obj: date, heure_str: str,
+                            tolerance: int = 30) -> bool:
+    """
+    Vérifie si une heure de pointage appartient à une plage de travail
+    de l'employé pour ce jour, avec une tolérance en minutes.
+
+    Retourne False si hors de toute plage → pointage ignoré.
+    Retourne True si dans une fenêtre [debut - tolerance, fin + tolerance].
+    """
+    plages = get_plages_jour(code, date_obj)
+    if not plages:
+        return False
+    h_min = _heure_to_min(heure_str)
+    for plage in plages:
+        if (plage["debut"] - tolerance) <= h_min <= (plage["fin"] + tolerance):
+            return True
+    return False
+
+
+def get_session_depuis_horaire(code: str, date_obj: date, heure_str: str) -> str:
+    """
+    Détermine la session (matin/apm) d'un pointage selon les plages horaires
+    réelles de l'employé, sans seuil fixe à 13h.
+
+    Logique :
+    - Si une seule plage dans la journée → toujours 'matin' (session unique)
+    - Si deux plages → la plage qui se termine la plus tôt = matin,
+      l'autre = apm
+    - On affecte le pointage à la plage dont le milieu est le plus proche
+    """
+    plages = get_plages_jour(code, date_obj)
+    if not plages:
+        # Fallback seuil fixe si pas d'horaire défini
+        h = _heure_to_min(heure_str)
+        return "matin" if h < 780 else "apm"
+
+    if len(plages) == 1:
+        return "matin"
+
+    # Plusieurs plages : trier par heure de début
+    plages_triees = sorted(plages, key=lambda p: p["debut"])
+    h_min = _heure_to_min(heure_str)
+
+    # Calculer le milieu de chaque plage et trouver la plus proche
+    distances = []
+    for i, plage in enumerate(plages_triees):
+        milieu = (plage["debut"] + plage["fin"]) // 2
+        distances.append((abs(h_min - milieu), i))
+
+    distances.sort()
+    idx_plus_proche = distances[0][1]
+
+    # La première plage (index 0 après tri) = matin, les suivantes = apm
+    return "matin" if idx_plus_proche == 0 else "apm"
+
+
 def get_minutes_theoriques_semaine(code: str) -> int:
     if not code:
         return 0

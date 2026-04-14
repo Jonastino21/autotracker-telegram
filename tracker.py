@@ -14,6 +14,7 @@ import database as db
 import detector
 import exporter
 import dashboard
+import parser as horaire_parser
 
 load_dotenv()
 
@@ -39,8 +40,56 @@ def get_tz():
     return ZoneInfo(TIMEZONE)
 
 
-def get_session(heure_locale):
-    return "matin" if int(heure_locale.split(":")[0]) < 13 else "apm"
+def get_session(heure_locale, prno: str = None, date_local: str = None) -> str:
+    """
+    Détermine la session (matin / apm) en fonction de l'horaire réel de l'employé.
+
+    Logique :
+      - Si l'employé a un horaire défini avec plusieurs plages, on cherche la plage
+        dont la fenêtre (début − tolérance … fin + tolérance) contient heure_locale.
+        · La plage qui commence avant 13 h → session "matin"
+        · La plage qui commence à 13 h ou après → session "apm"
+      - Si l'employé n'a qu'une seule plage continue (ex : 08 h–13 h), la session
+        est déterminée par le début de cette plage (avant / après 13 h).
+      - Fallback : seuil fixe 13 h (comportement d'origine).
+    """
+    from parser import get_plages_jour
+    from datetime import date as date_cls
+
+    h_min = int(heure_locale.split(":")[0]) * 60 + int(heure_locale.split(":")[1])
+    TOLERANCE = 30  # minutes de tolérance autour de chaque plage
+
+    if prno and date_local:
+        try:
+            horaire = db.get_horaire(prno, date_local)
+            if horaire:
+                code     = horaire["code_horaire"]
+                date_obj = date_cls.fromisoformat(date_local)
+                plages   = get_plages_jour(code, date_obj)
+
+                if plages:
+                    # Trouver la plage dont la fenêtre élargie contient heure_locale
+                    for plage in plages:
+                        pd, pf = plage["debut"], plage["fin"]
+                        if (pd - TOLERANCE) <= h_min <= (pf + TOLERANCE):
+                            return "matin" if pd < 780 else "apm"
+
+                    # Aucune plage ne correspond exactement : prendre la plus proche
+                    def distance(plage):
+                        pd, pf = plage["debut"], plage["fin"]
+                        if h_min < pd:
+                            return pd - h_min
+                        if h_min > pf:
+                            return h_min - pf
+                        return 0
+
+                    closest = min(plages, key=distance)
+                    return "matin" if closest["debut"] < 780 else "apm"
+        except Exception:
+            pass  # En cas d'erreur on tombe sur le fallback
+
+    # Fallback : seuil fixe 13 h
+    return "matin" if h_min < 780 else "apm"
 
 
 def ajouter_au_groupe(telegram_id, nom):
@@ -132,11 +181,40 @@ def process_group_message(message):
     msg_dt_local = datetime.fromtimestamp(message.date, tz=ZoneInfo("UTC")).astimezone(get_tz())
     date_local   = msg_dt_local.strftime("%Y-%m-%d")
     heure_locale = msg_dt_local.strftime("%H:%M:%S")
-    session      = get_session(heure_locale)
 
-    # Vérifier si c'est un doublon de type (même type que dernier pointage du jour)
-    dernier_type = db.get_dernier_pointage_type(prno, date_local)
+    # ── FIX 1 : Vérifier que le pointage est dans une plage horaire valide ──
+    # Si l'employé a un horaire défini et que l'heure est hors de toute plage
+    # (avec tolérance ±30 min), on ignore silencieusement le message.
+    from parser import est_dans_plage_horaire, get_session_depuis_horaire
+    from datetime import date as date_cls
+
+    horaire = db.get_horaire(prno, date_local)
+    if horaire and horaire.get("code_horaire"):
+        code_h   = horaire["code_horaire"]
+        date_obj = date_cls.fromisoformat(date_local)
+        if not est_dans_plage_horaire(code_h, date_obj, heure_locale, tolerance=30):
+            logger.info(
+                "%s — pointage ignoré (hors plage horaire) : %s à %s",
+                prno, date_local, heure_locale[:5]
+            )
+            return  # hors plage → on ne fait rien, pas de toast, pas de BDD
+
+        # Session calculée depuis l'horaire réel
+        session = get_session_depuis_horaire(code_h, date_obj, heure_locale)
+    else:
+        # Pas d'horaire défini → fallback seuil fixe 13h
+        session = get_session(heure_locale)
+
+    # ── FIX 2 : Doublon de type — on n'insère pas et on n'émet pas de toast ──
+    # On vérifie avant l'insertion si l'employé a déjà pointé ce type aujourd'hui.
+    dernier_type    = db.get_dernier_pointage_type(prno, date_local)
     is_type_doublon = (dernier_type == type_pointage)
+
+    if is_type_doublon:
+        logger.debug(
+            "%s — doublon de type '%s' ignoré à %s", prno, type_pointage, heure_locale[:5]
+        )
+        return  # doublon → ni insertion, ni toast, ni Excel
 
     inserted = db.insert_pointage(
         message_id=message.message_id, telegram_id=telegram_id, prno=prno,
@@ -144,12 +222,11 @@ def process_group_message(message):
         type_pointage=type_pointage, session=session, raw_text=text[:500],
     )
 
-    if inserted and not is_type_doublon:
+    if inserted:
         type_label    = "Arrivée" if type_pointage == "arrivee" else "Départ"
         session_label = "matin" if session == "matin" else "après-midi"
         logger.info("%s — %s [%s] %s à %s", prno, type_label, session_label, date_local, heure_locale)
 
-        # Émettre l'événement WebSocket temps réel (toast uniquement si pas doublon de type)
         payload = {
             "prno":          prno,
             "nom_complet":   nom_complet,
@@ -161,8 +238,6 @@ def process_group_message(message):
             "date":          date_local,
         }
         dashboard.emit_pointage(payload)
-
-    if inserted:
         threading.Thread(target=_regenerer_excel, args=(date_local,), daemon=True).start()
 
 
