@@ -298,11 +298,6 @@ tbody tr:hover td{background:rgba(0,191,165,0.04);}
     <img src="{{ url_for('static', filename='assets/logo.png') }}" alt="logo">
     <div><div class="logo-text">KAROKA</div><div class="logo-sub">Présences</div></div>
   </div>
-  <div class="sidebar-profile">
-    <div class="profile-avatar">{{ username[0]|upper if username else 'A' }}</div>
-    <div class="profile-name">{{ username or 'Admin' }}</div>
-    <div class="profile-email">{{ username or '' }}@karoka.mg</div>
-  </div>
   <nav class="sidebar-nav">
     <a href="/" class="nav-item"><i class="nav-icon">◈</i><span>Présences</span></a>
     <a href="/admin" class="nav-item active"><i class="nav-icon">◎</i><span>Admin</span></a>
@@ -834,6 +829,9 @@ function showAlert(el,type,msg){
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
+const _todayAdmin = new Date().toLocaleDateString('fr-CA'); // YYYY-MM-DD
+document.getElementById('inputDateEffet').value = _todayAdmin;
+document.getElementById('ferieDate').value = _todayAdmin;
 initFerieAnnee();
 loadEmployes();
 renderModelesRapides();

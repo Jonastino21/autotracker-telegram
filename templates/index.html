@@ -196,14 +196,7 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1
     <img src="{{ url_for('static', filename='assets/logo.png') }}" alt="logo">
     <div><div class="logo-text">KAROKA</div><div class="logo-sub">Présences</div></div>
   </div>
-  <div class="sidebar-profile">
-    <div class="profile-avatar">
-      {{ username[0]|upper if username else 'U' }}
-      <div class="profile-badge">4</div>
-    </div>
-    <div class="profile-name">{{ username or 'Utilisateur' }}</div>
-    <div class="profile-email">{{ username or '' }}@karoka.mg</div>
-  </div>
+
   <nav class="sidebar-nav">
     <a href="#" class="nav-item active" onclick="return false"><span class="nav-icon">◉</span><span>Présences</span></a>
     <a href="/admin" class="nav-item"><span class="nav-icon">◎</span><span>Admin</span></a>
@@ -305,7 +298,7 @@ let currentDate = '{{ date_param }}' || todayStr;
 if (!currentDate || currentDate === 'None' || currentDate === '') currentDate = todayStr;
 let allRowsData = [];
 
-document.getElementById('globalDate').value = currentDate;
+document.querySelectorAll('#globalDate').forEach(el => el.value = currentDate);
 const urlParams = new URLSearchParams(window.location.search);
 const dateParam = urlParams.get('date');
 if (dateParam) {
