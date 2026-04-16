@@ -357,10 +357,10 @@ tbody tr:hover td{background:rgba(0,191,165,0.04);}
           <div class="form-group">
             <label>Code horaire</label>
             <div class="modeles-grid" id="modelesRapides">
-              <div class="modele-chip" onclick="appliquerModeleRapide('0800tj1200;1400tj1700;(1000tj1010);(1600tj1610);(0800di1200);(1400di1700)')">Standard 40h</div>
+              <div class="modele-chip" onclick="appliquerModeleRapide('0800tj1200;1400tj1700;(1000tj1010);(1600tj1610);(di)')">Standard 40h</div>
             </div>
             <textarea id="inputHoraire"
-              placeholder="0800tj1200;1400tj1700;(1000tj1010);(1600tj1610);(0800di1200);(1400di1700)"
+              placeholder="0800tj1200;1400tj1700;(1000tj1010);(1600tj1610);(di)"
               oninput="validerHoraireFormulaire()"
               rows="3"></textarea>
             <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
@@ -476,7 +476,7 @@ tbody tr:hover td{background:rgba(0,191,165,0.04);}
           </div>
           <div class="form-group">
             <label>Code horaire</label>
-            <textarea id="modeleCode" placeholder="2000tj0600;(2000di0600)" oninput="validerHoraireModele()" rows="3"></textarea>
+            <textarea id="modeleCode" placeholder="2000tj0600;(di)" oninput="validerHoraireModele()" rows="3"></textarea>
             <div id="modelePreview" class="horaire-preview" style="display:none;margin-top:8px"></div>
           </div>
           <button class="btn btn-primary btn-full" onclick="creerModele()">Sauvegarder le modèle</button>
@@ -508,7 +508,7 @@ socket.on('admin_employes_updated', function() {
 
 const MODELE_STANDARD = {
   nom: 'Standard 40h',
-  code: '0800tj1200;1400tj1700;(1000tj1010);(1600tj1610);(0800di1200);(1400di1700)',
+  code: '0800tj1200;1400tj1700;(1000tj1010);(1600tj1610);(di)',
   builtin: true
 };
 

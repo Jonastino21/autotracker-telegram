@@ -40,6 +40,32 @@ def _parse_segment(seg: str):
     }
 
 
+def _parse_exclusion_jour(raw: str):
+    """
+    Parse les notations d'exclusion de jour simplifié :
+      - "di"         → exclure tout le dimanche
+      - "me:am"      → exclure le matin du mercredi (1ère plage)
+      - "sa:pm"      → exclure l'après-midi du samedi (2ème plage et +)
+
+    Retourne un dict {"jours": [...], "session": "full"|"am"|"pm"}
+    ou None si non reconnu.
+    """
+    raw = raw.strip().lower()
+    # Format "jour:am" ou "jour:pm"
+    m = re.match(r'^(lu|ma|me|je|ve|sa|di|tj):(am|pm)$', raw)
+    if m:
+        return {
+            "jours":   JOURS.get(m.group(1), []),
+            "session": m.group(2),
+        }
+    # Format "jour" seul (exclusion totale)
+    if raw in JOURS:
+        return {
+            "jours":   JOURS[raw],
+            "session": "full",
+        }
+
+
 def parse_code_horaire(code: str) -> dict:
     """
     Parse le code horaire complet.
@@ -51,11 +77,26 @@ def parse_code_horaire(code: str) -> dict:
     if not code or not code.strip():
         return _empty_result()
 
-    jours_raw = {i: {"travail": [], "pauses": []} for i in range(7)}
+    jours_raw = {i: {"travail": [], "pauses": [], "excl_full": False,
+                      "excl_am": False, "excl_pm": False} for i in range(7)}
 
     for seg in [s.strip() for s in code.split(";") if s.strip()]:
         is_pause = seg.startswith("(") and seg.endswith(")")
         raw    = seg[1:-1] if is_pause else seg
+
+        # Tenter notation exclusion simplifiee (jour seul ou jour:am/pm)
+        if is_pause:
+            excl = _parse_exclusion_jour(raw)
+            if excl is not None:
+                for j in excl["jours"]:
+                    if excl["session"] == "full":
+                        jours_raw[j]["excl_full"] = True
+                    elif excl["session"] == "am":
+                        jours_raw[j]["excl_am"] = True
+                    elif excl["session"] == "pm":
+                        jours_raw[j]["excl_pm"] = True
+                continue
+
         parsed = _parse_segment(raw)
         if not parsed:
             continue
@@ -68,8 +109,34 @@ def parse_code_horaire(code: str) -> dict:
 
     result = {}
     for jour_idx in range(7):
-        travail = jours_raw[jour_idx]["travail"]
-        pauses  = jours_raw[jour_idx]["pauses"]
+        travail    = jours_raw[jour_idx]["travail"]
+        pauses     = jours_raw[jour_idx]["pauses"]
+        excl_full  = jours_raw[jour_idx]["excl_full"]
+        excl_am    = jours_raw[jour_idx]["excl_am"]
+        excl_pm    = jours_raw[jour_idx]["excl_pm"]
+
+        # Si exclusion totale du jour, aucune plage nette
+        if excl_full:
+            result[jour_idx] = {
+                "nom":                JOURS_NOMS[jour_idx],
+                "plages_travail":     [],
+                "minutes_theoriques": 0,
+                "travaille":          False,
+            }
+            continue
+
+        # Résoudre excl_am / excl_pm en pauses concretes si travail defini
+        # On trie les plages de travail par debut pour determiner matin/apm
+        travail_trie = sorted(travail, key=lambda x: x[0])
+        pauses_effective = list(pauses)
+        if (excl_am or excl_pm) and travail_trie:
+            if excl_am:
+                # Exclure la 1re plage (matin)
+                pauses_effective.append(travail_trie[0])
+            if excl_pm and len(travail_trie) >= 2:
+                # Exclure toutes les plages apres la 1re (apm)
+                for p in travail_trie[1:]:
+                    pauses_effective.append(p)
 
         # Appliquer les exclusions/pauses
         plages_nettes = []
@@ -77,7 +144,7 @@ def parse_code_horaire(code: str) -> dict:
             brut = _duree_plage(td, tf)
             pause_total = 0
             exclure = False
-            for pd, pf in pauses:
+            for pd, pf in pauses_effective:
                 dur_pause = _duree_plage(pd, pf)
                 # Exclusion totale de la plage
                 if pd <= td and pf >= tf:
@@ -355,6 +422,9 @@ def valider_code_horaire(code: str) -> dict:
     for seg in [s.strip() for s in code.split(";") if s.strip()]:
         is_pause = seg.startswith("(") and seg.endswith(")")
         raw = seg[1:-1] if is_pause else seg
+        # Accepter notation exclusion simplifiee dans validateur
+        if is_pause and _parse_exclusion_jour(raw) is not None:
+            continue
         if not _parse_segment(raw):
             erreurs.append(f"Segment invalide : '{seg}'")
     if erreurs:
@@ -375,12 +445,12 @@ if __name__ == "__main__":
     from datetime import date as date_cls
 
     print("=== Test standard KAROKA ===")
-    code = "0800tj1200;1400tj1700;(1000tj1010);(1600tj1610);(0800di1200);(1400di1700)"
+    code = "0800tj1200;1400tj1700;(1000tj1010);(1600tj1610);(di)"
     val = valider_code_horaire(code)
     print(f"Semaine : {val['label_semaine']}")
 
     print("\n=== Test employée matin uniquement ===")
-    code2 = "0600tj1300;(1200sa1300);(1000tj1010);(0600di1300)"
+    code2 = "0600tj1300;(1200sa1300);(1000tj1010);(di:am)"
     val2  = valider_code_horaire(code2)
     for d in val2['detail']:
         print(f"  {d['jour']:<10} → {d['theorique'] if d['travaille'] else 'Repos'}")
