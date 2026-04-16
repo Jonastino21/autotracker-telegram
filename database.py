@@ -265,20 +265,44 @@ def ajouter_employe(prno, nom_complet):
 
 
 def desactiver_employe(prno):
+    """
+    Désactive un employé :
+    - marque actif=0
+    - supprime la liaison Telegram (permet re-onboarding si réactivé)
+    - retourne le telegram_id pour retirer du groupe
+    """
+    prno = prno.strip().lower()
     conn = get_connection()
     try:
         conn.execute(
             "UPDATE employes SET actif=0, updated_at=datetime('now') WHERE prno=?",
-            (prno.lower(),)
+            (prno,)
         )
         row = conn.execute(
-            "SELECT telegram_id FROM liaisons WHERE prno=?", (prno.lower(),)
+            "SELECT telegram_id FROM liaisons WHERE prno=?", (prno,)
         ).fetchone()
         telegram_id = row["telegram_id"] if row else None
-        if telegram_id:
-            conn.execute("UPDATE liaisons SET dans_groupe=0 WHERE prno=?", (prno.lower(),))
+        # Supprimer la liaison → permet re-onboarding si l'employé est réactivé
+        conn.execute("DELETE FROM liaisons WHERE prno=?", (prno,))
         conn.commit()
         return {"ok": True, "telegram_id": telegram_id}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        conn.close()
+
+
+def reactiver_employe(prno: str) -> dict:
+    """Réactive un employé désactivé (sans recréer la liaison — l'employé doit re-onboarder)."""
+    prno = prno.strip().lower()
+    conn = get_connection()
+    try:
+        conn.execute(
+            "UPDATE employes SET actif=1, updated_at=datetime('now') WHERE prno=?",
+            (prno,)
+        )
+        conn.commit()
+        return {"ok": True, "prno": prno}
     except Exception as e:
         return {"ok": False, "error": str(e)}
     finally:
@@ -336,6 +360,11 @@ def creer_liaison(telegram_id, prno, username=""):
     if not employe:
         return {"ok": False, "code": "PRNO_INCONNU",
                 "message": "❌ PRNO non reconnu. Contactez le service RH."}
+
+    # Si l'employé existe mais est inactif → le réactiver automatiquement
+    if not employe.get("actif", 1):
+        reactiver_employe(prno)
+        employe = get_employe_by_prno(prno)
 
     liaison_existante = get_liaison(telegram_id)
     if liaison_existante:
@@ -841,6 +870,18 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
         arrivees_mat.sort(); departs_mat.sort()
         arrivees_apm.sort(); departs_apm.sort()
 
+        # Calculer dur_mat et dur_apm depuis les plages_detail
+        dur_mat_min = None
+        dur_apm_min = None
+        if plages_detail:
+            for plage in plages_detail:
+                pd_h = int(plage["plage_debut"].split(":")[0]) * 60 + int(plage["plage_debut"].split(":")[1])
+                if plage["minutes"] and plage["minutes"] > 0:
+                    if pd_h < 780:  # plage matin
+                        dur_mat_min = (dur_mat_min or 0) + plage["minutes"]
+                    else:            # plage apm
+                        dur_apm_min = (dur_apm_min or 0) + plage["minutes"]
+
         result.append({
             "prno":              prno,
             "nom_prenom":        emp["nom_complet"],
@@ -849,8 +890,8 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
             "dep_mat":           departs_mat[-1] if departs_mat  else None,
             "arr_apm":           arrivees_apm[0] if arrivees_apm else None,
             "dep_apm":           departs_apm[-1] if departs_apm  else None,
-            "dur_mat":           None,
-            "dur_apm":           None,
+            "dur_mat":           dur_mat_min,
+            "dur_apm":           dur_apm_min,
             "dur_tot":           reel if reel > 0 else None,
             "statut":            statut,
             "ferie":             ferie,

@@ -359,6 +359,32 @@ def api_historique_horaire(prno):
     return jsonify(db.get_historique_horaires(prno))
 
 
+@app.route("/api/admin/employes/<prno>/reactiver", methods=["POST"])
+@login_required
+def api_reactiver_employe(prno):
+    result = db.reactiver_employe(prno)
+    return jsonify(result), (200 if result["ok"] else 400)
+
+
+@app.route("/api/admin/horaires/<prno>", methods=["PUT"])
+@login_required
+def api_modifier_horaire(prno):
+    """Modifie le code horaire d'un employé existant."""
+    data         = request.get_json()
+    code_horaire = (data.get("code_horaire") or "").strip()
+    date_effet   = (data.get("date_effet")   or get_today()).strip()
+    if not code_horaire:
+        return jsonify({"ok": False, "error": "Code horaire obligatoire"}), 400
+    from parser import valider_code_horaire
+    validation = valider_code_horaire(code_horaire)
+    if not validation["ok"]:
+        return jsonify({"ok": False, "error": " | ".join(validation["erreurs"])}), 400
+    result = db.set_horaire(prno, code_horaire, date_effet)
+    if result["ok"]:
+        result["heures_semaine"] = validation["label_semaine"]
+    return jsonify(result), (200 if result["ok"] else 400)
+
+
 @app.route("/api/admin/horaires/valider", methods=["POST"])
 @login_required
 def api_valider_horaire():

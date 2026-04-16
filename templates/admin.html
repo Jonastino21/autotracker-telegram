@@ -476,7 +476,7 @@ tbody tr:hover td{background:rgba(0,191,165,0.04);}
           </div>
           <div class="form-group">
             <label>Code horaire</label>
-            <textarea id="modeleCode" placeholder="2000tj0600;(di)" oninput="validerHoraireModele()" rows="3"></textarea>
+            <textarea id="modeleCode" placeholder="2000tj0600;(2000di0600)" oninput="validerHoraireModele()" rows="3"></textarea>
             <div id="modelePreview" class="horaire-preview" style="display:none;margin-top:8px"></div>
           </div>
           <button class="btn btn-primary btn-full" onclick="creerModele()">Sauvegarder le modèle</button>
@@ -677,7 +677,10 @@ function renderEmpTable(data, horMap={}) {
       <td><span class="badge ${bc}">${bl}</span></td>
       <td style="color:var(--text-dim)">${lieDate}</td>
       <td style="display:flex;gap:6px">
-        ${emp.actif?`<button class="btn btn-danger btn-sm" onclick="supprimerEmploye('${emp.prno}')">Désactiver</button>`:'<span style="color:var(--text-muted)">Inactif</span>'}
+        ${emp.actif
+          ? `<button class="btn btn-danger btn-sm" onclick="supprimerEmploye('${emp.prno}')">Désactiver</button>`
+          : `<button class="btn btn-ghost btn-sm" onclick="reactiver('${emp.prno}')">Réactiver</button>`}
+        ${emp.actif?`<button class="btn btn-ghost btn-sm" onclick="ouvrirModifHoraire('${emp.prno}','${horMap[emp.prno]||''}')">✏ Horaire</button>`:''}
         ${emp.lie&&!emp.dans_groupe?`<button class="btn btn-amber btn-sm" onclick="renvoiLien('${emp.prno}',${emp.telegram_id})">Renvoi lien</button>`:''}
       </td>
     </tr>`;
@@ -835,6 +838,101 @@ document.getElementById('ferieDate').value = _todayAdmin;
 initFerieAnnee();
 loadEmployes();
 renderModelesRapides();
+
+// ─── MODIFIER HORAIRE ────────────────────────────────────────────────────────
+let _modifPrno = null;
+
+function ouvrirModifHoraire(prno, codeActuel) {
+  _modifPrno = prno;
+  let modal = document.getElementById('modalHoraire');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'modalHoraire';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px';
+    modal.innerHTML = `
+      <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:28px;width:100%;max-width:520px;box-shadow:0 24px 60px rgba(0,0,0,0.2)">
+        <div style="font-size:15px;font-weight:700;margin-bottom:20px;color:var(--text)">Modifier horaire — <span id="mhPrno"></span></div>
+        <div id="mhAlert" class="alert" style="margin-bottom:14px"></div>
+        <div class="form-group">
+          <label>Code horaire</label>
+          <div class="modeles-grid" id="mhModeles" style="margin-bottom:8px"></div>
+          <textarea id="mhCode" rows="3" oninput="validerMH()" placeholder="0800tj1200;1400tj1700;..."></textarea>
+        </div>
+        <div class="form-group">
+          <label>Date d'effet</label>
+          <input type="date" id="mhDate">
+        </div>
+        <div id="mhPreview" style="font-size:12px;margin-bottom:16px;padding:10px;background:var(--main-bg);border-radius:8px;min-height:40px"></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary btn-full" onclick="sauvegarderModifHoraire()">Enregistrer</button>
+          <button class="btn btn-danger" onclick="document.getElementById('modalHoraire').remove()">Annuler</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if(e.target===modal) modal.remove(); });
+  }
+  document.getElementById('mhPrno').textContent = prno;
+  document.getElementById('mhCode').value = codeActuel || '';
+  document.getElementById('mhDate').value = new Date().toLocaleDateString('en-CA');
+  const mhMod = document.getElementById('mhModeles');
+  mhMod.innerHTML = `<div class="modele-chip" onclick="document.getElementById('mhCode').value='0800tj1200;1400tj1700;(1000tj1010);(1600tj1610);(0800di1200);(1400di1700)';validerMH()">Standard 40h</div>`;
+  modeles.forEach(m => {
+    mhMod.innerHTML += `<div class="modele-chip" onclick="document.getElementById('mhCode').value='${m.code}';validerMH()">${m.nom}</div>`;
+  });
+  validerMH();
+}
+
+async function validerMH() {
+  const code = document.getElementById('mhCode')?.value?.trim();
+  const prev = document.getElementById('mhPreview');
+  if (!prev) return;
+  if (!code) { prev.innerHTML = ''; return; }
+  try {
+    const r = await fetch('/api/admin/horaires/valider', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({code_horaire: code})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      let html = `<div style="color:var(--teal);font-weight:600;margin-bottom:8px">${d.label_semaine} / semaine</div>`;
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 16px">';
+      d.detail.forEach(j => {
+        html += `<div style="font-size:11px;color:${j.travaille?'var(--text)':'var(--text-muted)'}">${j.jour} → ${j.travaille?j.theorique:'Repos'}</div>`;
+      });
+      html += '</div>';
+      prev.innerHTML = html;
+    } else {
+      prev.innerHTML = `<div style="color:var(--red);font-size:12px">${d.error}</div>`;
+    }
+  } catch(e) { prev.innerHTML = ''; }
+}
+
+async function sauvegarderModifHoraire() {
+  const code = document.getElementById('mhCode')?.value?.trim();
+  const date_effet = document.getElementById('mhDate')?.value;
+  const alertEl = document.getElementById('mhAlert');
+  if (!code) { showAlert(alertEl,'error','Code horaire obligatoire'); return; }
+  const r = await fetch(`/api/admin/horaires/${_modifPrno}`, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({code_horaire: code, date_effet})
+  });
+  const d = await r.json();
+  if (d.ok) {
+    showAlert(alertEl,'success',`Horaire mis à jour — ${d.heures_semaine}/semaine`);
+    setTimeout(() => { document.getElementById('modalHoraire')?.remove(); loadEmployes(); }, 1500);
+  } else {
+    showAlert(alertEl,'error',d.error);
+  }
+}
+
+async function reactiver(prno) {
+  if (!confirm(`Réactiver ${prno} ? Il devra renvoyer son PRNO au bot pour se lier.`)) return;
+  const r = await fetch(`/api/admin/employes/${prno}/reactiver`, {method:'POST'});
+  const d = await r.json();
+  if (d.ok) loadEmployes();
+  else alert('Erreur : ' + d.error);
+}
 </script>
 </body>
 </html>
