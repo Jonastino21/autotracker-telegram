@@ -8,45 +8,28 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
 <style>
 :root{
-  /* Sidebar dark */
   --sidebar-bg:#1A1F2E;--sidebar-text:#E8EDF2;--sidebar-muted:#7B8BA8;--sidebar-active:#FFFFFF;--sidebar-hover:rgba(255,255,255,0.07);
-  /* Main area light */
   --main-bg:#F0F2F8;--main-bg2:#E8EBF4;--card-bg:#FFFFFF;--card-shadow:0 2px 12px rgba(0,0,0,0.07);
-  /* Content text */
   --text:#1A1F2E;--text-dim:#5A6A82;--text-muted:#9AAABB;
-  /* Accent */
   --teal:#00BFA5;--teal-dark:#00897B;--teal-glow:rgba(0,191,165,0.15);
-  /* Status */
   --amber:#FFB300;--amber-soft:rgba(255,179,0,0.12);
   --red:#EF5350;--red-soft:rgba(239,83,80,0.12);
   --green:#4CAF50;--green-soft:rgba(76,175,80,0.12);
   --purple:#9C27B0;--purple-soft:rgba(156,39,176,0.12);
-  /* Borders */
+  --slate:#607D8B;--slate-soft:rgba(96,125,139,0.10);
   --border:rgba(0,0,0,0.07);--border-mid:rgba(0,191,165,0.2);
-  /* Periods */
   --navy-mid:#2A3347;
   --radius:12px;--radius-lg:18px;
 }
-.sidebar-logo img{
-  width:38px;
-  height:38px;
-  object-fit:contain;
-}
+.sidebar-logo img{width:38px;height:38px;object-fit:contain;}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'DM Sans',sans-serif;background:var(--main-bg);color:var(--text);min-height:100vh;display:flex;overflow-x:hidden;}
-
-/* ── SIDEBAR ─────────────────────────────────────────────── */
 .sidebar{width:220px;min-height:100vh;background:var(--sidebar-bg);display:flex;flex-direction:column;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto;padding:28px 0 24px;}
 .sidebar-logo{display:flex;align-items:center;gap:10px;padding:0 24px 28px;}
-.logo-mark{width:38px;height:38px;background:linear-gradient(135deg,var(--teal),var(--teal-dark));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:white;box-shadow:0 0 16px rgba(0,191,165,0.35);flex-shrink:0;}
 .logo-text{font-size:17px;font-weight:700;color:var(--sidebar-text);}
 .logo-sub{font-size:10px;color:var(--sidebar-muted);letter-spacing:1.5px;text-transform:uppercase;}
-.sidebar-profile{display:flex;flex-direction:column;align-items:center;padding:0 24px 28px;border-bottom:1px solid rgba(255,255,255,0.07);margin-bottom:20px;}
-.profile-avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--teal-dark),var(--teal));display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:white;margin-bottom:12px;position:relative;box-shadow:0 0 0 3px rgba(0,191,165,0.3);}
-.profile-badge{position:absolute;top:-2px;right:-2px;width:18px;height:18px;background:var(--red);border-radius:50%;font-size:9px;font-weight:700;color:white;display:flex;align-items:center;justify-content:center;border:2px solid var(--sidebar-bg);}
-.profile-name{font-size:15px;font-weight:600;color:var(--sidebar-active);margin-bottom:3px;}
-.profile-email{font-size:11px;color:var(--sidebar-muted);}
 .sidebar-nav{display:flex;flex-direction:column;gap:2px;padding:0 12px;flex:1;}
+.nav-section-label{font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:var(--sidebar-muted);padding:14px 14px 6px;opacity:0.7;}
 .nav-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:500;color:var(--sidebar-muted);text-decoration:none;cursor:pointer;transition:all 0.2s;border:none;background:transparent;font-family:'DM Sans',sans-serif;width:100%;text-align:left;}
 .nav-item:hover{color:var(--sidebar-active);background:var(--sidebar-hover);}
 .nav-item.active{color:var(--sidebar-active);background:rgba(255,255,255,0.1);font-weight:600;}
@@ -55,26 +38,18 @@ body{font-family:'DM Sans',sans-serif;background:var(--main-bg);color:var(--text
 .live-badge{display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;font-size:11px;color:var(--teal);background:var(--teal-glow);}
 .live-dot{width:6px;height:6px;border-radius:50%;background:var(--teal);animation:pulse 1.5s infinite;}
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.3;transform:scale(0.6);}}
-
-/* ── MAIN WRAPPER ────────────────────────────────────────── */
 .page-body{flex:1;display:flex;flex-direction:column;min-width:0;}
-header{display:none;}/* header replaced by sidebar */
-
-/* ── TOP BAR ────────────────────────────────────────────── */
 .topbar{display:flex;align-items:center;gap:12px;padding:20px 28px 0;flex-shrink:0;}
+.topbar-date-display{font-size:13px;color:var(--teal);font-family:'DM Mono',monospace;font-weight:600;margin-top:2px;}
 .topbar-title{font-size:22px;font-weight:700;color:var(--text);flex:1;}
-.topbar-sub{font-size:12px;color:var(--text-dim);}
-.date-picker-wrap{display:flex;align-items:center;gap:8px;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:7px 14px;box-shadow:var(--card-shadow);}
-.date-picker-wrap label{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;}
+.date-picker-wrap{display:flex;align-items:center;gap:8px;background:var(--card-bg);border:1px solid rgba(0,191,165,0.45);border-radius:var(--radius);padding:7px 14px;box-shadow:0 0 0 3px rgba(0,191,165,0.08),var(--card-shadow);cursor:text;transition:border-color 0.2s,box-shadow 0.2s;}
+.date-picker-wrap:hover{border-color:var(--teal);box-shadow:0 0 0 4px rgba(0,191,165,0.15),var(--card-shadow);}
+.date-picker-wrap label{font-size:11px;color:var(--teal);text-transform:uppercase;letter-spacing:1px;font-weight:700;}
 input[type="date"]{background:transparent;border:none;color:var(--teal);font-family:'DM Mono',monospace;font-size:13px;outline:none;cursor:pointer;}
 input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1) hue-rotate(130deg);cursor:pointer;}
 .btn-excel{background:linear-gradient(135deg,#2E7D32,#43A047);color:white;border:none;border-radius:var(--radius);padding:8px 16px;font-size:12px;font-family:'DM Sans',sans-serif;font-weight:600;cursor:pointer;text-decoration:none;transition:opacity 0.2s;box-shadow:0 2px 8px rgba(46,125,50,0.3);}
 .btn-excel:hover{opacity:0.88;}
-.nav-btn{display:flex;align-items:center;gap:6px;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:8px 14px;font-size:12px;font-weight:500;color:var(--text-dim);text-decoration:none;transition:all 0.2s;cursor:pointer;box-shadow:var(--card-shadow);}
-.nav-btn:hover{color:var(--teal);border-color:var(--border-mid);}
-
-/* ── STAT CARDS ─────────────────────────────────────────── */
-.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding:20px 28px 0;position:relative;z-index:1;}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding:20px 28px 0;}
 .stat-card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px 22px;position:relative;overflow:hidden;transition:transform 0.2s,box-shadow 0.2s;box-shadow:var(--card-shadow);}
 .stat-card:hover{transform:translateY(-2px);box-shadow:0 6px 24px rgba(0,0,0,0.1);}
 .stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;border-radius:var(--radius-lg) var(--radius-lg) 0 0;}
@@ -88,17 +63,12 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1
 .stat-card.complet .stat-value{color:var(--green);}
 .stat-card.incomplet .stat-value{color:var(--amber);}
 .stat-card.absent .stat-value{color:var(--red);}
-.stat-icon{position:absolute;right:18px;top:18px;font-size:22px;opacity:0.12;}
-
-/* ── TABS ────────────────────────────────────────────────── */
-.tabs-wrap{padding:20px 28px 0;position:relative;z-index:1;}
+.tabs-wrap{padding:20px 28px 0;}
 .tabs{display:flex;gap:4px;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:5px;width:fit-content;box-shadow:var(--card-shadow);}
 .tab-btn{background:transparent;border:none;color:var(--text-dim);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;padding:8px 18px;border-radius:10px;cursor:pointer;transition:all 0.2s;white-space:nowrap;}
 .tab-btn:hover{color:var(--text);background:rgba(0,0,0,0.05);}
 .tab-btn.active{background:linear-gradient(135deg,var(--teal-dark),var(--teal));color:white;font-weight:600;box-shadow:0 2px 12px rgba(0,191,165,0.3);}
-
-/* ── TABLE CARD ─────────────────────────────────────────── */
-.main-content{padding:20px 28px 40px;position:relative;z-index:1;}
+.main-content{padding:20px 28px 40px;}
 .table-card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--card-shadow);}
 .table-header{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;}
 .table-title{font-size:15px;font-weight:700;color:var(--text);}
@@ -106,8 +76,6 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1
 .search-box{background:var(--main-bg);border:1px solid var(--border);border-radius:8px;padding:8px 14px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;width:200px;transition:border-color 0.2s;}
 .search-box:focus{border-color:var(--teal);}
 .search-box::placeholder{color:var(--text-muted);}
-
-/* ── DATA TABLE ─────────────────────────────────────────── */
 .data-table{width:100%;border-collapse:collapse;font-size:13px;}
 .data-table th{background:var(--main-bg);color:var(--text-dim);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.8px;padding:10px 14px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--border);}
 .data-table td{padding:10px 14px;border-bottom:1px solid var(--border);font-family:'DM Mono',monospace;font-size:12px;white-space:nowrap;color:var(--text);}
@@ -123,8 +91,7 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1
 .badge-incomplet{background:var(--amber-soft);color:#E65100;border:1px solid rgba(255,179,0,0.3);}
 .badge-absent{background:var(--red-soft);color:#C62828;border:1px solid rgba(239,83,80,0.3);}
 .badge-ferie{background:var(--purple-soft);color:#6A1B9A;border:1px solid rgba(156,39,176,0.3);}
-
-/* ── PERIOD TABLE ────────────────────────────────────────── */
+.badge-exclu{background:var(--slate-soft);color:var(--slate);border:1px solid rgba(96,125,139,0.2);}
 .periode-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
 .periode-table{width:100%;border-collapse:collapse;font-size:12px;min-width:600px;}
 .periode-table th{background:var(--main-bg);color:var(--text-dim);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;padding:8px 10px;border:1px solid var(--border);white-space:nowrap;cursor:pointer;text-align:center;}
@@ -138,10 +105,13 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1
 .cel-incomplet{background:rgba(255,179,0,0.14);color:#E65100;font-weight:600;}
 .cel-absent{background:rgba(239,83,80,0.1);color:#C62828;font-weight:600;}
 .cel-ferie{background:rgba(156,39,176,0.1);color:#6A1B9A;font-weight:600;}
-/* period summary columns */
-.periode-table td[style*="navy-mid"]{background:var(--main-bg2) !important;}
-
-/* ── MODAL ───────────────────────────────────────────────── */
+.cel-exclu{background:rgba(96,125,139,0.04);color:var(--text-muted);font-size:10px;}
+.smois-week-row{cursor:pointer;}
+.smois-week-row:hover td{background:rgba(0,191,165,0.06);}
+.smois-detail-row{display:none;}
+.smois-detail-row.open{display:table-row;}
+.smois-toggle{font-size:10px;color:var(--teal);margin-left:6px;display:inline-block;transition:transform 0.2s;}
+.smois-toggle.open{transform:rotate(90deg);}
 .loading-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px;gap:16px;color:var(--text-dim);}
 .spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--teal);border-radius:50%;animation:spin 0.8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
@@ -177,7 +147,7 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1
 ::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.15);border-radius:3px;}
 @media(max-width:900px){
   .sidebar{width:64px;}
-  .sidebar-profile,.profile-name,.profile-email,.nav-item span,.logo-text,.logo-sub,.sidebar-footer .live-badge span{display:none;}
+  .nav-section-label,.nav-item span,.logo-text,.logo-sub,.live-badge span{display:none;}
   .nav-item{justify-content:center;padding:12px;}
   .nav-icon{width:auto;}
 }
@@ -190,50 +160,46 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1
 </head>
 <body>
 
-<!-- SIDEBAR -->
 <aside class="sidebar">
   <div class="sidebar-logo">
     <img src="{{ url_for('static', filename='assets/logo.png') }}" alt="logo">
     <div><div class="logo-text">KAROKA</div><div class="logo-sub">Présences</div></div>
   </div>
-
   <nav class="sidebar-nav">
-    <a href="#" class="nav-item active" onclick="return false"><span class="nav-icon">◉</span><span>Présences</span></a>
-    <a href="/admin" class="nav-item"><span class="nav-icon">◎</span><span>Admin</span></a>
+    <div class="nav-section-label">Présence</div>
+    <a href="/" class="nav-item active"><span class="nav-icon">◉</span><span>Tableau de bord</span></a>
+    <div class="nav-section-label">Liaison</div>
+    <a href="/admin" class="nav-item"><span class="nav-icon">◎</span><span>Administration</span></a>
   </nav>
   <div class="sidebar-footer">
-
+    <div class="live-badge"><div class="live-dot"></div><span>Temps réel</span></div>
     <a href="/logout" class="nav-item"><span class="nav-icon">←</span><span>Déconnexion</span></a>
   </div>
 </aside>
 
-<!-- PAGE BODY -->
 <div class="page-body">
-
-<!-- hidden header kept for compatibility but not shown -->
-<header style="display:none">
-    <div><div class="logo-text">KAROKA</div><div class="logo-sub">Présences</div></div>
-
-  <div class="header-right">
-    <div class="date-picker-wrap">
-      <label>Date</label>
-      <input type="date" id="globalDate" onchange="onDateChange(this.value)">
-    </div>
-    <div class="live-badge"><div class="live-dot"></div><span>Temps réel</span></div>
-    <a href="/admin" class="nav-btn">Admin</a>
-    <a href="/api/download_excel" class="btn-excel">Exporter Excel</a>
-    <a href="/logout" class="nav-btn">{{ username }}</a>
-  </div>
-</header>
-
-<!-- TOP BAR -->
 <div class="topbar">
   <div>
     <div class="topbar-title">Présences</div>
   </div>
-  <div class="date-picker-wrap">
-    <label>Date</label>
-    <input type="date" id="globalDate" onchange="onDateChange(this.value)">
+  <!-- Bannière relevé inline -->
+  <div id="releveBanner" style="display:none;align-items:center;gap:8px;background:rgba(0,191,165,0.08);border:1px solid rgba(0,191,165,0.25);border-radius:10px;padding:6px 14px;font-size:12px;color:var(--teal);flex:1;max-width:380px">
+    <span style="font-weight:700">◉</span>
+    <span id="releveBannerText" style="font-family:'DM Mono',monospace;font-size:11px;flex:1"></span>
+    <button onclick="clearReleve()" style="background:transparent;border:1px solid rgba(0,191,165,0.4);border-radius:6px;color:var(--teal);font-size:10px;padding:2px 7px;cursor:pointer;white-space:nowrap">✕ Désactiver</button>
+  </div>
+  <div class="date-picker-wrap" id="releveSelectorWrap" style="display:none">
+    <select id="releveSelector" onchange="onReleveChange(this.value)"
+            style="background:transparent;border:none;color:var(--teal);font-family:'DM Mono',monospace;font-size:12px;outline:none;max-width:200px">
+      <option value="">— Choisir un relevé —</option>
+    </select>
+  </div>
+  <div class="date-picker-wrap" onclick="document.getElementById('nativeDatePicker').showPicker ? document.getElementById('nativeDatePicker').showPicker() : document.getElementById('nativeDatePicker').click()" style="cursor:pointer;position:relative;">
+    <label style="cursor:pointer;">Date</label>
+    <span id="globalDate" style="width:110px;color:var(--teal);font-family:'DM Mono',monospace;font-weight:700;font-size:13px;cursor:pointer;">—</span>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--teal);opacity:0.6;flex-shrink:0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    <input type="date" id="nativeDatePicker" onchange="onNativeDateChange(this.value)"
+           style="position:absolute;opacity:0;width:0;height:0;pointer-events:none;">
   </div>
   <a href="/api/download_excel" class="btn-excel">Exporter Excel</a>
 </div>
@@ -249,10 +215,8 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('jour')">Jour</button>
     <button class="tab-btn" onclick="switchTab('semaine')">Semaine</button>
+    <button class="tab-btn" onclick="switchTab('s_mois')">S-Mois</button>
     <button class="tab-btn" onclick="switchTab('mois')">Mois</button>
-    <button class="tab-btn" onclick="switchTab('trimestre')">Trimestre</button>
-    <button class="tab-btn" onclick="switchTab('semestre')">Semestre</button>
-    <button class="tab-btn" onclick="switchTab('annee')">Année</button>
   </div>
 </div>
 
@@ -267,7 +231,6 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1
   </div>
 </div>
 
-<!-- MODAL -->
 <div class="modal-overlay" id="modalOverlay" onclick="closeModalOnBg(event)">
   <div class="modal">
     <div class="modal-header">
@@ -284,51 +247,75 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1
     <div class="modal-body" id="modalBody"><div class="loading-state"><div class="spinner"></div></div></div>
   </div>
 </div>
-
 <div id="toast"></div>
-
-</div><!-- /page-body -->
+</div>
 
 <script>
 const socket = io();
 let currentTab = 'jour';
-// Date J injectée par le serveur (timezone Madagascar correcte)
-const todayStr = '{{ today }}';
+const todayStr = '{{ today }}';  // format YYYY-MM-DD from server
 let currentDate = '{{ date_param }}' || todayStr;
 if (!currentDate || currentDate === 'None' || currentDate === '') currentDate = todayStr;
 let allRowsData = [];
 
-document.querySelectorAll('#globalDate').forEach(el => el.value = currentDate);
+// Convertit YYYY-MM-DD → yyyy/mm/dd pour affichage
+function toDisplayDate(iso) { return iso ? iso.replace(/-/g, '/') : ''; }
+// Convertit yyyy/mm/dd → YYYY-MM-DD pour les APIs
+function toISODate(disp) { return disp ? disp.replace(/\//g, '-') : ''; }
+
+function setDateDisplay(iso) {
+  const disp = toDisplayDate(iso);
+  const el = document.getElementById('globalDate');
+  if (el) el.textContent = disp;
+  const picker = document.getElementById('nativeDatePicker');
+  if (picker) picker.value = iso;
+  const d = new Date(iso + 'T12:00:00');
+  const label = d.toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+  const topEl = document.getElementById('topbarDateDisplay');
+  if (topEl) topEl.textContent = label;
+}
+
+function onNativeDateChange(iso) {
+  if (!iso) return;
+  currentDate = iso;
+  history.replaceState(null, '', `?date=${iso}`);
+  setDateDisplay(iso);
+  loadData();
+  loadStats();
+}
+
+setDateDisplay(currentDate);
+
 const urlParams = new URLSearchParams(window.location.search);
 const dateParam = urlParams.get('date');
 if (dateParam) {
   currentDate = dateParam;
-  document.getElementById('globalDate').value = dateParam;
+  setDateDisplay(dateParam);
   setTimeout(() => openModal(dateParam), 600);
 }
 
-// ─── WebSocket temps réel ──────────────────────────────────────────────────
+// ── Format de date court : "di 04 26" ─────────────────────────────────────
+const JOURS_ABRV = ['lu','ma','me','je','ve','sa','di'];
+function formatDateCourt(ds) {
+  const d = new Date(ds + 'T12:00:00');
+  const j = d.getDay() === 0 ? 6 : d.getDay() - 1;
+  return `${JOURS_ABRV[j]} ${String(d.getMonth()+1).padStart(2,'0')} ${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// ── WebSocket ──────────────────────────────────────────────────────────────
 socket.on('nouveau_pointage', function(data) {
   showPointageToast(data);
-  if (currentTab === 'jour' && data.date === currentDate) {
-    loadData();
-    loadStats();
-  }
+  if (currentTab === 'jour' && data.date === currentDate) { loadData(); loadStats(); }
   playBeep();
 });
 
 function showPointageToast(data) {
   const container = document.getElementById('toast');
-  const icon = data.type_pointage === 'arrivee' ? "▲" : "▼";
+  const icon = data.type_pointage === 'arrivee' ? '▲' : '▼';
   const initials = data.nom_complet.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
   const div = document.createElement('div');
   div.className = 'toast-item pointage';
-  div.innerHTML = `
-    <div class="toast-avatar">${initials}</div>
-    <div class="toast-content">
-      <div class="toast-name">${data.nom_complet}</div>
-      <div class="toast-detail">${icon} ${data.type_label} ${data.session_label} — ${data.heure}</div>
-    </div>`;
+  div.innerHTML = `<div class="toast-avatar">${initials}</div><div class="toast-content"><div class="toast-name">${data.nom_complet}</div><div class="toast-detail">${icon} ${data.type_label} ${data.session_label} — ${data.heure}</div></div>`;
   container.appendChild(div);
   setTimeout(() => div.classList.add('show'), 50);
   setTimeout(() => { div.classList.remove('show'); setTimeout(() => div.remove(), 400); }, 4000);
@@ -337,8 +324,7 @@ function showPointageToast(data) {
 function playBeep() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
+    const osc = ctx.createOscillator(); const gain = ctx.createGain();
     osc.connect(gain); gain.connect(ctx.destination);
     osc.frequency.value = 880;
     gain.gain.setValueAtTime(0.1, ctx.currentTime);
@@ -347,112 +333,367 @@ function playBeep() {
   } catch(e) {}
 }
 
-// ─── Navigation ────────────────────────────────────────────────────────────
-function switchTab(tab) {
-  currentTab = tab;
-  document.querySelectorAll('.tab-btn').forEach((b,i) => {
-    const tabs=['jour','semaine','mois','trimestre','semestre','annee'];
-    b.classList.toggle('active', tabs[i]===tab);
+// ── État relevé actif ──────────────────────────────────────────────────────
+let activeReleveId = null;  // null = mode libre, sinon ID du relevé sélectionné
+
+// Charger la liste des relevés dans le sélecteur du topbar
+async function loadTopbarReleves() {
+  try {
+    const releves = await (await fetch('/api/releves')).json();
+    const sel = document.getElementById('releveSelector');
+    const wrap = document.getElementById('releveSelectorWrap');
+    if (!releves.length) return;
+    wrap.style.display = 'flex';
+    // Vider sauf le premier option vide
+    while (sel.options.length > 1) sel.remove(1);
+    releves.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r.id;
+      const label = r.libelle || `Relevé #${r.id}`;
+      const debut = (r.date_debut||'').replace(/-/g,'/');
+      const fin   = (r.date_fin  ||'').replace(/-/g,'/');
+      opt.textContent = `${label} (${debut}→${fin})`;
+      if (r.clos === 0) opt.style.fontWeight = '600';  // relevé en cours en gras
+      sel.appendChild(opt);
+    });
+    // Pré-sélectionner le relevé actif s'il existe
+    const actif = await (await fetch('/api/releves/actif')).json();
+    if (actif && actif.id) {
+      sel.value = actif.id;
+      activeReleveId = actif.id;
+      showReleveBanner(actif);
+    }
+  } catch(e) {}
+}
+
+function onReleveChange(val) {
+  activeReleveId = val ? parseInt(val) : null;
+  if (!activeReleveId) {
+    hideReleveBanner();
+    loadData();
+    return;
+  }
+  // Charger les infos du relevé et afficher bannière
+  fetch(`/api/releves`).then(r=>r.json()).then(releves => {
+    const r = releves.find(x => x.id === activeReleveId);
+    if (r) showReleveBanner(r);
   });
   loadData();
 }
 
-function onDateChange(val) {
-  currentDate = val;
-  history.replaceState(null,'',`?date=${val}`);
-  loadData(); loadStats();
+function showReleveBanner(r) {
+  const banner = document.getElementById('releveBanner');
+  const text   = document.getElementById('releveBannerText');
+  if (!banner || !text) return;
+  const debut = (r.date_debut||'').replace(/-/g,'/');
+  const fin   = (r.date_fin  ||'').replace(/-/g,'/');
+  text.textContent = `${r.libelle || 'Relevé #'+r.id}  ${debut} → ${fin}`;
+  banner.style.display = 'flex';
 }
 
-// ─── Stats ─────────────────────────────────────────────────────────────────
-async function loadStats() {
-  try {
-    const r = await fetch(`/api/stats?date=${currentDate}`);
-    const d = await r.json();
-    document.getElementById('statTotal').textContent     = d.total ?? '—';
-    document.getElementById('statComplets').textContent  = d.complets ?? '—';
-    document.getElementById('statIncomplets').textContent= d.incomplets ?? '—';
-    document.getElementById('statAbsents').textContent   = d.absents ?? '—';
-  } catch(e) {}
+function hideReleveBanner() {
+  const banner = document.getElementById('releveBanner');
+  if (banner) banner.style.display = 'none';
 }
 
-// ─── Table ─────────────────────────────────────────────────────────────────
+function clearReleve() {
+  activeReleveId = null;
+  document.getElementById('releveSelector').value = '';
+  hideReleveBanner();
+  loadData();
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  const tabs = ['jour','semaine','s_mois','mois'];
+  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', tabs[i]===tab));
+
+  // Sélecteur de relevé : visible seulement sur S-Mois et Mois
+  const wrap = document.getElementById('releveSelectorWrap');
+  if (wrap) {
+    const showReleve = (tab === 's_mois' || tab === 'mois');
+    wrap.style.display = showReleve ? 'flex' : 'none';
+    // Si on quitte S-Mois/Mois, on désactive le relevé actif
+    if (!showReleve && activeReleveId) {
+      activeReleveId = null;
+      hideReleveBanner();
+      if (wrap) document.getElementById('releveSelector').value = '';
+    }
+  }
+  loadData();
+}
+
 async function loadData() {
   document.getElementById('tableBody').innerHTML = '<div class="loading-state"><div class="spinner"></div><span>Chargement...</span></div>';
   try {
-    if (currentTab === 'jour') await loadJour();
-    else await loadPeriode();
+    if (currentTab === 'jour')    await loadJour();
+    else if (currentTab === 'semaine') await loadPeriode();
+    else if (currentTab === 's_mois')  await loadSMois();
+    else if (currentTab === 'mois')    await loadPeriode();
   } catch(e) {
     document.getElementById('tableBody').innerHTML = '<div class="loading-state">Erreur de chargement</div>';
   }
 }
 
+function onDateChange(iso) {
+  currentDate = iso;
+  history.replaceState(null,'',`?date=${iso}`);
+  setDateDisplay(iso);
+  loadData(); loadStats();
+}
+
+async function loadStats() {
+  try {
+    const d = await (await fetch(`/api/stats?date=${currentDate}`)).json();
+    document.getElementById('statTotal').textContent      = d.total ?? '—';
+    document.getElementById('statComplets').textContent   = d.complets ?? '—';
+    document.getElementById('statIncomplets').textContent = d.incomplets ?? '—';
+    document.getElementById('statAbsents').textContent    = d.absents ?? '—';
+  } catch(e) {}
+}
+
+// ── VUE JOUR ──────────────────────────────────────────────────────────────
 async function loadJour() {
-  const r = await fetch(`/api/jour_horaires?date=${currentDate}`);
-  const data = await r.json();
+  const data = await (await fetch(`/api/jour_horaires?date=${currentDate}`)).json();
   allRowsData = data;
   const dt = new Date(currentDate+'T12:00:00');
   document.getElementById('tableTitle').textContent = 'Présences du jour';
   document.getElementById('tableSubtitle').textContent = dt.toLocaleDateString('fr-FR',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-  // Bannière jour férié
-  const bannerEl = document.getElementById('ferierBanner');
-  if (data.length > 0 && data[0].ferie) {
-    bannerEl.innerHTML = '<div class="ferie-banner">Jour férié — les absences ne sont pas comptabilisées</div>';
-  } else { bannerEl.innerHTML = ''; }
+  const banner = document.getElementById('ferierBanner');
+  banner.innerHTML = (data.length > 0 && data[0].ferie)
+    ? '<div class="ferie-banner">★ Jour férié — les absences ne sont pas comptabilisées</div>' : '';
   renderJourTable(data);
 }
 
 function renderJourTable(data) {
   const body = document.getElementById('tableBody');
   if (!data.length) { body.innerHTML = '<div class="loading-state">📭 Aucune donnée</div>'; return; }
-  const dur = m => (m !== null && m !== undefined && m > 0) ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty">—</span>';
+  const dur = m => (m > 0) ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty">—</span>';
+  const bc  = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu'}[s]||'');
   const t   = v => v ? `<span class="td-time">${v.slice(0,5)}</span>` : '<span class="td-empty">—</span>';
-  const bc  = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie'}[s]||'');
+  const vide = '<span class="td-empty">—</span>';
+
   let html = `<div style="overflow-x:auto"><table class="data-table"><thead><tr>
-    <th>PRNO</th><th>Nom Prénom</th><th>Arr. Matin</th><th>Dép. Matin</th><th>Arr. AM</th><th>Dép. AM</th>
-    <th>Dur. Matin</th><th>Dur. AM</th><th>Réel</th><th>Théorique</th><th>Écart</th><th>Statut</th>
+    <th>PRNO</th><th>Nom Prénom</th>
+    <th>Arr. Mat</th><th>Dép. Mat</th>
+    <th>Arr. APM</th><th>Dép. APM</th>
+    <th>Durée</th><th style="color:var(--teal)">Contrat</th><th>Écart</th><th>Statut</th>
   </tr></thead><tbody>`;
+
   data.forEach(r => {
-    const noHoraire = !r.code_horaire;
-    // Colonne Réel : priorité à minutes_reels si dispo, sinon dur_tot
-    const reelMin = (r.minutes_reels !== null && r.minutes_reels !== undefined) ? r.minutes_reels : r.dur_tot;
-    const reelLabel = noHoraire ? '<span class="td-empty">—</span>'
-      : (r.reel_label && r.reel_label !== '—' ? r.reel_label : dur(reelMin));
-    const theorLabel = noHoraire ? '<span class="td-empty">N/A</span>' : (r.theorique_label || '—');
-    const ecartLabel = noHoraire ? '<span class="td-empty">—</span>' : (r.ecart_label || '—');
-    const ecartColor = noHoraire ? 'var(--text-muted)'
-      : (r.ecart_type==='manquant'?'var(--red)':r.ecart_type==='ok'?'var(--green)':'var(--text-muted)');
-    // Ligne désactivée si pas d'horaire défini
-    const rowStyle = noHoraire
-      ? 'opacity:0.45;background:repeating-linear-gradient(135deg,transparent,transparent 4px,rgba(0,0,0,0.03) 4px,rgba(0,0,0,0.03) 8px);'
-      : (r.ferie ? 'opacity:0.6;' : '');
-    const rowTitle = noHoraire ? ' title="Aucun horaire défini — pointage non comptabilisé"' : '';
-    html += `<tr style="${rowStyle}"${rowTitle}>
-      <td class="td-prno">${r.prno}</td><td class="td-name">${r.nom_prenom}</td>
-      <td>${noHoraire ? '<span class="td-empty">—</span>' : t(r.arr_mat)}</td>
-      <td>${noHoraire ? '<span class="td-empty">—</span>' : t(r.dep_mat)}</td>
-      <td>${noHoraire ? '<span class="td-empty">—</span>' : t(r.arr_apm)}</td>
-      <td>${noHoraire ? '<span class="td-empty">—</span>' : t(r.dep_apm)}</td>
-      <td class="td-dur">${noHoraire ? '<span class="td-empty">—</span>' : dur(r.dur_mat)}</td>
-      <td class="td-dur">${noHoraire ? '<span class="td-empty">—</span>' : dur(r.dur_apm)}</td>
-      <td class="td-dur">${reelLabel}</td>
-      <td class="td-dur" style="color:var(--teal)">${theorLabel}</td>
-      <td class="td-dur" style="color:${ecartColor};font-weight:600">${ecartLabel}</td>
-      <td>${noHoraire
-        ? '<span class="badge" style="background:rgba(0,0,0,0.06);color:var(--text-muted);border:1px solid var(--border)">Sans horaire</span>'
-        : `<span class="badge ${bc(r.statut)}">${r.statut}</span>`}</td>
+    const nh = !r.code_horaire;
+    const ex = r.statut === 'Exclu';
+    const duree   = nh ? vide : (r.reel_label && r.reel_label !== '—' ? r.reel_label : dur(r.minutes_reels||0));
+    const contrat = nh ? '<span class="td-empty">N/A</span>' : (r.theorique_label||'—');
+    const ecartC  = nh ? 'var(--text-muted)' : (r.ecart_type==='manquant'?'var(--red)':r.ecart_type==='ok'?'var(--green)':'var(--text-muted)');
+    const ecart   = nh || ex ? vide : (r.ecart_label||'—');
+    const rowSt   = nh ? 'opacity:0.45;background:repeating-linear-gradient(135deg,transparent,transparent 4px,rgba(0,0,0,0.03) 4px,rgba(0,0,0,0.03) 8px);' : ex ? 'opacity:0.35;' : r.ferie ? 'opacity:0.6;' : '';
+    const statut  = nh
+      ? '<span class="badge" style="background:rgba(0,0,0,0.06);color:var(--text-muted);border:1px solid var(--border)">Sans horaire</span>'
+      : `<span class="badge ${bc(r.statut)}">${r.statut}</span>`;
+
+    const show = !ex;
+    html += `<tr style="${rowSt}">
+      <td class="td-prno">${r.prno}</td>
+      <td class="td-name">${r.nom_prenom}</td>
+      <td>${show ? t(r.arr_mat) : vide}</td>
+      <td>${show ? t(r.dep_mat) : vide}</td>
+      <td>${show ? t(r.arr_apm) : vide}</td>
+      <td>${show ? t(r.dep_apm) : vide}</td>
+      <td class="td-dur">${ex ? vide : duree}</td>
+      <td class="td-dur" style="color:var(--teal)">${ex ? vide : contrat}</td>
+      <td class="td-dur" style="color:${ecartC};font-weight:600">${ecart}</td>
+      <td>${statut}</td>
     </tr>`;
   });
   html += '</tbody></table></div>';
   body.innerHTML = html;
 }
 
-async function loadPeriode() {
-  const r = await fetch(`/api/periode?periode=${currentTab}&date=${currentDate}`);
-  const data = await r.json();
+// ── VUE S-MOIS ────────────────────────────────────────────────────────────
+async function loadSMois() {
+  const releveParam = activeReleveId ? `&releve_id=${activeReleveId}` : '';
+  const data = await (await fetch(`/api/periode?periode=s_mois&date=${currentDate}${releveParam}`)).json();
   allRowsData = data.employes || [];
-  const labels={semaine:'Semaine',mois:'Mois',trimestre:'Trimestre',semestre:'Semestre',annee:'Année'};
-  document.getElementById('tableTitle').textContent = `Vue ${labels[currentTab]}`;
-  document.getElementById('tableSubtitle').textContent = `${data.date_debut} → ${data.date_fin}`;
+  const dt = new Date(currentDate+'T12:00:00');
+  const moisNom = dt.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
+  const titre = activeReleveId ? `Vue S-Mois — Relevé #${activeReleveId}` : `Vue S-Mois — ${moisNom}`;
+  document.getElementById('tableTitle').textContent = titre;
+  document.getElementById('tableSubtitle').textContent = `${data.date_debut.replace(/-/g,'/')} → ${data.date_fin.replace(/-/g,'/')} · cliquer sur une ligne pour voir le détail par jour`;
+  document.getElementById('ferierBanner').innerHTML = '';
+  renderSMoisTable(data);
+}
+
+function renderSMoisTable(data) {
+  const body = document.getElementById('tableBody');
+  const employes = data.employes || [];
+  if (!employes.length) { body.innerHTML='<div class="loading-state">📭 Aucune donnée</div>'; return; }
+  const dates = [...new Set(employes.flatMap(e => Object.keys(e.dates||{})))].sort();
+
+  // Grouper par semaine lundi→dimanche
+  const semaines = [];
+  let sem = [];
+  dates.forEach(d => {
+    const dow = new Date(d+'T12:00:00').getDay();
+    if (dow === 1 && sem.length) { semaines.push(sem); sem = []; }
+    sem.push(d);
+  });
+  if (sem.length) semaines.push(sem);
+
+  let html = '<div class="periode-scroll"><table class="periode-table"><thead><tr>';
+  html += '<th style="text-align:left;padding-left:14px">PRNO</th>';
+  html += '<th style="text-align:left;padding-left:10px;min-width:150px">Nom Prénom</th>';
+  semaines.forEach((s,i) => {
+    const d0 = formatDateCourt(s[0]); const d1 = formatDateCourt(s[s.length-1]);
+    html += `<th title="${s[0]} → ${s[s.length-1]}">S${i+1}<br><span style="font-size:9px;font-weight:400;opacity:0.65">${d0}→${d1}</span></th>`;
+  });
+  html += `<th style="background:var(--main-bg2);color:var(--teal);min-width:75px;border-left:2px solid var(--border-mid)">Contrat</th>`;
+  html += `<th style="background:var(--main-bg2);color:var(--text-dim);min-width:75px">Durée</th>`;
+  html += `<th style="background:var(--main-bg2);min-width:70px">Écart</th>`;
+  html += `<th style="background:var(--main-bg2);color:var(--green);min-width:36px" title="Complets">✓</th>`;
+  html += `<th style="background:var(--main-bg2);color:var(--amber);min-width:36px" title="Incomplets">◑</th>`;
+  html += `<th style="background:var(--main-bg2);color:var(--red);min-width:36px" title="Absents">✕</th>`;
+  html += '</tr></thead><tbody>';
+
+  employes.forEach(emp => {
+    const rid = 'sm_' + emp.prno.replace(/\W/g,'_');
+    const ec  = emp.ecart_type==='manquant'?'var(--red)':emp.ecart_type==='ok'?'var(--green)':'var(--text-muted)';
+
+    html += `<tr>`;
+    html += `<td class="td-prno-col">${emp.prno}</td>`;
+    html += `<td class="td-nom-col">${emp.nom_prenom}</td>`;
+
+    semaines.forEach((s, i) => {
+      const sts = s.map(d => (emp.dates||{})[d]||'Exclu');
+      const nC  = sts.filter(x=>x==='Complet').length;
+      const nI  = sts.filter(x=>x==='Incomplet').length;
+      const nA  = sts.filter(x=>x==='Absent').length;
+      const nEx = sts.filter(x=>x==='Exclu').length;
+      const nF  = sts.filter(x=>x==='Férié').length;
+      const cls = nA>0?'cel-absent':nI>0?'cel-incomplet':nC>0?'cel-complet':'cel-exclu';
+      const lbl = nEx+nF===s.length ? (nF>0?`★${nF}`:'·')
+        : [nC?`✓${nC}`:'',nI?`◑${nI}`:'',nA?`✕${nA}`:''].filter(Boolean).join(' ') || '·';
+      const datesStr = s.join(',');
+      html += `<td class="${cls}" style="font-size:11px;cursor:pointer"
+        onclick="openSemaine('${rid}','${emp.prno}',${i},'${datesStr}')"
+        title="Cliquer pour voir le détail de cette semaine">${lbl}</td>`;
+    });
+
+    html += `<td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--teal);background:var(--main-bg2);border-left:2px solid var(--border-mid);font-weight:600">${emp.theorique_label||'—'}</td>`;
+    html += `<td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-dim);background:var(--main-bg2)">${emp.reel_label||'—'}</td>`;
+    html += `<td style="font-family:'DM Mono',monospace;font-size:11px;color:${ec};background:var(--main-bg2);font-weight:600">${emp.ecart_label||'—'}</td>`;
+    html += `<td style="color:var(--green);font-weight:700;text-align:center;background:var(--main-bg2)">${emp.nb_complet||0}</td>`;
+    html += `<td style="color:var(--amber);font-weight:700;text-align:center;background:var(--main-bg2)">${emp.nb_incomplet||0}</td>`;
+    html += `<td style="color:var(--red);font-weight:700;text-align:center;background:var(--main-bg2)">${emp.nb_absent||0}</td>`;
+    html += '</tr>';
+
+    // Ligne détail cachée — s'ouvre sous la ligne avec les jours de la semaine cliquée
+    const ncol = 2 + semaines.length + 6;
+    html += `<tr class="smois-detail-row" id="${rid}">
+      <td colspan="${ncol}" style="padding:0;background:rgba(0,191,165,0.03);border-bottom:2px solid var(--border-mid)">
+        <div id="${rid}_content"></div>
+      </td>
+    </tr>`;
+  });
+
+  html += '</tbody></table></div>';
+  body.innerHTML = html;
+}
+
+// Cache données journalières
+const _dayCache = {};
+
+async function openSemaine(rid, prno, semIdx, datesStr) {
+  const dates = datesStr.split(',');
+  const detailRow = document.getElementById(rid);
+  const content   = document.getElementById(rid+'_content');
+  if (!detailRow || !content) return;
+
+  // Même semaine déjà ouverte → fermer
+  if (detailRow.classList.contains('open') && detailRow.dataset.semIdx === String(semIdx)) {
+    detailRow.classList.remove('open');
+    content.innerHTML = '';
+    return;
+  }
+
+  detailRow.dataset.semIdx = semIdx;
+  detailRow.classList.add('open');
+
+  const d0 = formatDateCourt(dates[0]); const d1 = formatDateCourt(dates[dates.length-1]);
+  content.innerHTML = `
+    <div style="padding:7px 16px;background:var(--navy-mid);color:white;font-size:11px;font-weight:600;display:flex;align-items:center;gap:12px">
+      <span>📅 ${d0} → ${d1}</span>
+      <button onclick="document.getElementById('${rid}').classList.remove('open');document.getElementById('${rid}_content').innerHTML=''"
+        style="margin-left:auto;background:transparent;border:1px solid rgba(255,255,255,0.3);border-radius:5px;color:white;font-size:10px;padding:2px 7px;cursor:pointer">✕</button>
+    </div>
+    <div id="${rid}_tbody_wrap"><div class="loading-state" style="padding:16px"><div class="spinner"></div></div></div>`;
+
+  // Charger en parallèle chaque jour de la semaine
+  const dayResults = await Promise.all(
+    dates.map(ds => {
+      if (_dayCache[ds]) return Promise.resolve(_dayCache[ds]);
+      return fetch(`/api/detail_jour?date=${ds}`)
+        .then(r=>r.json())
+        .then(d => { _dayCache[ds] = d; return d; })
+        .catch(() => null);
+    })
+  );
+
+  const dur = m => (m > 0) ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty">—</span>';
+  const bc  = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu'}[s]||'');
+  const t   = v => v ? `<span style="font-family:'DM Mono',monospace">${v.slice(0,5)}</span>` : '<span class="td-empty">—</span>';
+  const vide = '<span class="td-empty">—</span>';
+
+  let html = `<table class="data-table" style="width:100%;font-size:11px"><thead><tr>
+    <th style="padding:7px 12px">Date</th>
+    <th>Arr. Mat</th><th>Dép. Mat</th>
+    <th>Arr. APM</th><th>Dép. APM</th>
+    <th>Durée</th><th style="color:var(--teal)">Contrat</th>
+    <th>Écart</th><th>Statut</th>
+  </tr></thead><tbody>`;
+
+  dates.forEach((ds, i) => {
+    const dayData = dayResults[i];
+    const emp = dayData ? (dayData.employes||[]).find(e => e.prno === prno) : null;
+    const statut = emp ? emp.statut : 'Exclu';
+    const nh = !emp || !emp.code_horaire;
+    const ex = statut === 'Exclu';
+    const ferie = emp && emp.ferie;
+    const rowSt = ex ? 'opacity:0.4;' : ferie ? 'opacity:0.7;' : '';
+    const duree   = nh ? vide : (emp.reel_label && emp.reel_label !== '—' ? emp.reel_label : dur(emp.minutes_reels||0));
+    const contrat = nh ? vide : (emp.theorique_label||'—');
+    const ecartC  = !emp ? 'var(--text-muted)' : emp.ecart_type==='manquant'?'var(--red)':emp.ecart_type==='ok'?'var(--green)':'var(--text-muted)';
+    const ecart   = ex ? vide : (emp.ecart_label||'—');
+    html += `<tr style="${rowSt}" onclick="openModal('${ds}')" title="Voir détail complet">
+      <td style="padding:7px 12px;font-family:'DM Mono',monospace;color:var(--teal);font-weight:600;cursor:pointer">${formatDateCourt(ds)}</td>
+      <td>${ex?vide:t(emp.arr_mat)}</td>
+      <td>${ex?vide:t(emp.dep_mat)}</td>
+      <td>${ex?vide:t(emp.arr_apm)}</td>
+      <td>${ex?vide:t(emp.dep_apm)}</td>
+      <td class="td-dur">${ex?vide:duree}</td>
+      <td class="td-dur" style="color:var(--teal)">${ex?vide:contrat}</td>
+      <td class="td-dur" style="color:${ecartC};font-weight:600">${ecart}</td>
+      <td><span class="badge ${bc(statut)}">${ferie?'★ Férié':statut}</span></td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  document.getElementById(rid+'_tbody_wrap').innerHTML = html;
+}
+
+
+
+// ── VUE PÉRIODE (semaine, mois) ────────────────────────────────────────────
+async function loadPeriode() {
+  const releveParam = (activeReleveId && currentTab === 'mois') ? `&releve_id=${activeReleveId}` : '';
+  const data = await (await fetch(`/api/periode?periode=${currentTab}&date=${currentDate}${releveParam}`)).json();
+  allRowsData = data.employes || [];
+  const labels = {semaine:'Semaine', mois:'Mois'};
+  const titre = (activeReleveId && currentTab === 'mois')
+    ? `Mois — Relevé #${activeReleveId}`
+    : `Vue ${labels[currentTab]}`;
+  document.getElementById('tableTitle').textContent = titre;
+  document.getElementById('tableSubtitle').textContent = `${(data.date_debut||'').replace(/-/g,'/')} → ${(data.date_fin||'').replace(/-/g,'/')}`;
   document.getElementById('ferierBanner').innerHTML = '';
   renderPeriodeTable(data);
 }
@@ -461,42 +702,36 @@ function renderPeriodeTable(data) {
   const body = document.getElementById('tableBody');
   const employes = data.employes || [];
   if (!employes.length) { body.innerHTML='<div class="loading-state">📭 Aucune donnée</div>'; return; }
-  const datesSet = new Set();
-  employes.forEach(e => Object.keys(e.dates||{}).forEach(d => datesSet.add(d)));
-  const dates = [...datesSet].sort();
-
+  const dates = [...new Set(employes.flatMap(e => Object.keys(e.dates||{})))].sort();
   let html = `<div class="periode-scroll"><table class="periode-table"><thead><tr>
     <th style="text-align:left;padding-left:14px">PRNO</th>
     <th style="text-align:left;padding-left:10px;min-width:150px">Nom Prénom</th>`;
   dates.forEach(d => {
-    const dt = new Date(d+'T12:00:00');
-    const label = dt.toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit',month:'2-digit'});
     const isFerie = employes.length > 0 && (employes[0].dates||{})[d] === 'Férié';
-    html += `<th class="${isFerie?'th-ferie':''}" onclick="openModal('${d}')" title="${d}">${label}${isFerie?' ★':''}</th>`;
+    html += `<th class="${isFerie?'th-ferie':''}" onclick="openModal('${d}')" title="${d}">${formatDateCourt(d)}${isFerie?' ★':''}</th>`;
   });
-  html += `
-    <th style="background:var(--main-bg2);color:var(--teal);min-width:75px;border-left:2px solid var(--border-mid)">Théorique</th>
-    <th style="background:var(--main-bg2);color:var(--text-dim);min-width:75px">Réel</th>
+  html += `<th style="background:var(--main-bg2);color:var(--teal);min-width:75px;border-left:2px solid var(--border-mid)">Contrat</th>
+    <th style="background:var(--main-bg2);color:var(--text-dim);min-width:75px">Durée</th>
     <th style="background:var(--main-bg2);min-width:75px">Écart</th>
     <th style="background:var(--main-bg2);color:var(--green);min-width:36px" title="Complets">✓</th>
     <th style="background:var(--main-bg2);color:var(--amber);min-width:36px" title="Incomplets">◑</th>
     <th style="background:var(--main-bg2);color:var(--red);min-width:36px" title="Absents">✕</th>
-    <th style="background:var(--main-bg2);min-width:36px" title="Fériés payés">★</th>`;
+    <th style="background:var(--main-bg2);min-width:36px" title="Fériés">★</th>`;
   html += '</tr></thead><tbody>';
-
   employes.forEach(emp => {
     html += `<tr><td class="td-prno-col">${emp.prno}</td><td class="td-nom-col">${emp.nom_prenom}</td>`;
     dates.forEach(d => {
-      const s = (emp.dates||{})[d]||'Absent';
-      const cls = {Complet:'cel-complet',Incomplet:'cel-incomplet',Absent:'cel-absent',Férié:'cel-ferie'}[s]||'';
-      const lbl = {Complet:'✓',Incomplet:'◑',Absent:'✕',Férié:'★'}[s]||'—';
-      html += `<td class="${cls}" onclick="openModal('${d}')" title="${s} — ${d}">${lbl}</td>`;
+      const s   = (emp.dates||{})[d]||'Exclu';
+      const cls = {Complet:'cel-complet',Incomplet:'cel-incomplet',Absent:'cel-absent',Férié:'cel-ferie',Exclu:'cel-exclu'}[s]||'';
+      const lbl = {Complet:'✓',Incomplet:'◑',Absent:'✕',Férié:'★',Exclu:'·'}[s]||'—';
+      const oc  = s !== 'Exclu' ? `onclick="openModal('${d}')"` : '';
+      html += `<td class="${cls}" ${oc} title="${s} — ${d}">${lbl}</td>`;
     });
-    const ecartColor = emp.ecart_type==='manquant'?'var(--red)':emp.ecart_type==='ok'?'var(--green)':'var(--text-muted)';
+    const ec = emp.ecart_type==='manquant'?'var(--red)':emp.ecart_type==='ok'?'var(--green)':'var(--text-muted)';
     html += `
       <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--teal);background:var(--main-bg2);border-left:2px solid var(--border-mid);font-weight:600">${emp.theorique_label||'—'}</td>
       <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-dim);background:var(--main-bg2)">${emp.reel_label||'—'}</td>
-      <td style="font-family:'DM Mono',monospace;font-size:11px;color:${ecartColor};background:var(--main-bg2);font-weight:600">${emp.ecart_label||'—'}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:${ec};background:var(--main-bg2);font-weight:600">${emp.ecart_label||'—'}</td>
       <td style="color:var(--green);font-weight:700;text-align:center;background:var(--main-bg2)">${emp.nb_complet||0}</td>
       <td style="color:var(--amber);font-weight:700;text-align:center;background:var(--main-bg2)">${emp.nb_incomplet||0}</td>
       <td style="color:var(--red);font-weight:700;text-align:center;background:var(--main-bg2)">${emp.nb_absent||0}</td>
@@ -507,61 +742,71 @@ function renderPeriodeTable(data) {
   body.innerHTML = html;
 }
 
-
 function filterTable() {
-  const q = document.getElementById('searchBox').value.toLowerCase();
-  if (currentTab === 'jour') { renderJourTable(allRowsData.filter(r=>(r.prno+r.nom_prenom).toLowerCase().includes(q))); return; }
+  const q = document.getElementById('searchBox').value.toLowerCase().trim();
+  if (!q) {
+    if (currentTab === 'jour') renderJourTable(allRowsData);
+    else document.querySelectorAll('.periode-table tbody tr:not(.smois-detail-row)').forEach(r => r.style.display = '');
+    return;
+  }
+  if (currentTab === 'jour') {
+    renderJourTable(allRowsData.filter(r => {
+      // Cherche dans prno, nom, et toutes les heures de pointage
+      const heures = [r.arr_mat, r.dep_mat, r.arr_apm, r.dep_apm]
+        .filter(Boolean).map(h => h.slice(0,5)).join(' ');
+      return (r.prno + ' ' + r.nom_prenom + ' ' + heures + ' ' + (r.statut||'')).toLowerCase().includes(q);
+    }));
+    return;
+  }
+  // Vues période et S-Mois : filtrer par ligne (prno + nom)
   document.querySelectorAll('.periode-table tbody tr').forEach(row => {
+    if (row.classList.contains('smois-detail-row')) return;
     row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
   });
 }
 
-// ─── Modal ─────────────────────────────────────────────────────────────────
-async function openModal(dateStr) {
+// ── Modal ──────────────────────────────────────────────────────────────────
+async function openModal(ds) {
   document.getElementById('modalOverlay').classList.add('open');
-  document.getElementById('modalDate').textContent = dateStr;
-  const dt = new Date(dateStr+'T12:00:00');
-  document.getElementById('modalTitle').textContent = dt.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  document.getElementById('modalDate').textContent = formatDateCourt(ds);
+  document.getElementById('modalTitle').textContent = new Date(ds+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   document.getElementById('modalBody').innerHTML = '<div class="loading-state"><div class="spinner"></div></div>';
   ['mStatTotal','mStatComplets','mStatIncomplets','mStatAbsents'].forEach(id => document.getElementById(id).textContent='—');
   try {
-    const r = await fetch(`/api/detail_jour?date=${dateStr}`);
-    const data = await r.json();
-    document.getElementById('mStatTotal').textContent     = data.stats.total;
-    document.getElementById('mStatComplets').textContent  = data.stats.complets;
-    document.getElementById('mStatIncomplets').textContent= data.stats.incomplets;
-    document.getElementById('mStatAbsents').textContent   = data.stats.absents;
-    const dur = m => (m !== null && m !== undefined && m > 0) ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty">—</span>';
-    const t   = v => v ? `<span class="td-time">${v.slice(0,5)}</span>` : '<span class="td-empty">—</span>';
-    const bc  = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie'}[s]||'');
+    const data = await (await fetch(`/api/detail_jour?date=${ds}`)).json();
+    document.getElementById('mStatTotal').textContent      = data.stats.total;
+    document.getElementById('mStatComplets').textContent   = data.stats.complets;
+    document.getElementById('mStatIncomplets').textContent = data.stats.incomplets;
+    document.getElementById('mStatAbsents').textContent    = data.stats.absents;
+    const dur = m => (m > 0) ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty">—</span>';
+    const bc  = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu'}[s]||'');
     let html = '';
-    if (data.stats.ferie) html += '<div class="ferie-banner" style="margin:12px 16px 0">Jour férié</div>';
+    if (data.stats.ferie) html += '<div class="ferie-banner" style="margin:12px 16px 0">★ Jour férié</div>';
     html += `<div style="overflow-x:auto"><table class="data-table"><thead><tr>
-      <th>PRNO</th><th>Nom Prénom</th><th>Arr. Matin</th><th>Dép. Matin</th><th>Arr. AM</th><th>Dép. AM</th>
-      <th>Dur. Matin</th><th>Dur. AM</th><th>Réel</th><th>Théorique</th><th>Écart</th><th>Statut</th>
+      <th>PRNO</th><th>Nom Prénom</th>
+      <th>Arr. Mat</th><th>Dép. Mat</th>
+      <th>Arr. APM</th><th>Dép. APM</th>
+      <th>Durée</th><th style="color:var(--teal)">Contrat</th><th>Écart</th><th>Statut</th>
     </tr></thead><tbody>`;
+    const tM = v => v ? `<span class="td-time">${v.slice(0,5)}</span>` : '<span class="td-empty">—</span>';
+    const vM = '<span class="td-empty">—</span>';
     (data.employes||[]).forEach(r => {
-      const noHoraire = !r.code_horaire;
-      const reelMin = (r.minutes_reels !== null && r.minutes_reels !== undefined) ? r.minutes_reels : r.dur_tot;
-      const reelLabel = noHoraire ? '<span class="td-empty">—</span>'
-        : (r.reel_label && r.reel_label !== '—' ? r.reel_label : dur(reelMin));
-      const rowStyle = noHoraire
-        ? 'opacity:0.45;background:repeating-linear-gradient(135deg,transparent,transparent 4px,rgba(0,0,0,0.03) 4px,rgba(0,0,0,0.03) 8px);'
-        : (r.ferie ? 'opacity:0.6;' : '');
-      html += `<tr style="${rowStyle}" ${noHoraire ? 'title="Aucun horaire défini"' : ''}>
+      const nh = !r.code_horaire;
+      const ex = r.statut === 'Exclu';
+      const duree = nh ? vM : (r.reel_label && r.reel_label !== '—' ? r.reel_label : dur(r.minutes_reels||0));
+      const ec  = nh ? 'var(--text-muted)' : (r.ecart_type==='manquant'?'var(--red)':r.ecart_type==='ok'?'var(--green)':'var(--text-muted)');
+      const rst = nh ? 'opacity:0.45;background:repeating-linear-gradient(135deg,transparent,transparent 4px,rgba(0,0,0,0.03) 4px,rgba(0,0,0,0.03) 8px);' : ex ? 'opacity:0.35;' : r.ferie ? 'opacity:0.6;' : '';
+      const show = !ex;
+      html += `<tr style="${rst}">
         <td class="td-prno">${r.prno}</td><td class="td-name">${r.nom_prenom}</td>
-        <td>${noHoraire ? '<span class="td-empty">—</span>' : t(r.arr_mat)}</td>
-        <td>${noHoraire ? '<span class="td-empty">—</span>' : t(r.dep_mat)}</td>
-        <td>${noHoraire ? '<span class="td-empty">—</span>' : t(r.arr_apm)}</td>
-        <td>${noHoraire ? '<span class="td-empty">—</span>' : t(r.dep_apm)}</td>
-        <td class="td-dur">${noHoraire ? '<span class="td-empty">—</span>' : dur(r.dur_mat)}</td>
-        <td class="td-dur">${noHoraire ? '<span class="td-empty">—</span>' : dur(r.dur_apm)}</td>
-        <td class="td-dur">${reelLabel}</td>
-        <td class="td-dur" style="color:var(--teal)">${noHoraire ? '<span class="td-empty">N/A</span>' : (r.theorique_label||'—')}</td>
-        <td class="td-dur" style="color:${noHoraire ? 'var(--text-muted)' : (r.ecart_type==='manquant'?'var(--red)':r.ecart_type==='ok'?'var(--green)':'var(--text-muted)')}">${noHoraire ? '<span class="td-empty">—</span>' : (r.ecart_label||'—')}</td>
-        <td>${noHoraire
-          ? '<span class="badge" style="background:rgba(0,0,0,0.06);color:var(--text-muted);border:1px solid var(--border)">Sans horaire</span>'
-          : `<span class="badge ${bc(r.statut)}">${r.statut}</span>`}</td>
+        <td>${show ? tM(r.arr_mat) : vM}</td>
+        <td>${show ? tM(r.dep_mat) : vM}</td>
+        <td>${show ? tM(r.arr_apm) : vM}</td>
+        <td>${show ? tM(r.dep_apm) : vM}</td>
+        <td class="td-dur">${ex||nh ? vM : duree}</td>
+        <td class="td-dur" style="color:var(--teal)">${ex||nh ? vM : (r.theorique_label||'—')}</td>
+        <td class="td-dur" style="color:${ec};font-weight:600">${ex||nh ? vM : (r.ecart_label||'—')}</td>
+        <td>${nh?'<span class="badge" style="background:rgba(0,0,0,0.06);color:var(--text-muted);border:1px solid var(--border)">Sans horaire</span>':`<span class="badge ${bc(r.statut)}">${r.statut}</span>`}</td>
       </tr>`;
     });
     html += '</tbody></table></div>';
@@ -573,10 +818,12 @@ function closeModal() { document.getElementById('modalOverlay').classList.remove
 function closeModalOnBg(e) { if(e.target===document.getElementById('modalOverlay')) closeModal(); }
 document.addEventListener('keydown', e => { if(e.key==='Escape') closeModal(); });
 
-// ─── Init ──────────────────────────────────────────────────────────────────
 loadStats();
 loadData();
-// Auto-refresh stats toutes les 2 minutes (backup si WebSocket déconnecté)
+loadTopbarReleves();
+// Cacher le sélecteur de relevé au démarrage (onglet Jour par défaut)
+const _wrap = document.getElementById('releveSelectorWrap');
+if (_wrap) _wrap.style.display = 'none';
 setInterval(() => { loadStats(); if(currentTab==='jour') loadData(); }, 120000);
 </script>
 </body>

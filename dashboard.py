@@ -83,7 +83,23 @@ def _periode_dates(periode, ref_date=None):
     if periode == "semaine":
         lundi = today - timedelta(days=today.weekday())
         return lundi.isoformat(), (lundi + timedelta(days=6)).isoformat()
+    if periode == "s_mois":
+        # Vue S-Mois : tout le mois calendaire (les semaines seront groupées côté JS)
+        import calendar
+        premier = today.replace(day=1)
+        dernier = today.replace(day=calendar.monthrange(today.year, today.month)[1])
+        return premier.isoformat(), dernier.isoformat()
     if periode == "mois":
+        import calendar
+        premier = today.replace(day=1)
+        dernier = today.replace(day=calendar.monthrange(today.year, today.month)[1])
+        return premier.isoformat(), dernier.isoformat()
+    if periode == "releve":
+        # Utiliser le relevé actif
+        releve = db.get_releve_actif()
+        if releve:
+            return releve["date_debut"], releve["date_fin"]
+        # Fallback : mois civil
         import calendar
         premier = today.replace(day=1)
         dernier = today.replace(day=calendar.monthrange(today.year, today.month)[1])
@@ -160,12 +176,24 @@ def api_jour():
 @app.route("/api/periode")
 @login_required
 def api_periode():
-    periode = request.args.get("periode","semaine")
-    ref     = request.args.get("date", get_today())
-    d1, d2  = _periode_dates(periode, ref)
+    periode   = request.args.get("periode", "semaine")
+    ref       = request.args.get("date", get_today())
+    releve_id = request.args.get("releve_id")
+
+    if releve_id:
+        # Priorité au relevé sélectionné
+        releve = db.get_releve_by_id(int(releve_id))
+        if releve:
+            d1, d2 = releve["date_debut"], releve["date_fin"]
+        else:
+            d1, d2 = _periode_dates(periode, ref)
+    else:
+        d1, d2 = _periode_dates(periode, ref)
+
     return jsonify({
         "date_debut": d1,
         "date_fin":   d2,
+        "releve_id":  releve_id,
         "employes":   db.get_resume_periode_avec_synthese(d1, d2),
     })
 
@@ -174,7 +202,7 @@ def api_periode():
 @login_required
 def api_detail_jour():
     ds = request.args.get("date", get_today())
-    return jsonify({"date":ds,"stats":db.get_stats_jour(ds),"employes":db.get_resume_jour(ds)})
+    return jsonify({"date":ds,"stats":db.get_stats_jour(ds),"employes":db.get_resume_jour_avec_horaires(ds)})
 
 
 @app.route("/api/download_excel")
@@ -212,9 +240,10 @@ def api_ajouter_ferie():
     date_str  = (data.get("date_str") or "").strip()
     libelle   = (data.get("libelle") or "").strip()
     recurrent = bool(data.get("recurrent", False))
+    type_ferie = (data.get("type_ferie") or "fixe").strip()
     if not date_str or not libelle:
         return jsonify({"ok":False,"error":"Date et libellé obligatoires"}), 400
-    return jsonify(db.ajouter_jour_ferie(date_str, libelle, recurrent))
+    return jsonify(db.ajouter_jour_ferie(date_str, libelle, recurrent, type_ferie))
 
 
 @app.route("/api/jours_feries/<date_str>", methods=["DELETE"])
@@ -336,17 +365,17 @@ def api_set_horaire(prno):
     data         = request.get_json()
     code_horaire = (data.get("code_horaire") or "").strip()
     date_effet   = (data.get("date_effet")   or get_today()).strip()
+    commentaire  = (data.get("commentaire")  or "").strip() or None
 
     if not code_horaire:
         return jsonify({"ok": False, "error": "Code horaire obligatoire"}), 400
 
-    # Valider le code avant de sauvegarder
     from parser import valider_code_horaire
     validation = valider_code_horaire(code_horaire)
     if not validation["ok"]:
         return jsonify({"ok": False, "error": " | ".join(validation["erreurs"])}), 400
 
-    result = db.set_horaire(prno, code_horaire, date_effet)
+    result = db.set_horaire(prno, code_horaire, date_effet, commentaire)
     if result["ok"]:
         result["heures_semaine"] = validation["label_semaine"]
         emit_admin_update("admin_employes_updated")
@@ -373,15 +402,62 @@ def api_modifier_horaire(prno):
     data         = request.get_json()
     code_horaire = (data.get("code_horaire") or "").strip()
     date_effet   = (data.get("date_effet")   or get_today()).strip()
+    commentaire  = (data.get("commentaire")  or "").strip() or None
     if not code_horaire:
         return jsonify({"ok": False, "error": "Code horaire obligatoire"}), 400
     from parser import valider_code_horaire
     validation = valider_code_horaire(code_horaire)
     if not validation["ok"]:
         return jsonify({"ok": False, "error": " | ".join(validation["erreurs"])}), 400
-    result = db.set_horaire(prno, code_horaire, date_effet)
+    result = db.set_horaire(prno, code_horaire, date_effet, commentaire)
     if result["ok"]:
         result["heures_semaine"] = validation["label_semaine"]
+    return jsonify(result), (200 if result["ok"] else 400)
+
+
+# ─── API Relevés ──────────────────────────────────────────────────────────────
+
+@app.route("/api/releves", methods=["GET"])
+@login_required
+def api_get_releves():
+    return jsonify(db.get_releves())
+
+
+@app.route("/api/releves/actif", methods=["GET"])
+@login_required
+def api_releve_actif():
+    r = db.get_releve_actif()
+    return jsonify(r or {})
+
+
+@app.route("/api/releves", methods=["POST"])
+@login_required
+def api_creer_releve():
+    data = request.get_json()
+    date_debut = (data.get("date_debut") or "").strip()
+    date_fin   = (data.get("date_fin")   or "").strip()
+    libelle    = (data.get("libelle")    or "").strip() or None
+    if not date_debut or not date_fin:
+        return jsonify({"ok": False, "error": "date_debut et date_fin obligatoires"}), 400
+    if date_debut >= date_fin:
+        return jsonify({"ok": False, "error": "date_debut doit être avant date_fin"}), 400
+    result = db.creer_releve(date_debut, date_fin, libelle)
+    return jsonify(result), (200 if result["ok"] else 400)
+
+
+@app.route("/api/releves/<int:releve_id>/clore", methods=["POST"])
+@login_required
+def api_clore_releve(releve_id):
+    data = request.get_json(silent=True) or {}
+    libelle_prochain = data.get("libelle_prochain") or None
+    result = db.clore_releve(releve_id, libelle_prochain=libelle_prochain)
+    return jsonify(result), (200 if result["ok"] else 400)
+
+
+@app.route("/api/releves/<int:releve_id>", methods=["DELETE"])
+@login_required
+def api_supprimer_releve(releve_id):
+    result = db.supprimer_releve(releve_id)
     return jsonify(result), (200 if result["ok"] else 400)
 
 

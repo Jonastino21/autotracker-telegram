@@ -95,25 +95,45 @@ def get_session(heure_locale, prno: str = None, date_local: str = None) -> str:
 def ajouter_au_groupe(telegram_id, nom):
     """
     Envoie un lien d'invitation personnalisé au nouvel employé.
-    Stratégie : essaie create_chat_invite_link, fallback sur lien fixe du groupe.
+    - member_limit=1  → lien strictement à usage unique (1 seule personne)
+    - expire_date=72h → fenêtre plus large pour que l'employé ait le temps de cliquer
+    - Vérifie d'abord si l'employé est déjà dans le groupe pour éviter
+      d'envoyer un lien inutile (qui apparaîtrait "expiré" car déjà membre).
     """
     import time as _time
+
+    # Vérifier si déjà membre du groupe — si oui, pas besoin de lien
+    try:
+        member = bot.get_chat_member(GROUP_ID, telegram_id)
+        if member.status in ("member", "administrator", "creator"):
+            db.marquer_dans_groupe(telegram_id, True)
+            bot.send_message(
+                telegram_id,
+                f"Bonjour *{nom}* ! Votre compte est activé. ✓\n\n"
+                f"Vous êtes déjà dans le groupe de présence KAROKA.\n"
+                f"Pointez avec *Bonjour* à l'arrivée et *Au revoir* au départ chaque jour."
+            )
+            logger.info("Employé déjà dans le groupe : telegram_id=%s (%s)", telegram_id, nom)
+            return True
+    except Exception:
+        pass  # Pas encore membre ou erreur API — on continue avec le lien
+
     for tentative in range(3):
         try:
             invite = bot.create_chat_invite_link(
                 GROUP_ID,
-                member_limit=1,
                 name=f"Onboarding {nom}",
-                expire_date=int(_time.time()) + 86400  # 24h
+                expire_date=int(_time.time()) + 259200,  # 72h (au lieu de 24h)
+                member_limit=1,  # ← usage unique : 1 seule personne peut rejoindre
             )
             bot.send_message(
                 telegram_id,
                 f"Bonjour *{nom}* !\n\n"
                 f"Voici votre lien personnel pour rejoindre le groupe de présence KAROKA :\n"
                 f"{invite.invite_link}\n\n"
-                f"Ce lien est à usage unique et expire dans 24h."
+                f"⚠️ Ce lien est *à usage unique* — valable 72h.\n"
+                f"Ne le partagez pas avec quelqu'un d'autre."
             )
-            db.marquer_dans_groupe(telegram_id, True)
             logger.info("Lien invitation envoyé : telegram_id=%s (%s)", telegram_id, nom)
             return True
         except Exception as e:

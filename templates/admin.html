@@ -38,6 +38,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--main-bg);color:var(--text
 .profile-name{font-size:15px;font-weight:600;color:var(--sidebar-active);margin-bottom:3px;}
 .profile-email{font-size:11px;color:var(--sidebar-muted);}
 .sidebar-nav{display:flex;flex-direction:column;gap:2px;padding:0 12px;flex:1;}
+.nav-section-label{font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:var(--sidebar-muted);padding:14px 14px 6px;opacity:0.7;}
 .nav-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:500;color:var(--sidebar-muted);text-decoration:none;cursor:pointer;transition:all 0.2s;border:none;background:transparent;font-family:'DM Sans',sans-serif;width:100%;text-align:left;}
 .nav-item:hover{color:var(--sidebar-active);background:var(--sidebar-hover);}
 .nav-item.active{color:var(--sidebar-active);background:rgba(255,255,255,0.1);font-weight:600;}
@@ -299,8 +300,10 @@ tbody tr:hover td{background:rgba(0,191,165,0.04);}
     <div><div class="logo-text">KAROKA</div><div class="logo-sub">Présences</div></div>
   </div>
   <nav class="sidebar-nav">
-    <a href="/" class="nav-item"><i class="nav-icon">◈</i><span>Présences</span></a>
-    <a href="/admin" class="nav-item active"><i class="nav-icon">◎</i><span>Admin</span></a>
+    <div class="nav-section-label">Présence</div>
+    <a href="/" class="nav-item"><i class="nav-icon">◈</i><span>Tableau de bord</span></a>
+    <div class="nav-section-label">Liaison</div>
+    <a href="/admin" class="nav-item active"><i class="nav-icon">◎</i><span>Administration</span></a>
   </nav>
   <div class="sidebar-footer">
     <a href="/logout" class="nav-item"><i class="nav-icon">←</i><span>Déconnexion</span></a>
@@ -325,6 +328,7 @@ tbody tr:hover td{background:rgba(0,191,165,0.04);}
       <button class="tab-admin" onclick="showSection('feries',this)">Jours fériés</button>
       <button class="tab-admin" onclick="showSection('liaisons',this)">Liaisons</button>
       <button class="tab-admin" onclick="showSection('modeles',this)">Modèles horaires</button>
+      <button class="tab-admin" onclick="showSection('releves',this)">Relevés de paie</button>
     </div>
   </div>
 
@@ -334,11 +338,6 @@ tbody tr:hover td{background:rgba(0,191,165,0.04);}
          SECTION EMPLOYÉS
     ════════════════════════════════════ -->
     <div class="section active" id="sec-employes">
-      <div class="stats-mini">
-        <div class="stat-mini total"><div><div class="stat-mini-val" id="sTotal">—</div><div class="stat-mini-label">Total</div></div></div>
-        <div class="stat-mini lies"><div><div class="stat-mini-val" id="sLies">—</div><div class="stat-mini-label">Liés Telegram</div></div></div>
-        <div class="stat-mini nonlies"><div><div class="stat-mini-val" id="sNonLies">—</div><div class="stat-mini-label">Non liés</div></div></div>
-      </div>
 
       <div class="grid-2">
         <!-- Formulaire ajout -->
@@ -369,8 +368,9 @@ tbody tr:hover td{background:rgba(0,191,165,0.04);}
             <div id="horairePreviewForm" class="horaire-preview" style="display:none"></div>
           </div>
           <div class="form-group">
-            <label>Date d'effet de l'horaire</label>
-            <input type="date" id="inputDateEffet">
+            <label>Date d'effet de l'horaire <span style="font-size:11px;color:var(--text-muted)">(yyyy/mm/dd)</span></label>
+            <input type="text" id="inputDateEffet" placeholder="2026/04/19" maxlength="10" oninput="formatDateEffetInput(this)">
+            <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Format : <code style="color:var(--teal)">yyyy/mm/dd</code> — laissez vide pour aujourd'hui</div>
           </div>
 
           <div style="display:flex;gap:8px">
@@ -415,27 +415,99 @@ tbody tr:hover td{background:rgba(0,191,165,0.04);}
         <div class="card">
           <div class="card-title">Ajouter un jour férié</div>
           <div id="alertFerie" class="alert"></div>
-          <div class="form-group"><label>Date</label><input type="date" id="ferieDate"></div>
-          <div class="form-group"><label>Libellé</label><input type="text" id="ferieLibelle" placeholder="ex: Fête Nationale"></div>
+          <div class="form-group">
+            <label>Date <span style="font-size:11px;color:var(--text-muted)">(yyyy/mm/dd)</span></label>
+            <input type="text" id="ferieDate" placeholder="2026/04/20" maxlength="10" oninput="formatFerieDateInput(this)">
+          </div>
+          <div class="form-group"><label>Libellé</label><input type="text" id="ferieLibelle" placeholder="ex: Taombaovao Malagasy"></div>
+          <div class="form-group">
+            <label>Ce jour tombe-t-il toujours à la même date chaque année ?</label>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <label id="ferieToggleFixe" onclick="setFerieType('fixe')" style="flex:1;display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;border:2px solid var(--teal);background:rgba(0,191,165,0.1);cursor:pointer;transition:all 0.15s">
+                <span style="font-size:18px">📅</span>
+                <div>
+                  <div style="font-size:12px;font-weight:700;color:var(--teal)">Oui, date fixe</div>
+                  <div style="font-size:10px;color:var(--text-dim)">Ex : 26 juin, 1er mai…</div>
+                </div>
+              </label>
+              <label id="ferieToggleVariable" onclick="setFerieType('variable')" style="flex:1;display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;border:2px solid var(--border);background:transparent;cursor:pointer;transition:all 0.15s">
+                <span style="font-size:18px">🔄</span>
+                <div>
+                  <div style="font-size:12px;font-weight:700;color:var(--text-dim)">Non, date variable</div>
+                  <div style="font-size:10px;color:var(--text-dim)">Ex : Taombaovao, Aïd…</div>
+                </div>
+              </label>
+            </div>
+            <input type="hidden" id="ferieTypeHidden" value="fixe">
+          </div>
           <div class="form-group">
             <div class="checkbox-row">
               <input type="checkbox" id="ferieRecurrent">
-              <span style="font-size:13px;color:var(--text-dim)">Récurrent chaque année</span>
+              <span style="font-size:13px;color:var(--text-dim)">Enregistrer pour toutes les années futures</span>
             </div>
           </div>
           <button class="btn btn-primary btn-full" onclick="ajouterFerie()">Ajouter</button>
         </div>
         <div class="card">
-          <div class="card-title">Jours fériés malgaches pré-chargés</div>
-          <div class="feries-list">
-            <div><span></span>1er Jan — Jour de l'An</div>
-            <div><span></span>29 Mar — Commémoration 1947</div>
-            <div><span></span>1er Mai — Fête du Travail</div>
-            <div><span></span>26 Jun — Fête de l'Indépendance</div>
-            <div><span></span>15 Aoû — Assomption</div>
-            <div><span></span>1er Nov — Toussaint</div>
-            <div><span></span>2 Nov — Fête des Morts</div>
-            <div><span></span>25 Déc — Noël</div>
+          <div class="card-title">Jours fériés malgaches préchargés</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--border);border-radius:10px;overflow:hidden">
+            <div style="border-right:1px solid var(--border)">
+              <div style="padding:8px 12px;background:rgba(0,191,165,0.07);border-bottom:1px solid var(--border)">
+                <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--teal)">● Fixes</span>
+              </div>
+              <div style="padding:10px 12px;display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--text)">
+                <div>1er Jan — Jour de l'An</div>
+                <div>29 Mar — Commémoration 1947</div>
+                <div>1er Mai — Fête du Travail</div>
+                <div>26 Jun — Indépendance</div>
+                <div>15 Aoû — Assomption</div>
+                <div>1er Nov — Toussaint</div>
+                <div>2 Nov — Fête des Morts</div>
+                <div>25 Déc — Noël</div>
+              </div>
+            </div>
+            <div>
+              <div style="padding:8px 12px;background:rgba(255,152,0,0.07);border-bottom:1px solid var(--border)">
+                <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#E65100">◆ Variables</span>
+              </div>
+              <div style="padding:10px 12px;display:flex;flex-direction:column;gap:10px;font-size:12px">
+
+                <!-- Aïd el-Fitr -->
+                <div style="border:1px solid rgba(255,152,0,0.25);border-radius:8px;overflow:hidden">
+                  <div style="padding:7px 10px;background:rgba(255,152,0,0.07);font-weight:600;color:#E65100;display:flex;align-items:center;justify-content:space-between">
+                    <span>Aïd el-Fitr</span>
+                    <button class="btn btn-amber btn-sm" onclick="toggleInsertFerieVariable('aidFitr')" style="padding:2px 8px;font-size:11px">+ Insérer</button>
+                  </div>
+                  <div id="aidFitr" style="display:none;padding:8px 10px;background:var(--card-bg)">
+                    <div style="display:flex;gap:6px;align-items:center">
+                      <input type="text" id="aidFitrDate" placeholder="aaaa/mm/jj" maxlength="10"
+                             oninput="formatFerieDateInput(this)"
+                             style="flex:1;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--main-bg);color:var(--text);font-family:'DM Mono',monospace;font-size:12px;outline:none">
+                      <button class="btn btn-primary btn-sm" onclick="insererFerieVariable('aidFitrDate','Aïd el-Fitr')" style="padding:5px 10px;font-size:11px;white-space:nowrap">✓ Valider</button>
+                    </div>
+                    <div id="aidFitrMsg" style="font-size:11px;margin-top:5px;min-height:16px"></div>
+                  </div>
+                </div>
+
+                <!-- Aïd el-Adha -->
+                <div style="border:1px solid rgba(255,152,0,0.25);border-radius:8px;overflow:hidden">
+                  <div style="padding:7px 10px;background:rgba(255,152,0,0.07);font-weight:600;color:#E65100;display:flex;align-items:center;justify-content:space-between">
+                    <span>Aïd el-Adha</span>
+                    <button class="btn btn-amber btn-sm" onclick="toggleInsertFerieVariable('aidAdha')" style="padding:2px 8px;font-size:11px">+ Insérer</button>
+                  </div>
+                  <div id="aidAdha" style="display:none;padding:8px 10px;background:var(--card-bg)">
+                    <div style="display:flex;gap:6px;align-items:center">
+                      <input type="text" id="aidAdhaDate" placeholder="aaaa/mm/jj" maxlength="10"
+                             oninput="formatFerieDateInput(this)"
+                             style="flex:1;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--main-bg);color:var(--text);font-family:'DM Mono',monospace;font-size:12px;outline:none">
+                      <button class="btn btn-primary btn-sm" onclick="insererFerieVariable('aidAdhaDate','Aïd el-Adha')" style="padding:5px 10px;font-size:11px;white-space:nowrap">✓ Valider</button>
+                    </div>
+                    <div id="aidAdhaMsg" style="font-size:11px;margin-top:5px;min-height:16px"></div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -453,10 +525,46 @@ tbody tr:hover td{background:rgba(0,191,165,0.04);}
          SECTION LIAISONS
     ════════════════════════════════════ -->
     <div class="section" id="sec-liaisons">
+      <div class="grid-2" style="margin-bottom:20px">
+        <div class="card">
+          <div class="card-title">Lier manuellement un employé</div>
+          <div id="alertLiaison" class="alert"></div>
+          <div class="form-group">
+            <label>PRNO de l'employé</label>
+            <input type="text" id="liaisonPrno" placeholder="ex: pira" maxlength="20">
+          </div>
+          <div class="form-group">
+            <label>Username ou ID Telegram</label>
+            <input type="text" id="liaisonTelegram" placeholder="ex: @username ou 123456789">
+          </div>
+          <button class="btn btn-primary btn-full" onclick="lierManuellement()">Lier cet employé</button>
+        </div>
+        <div class="card">
+          <div class="card-title">Comment ça fonctionne</div>
+          <div style="font-size:12px;color:var(--text-dim);line-height:1.8">
+            <div style="margin-bottom:8px">
+              <span style="color:var(--teal);font-weight:600">1.</span> L'employé envoie son PRNO dans le groupe Telegram surveillé par le bot.
+            </div>
+            <div style="margin-bottom:8px">
+              <span style="color:var(--teal);font-weight:600">2.</span> Le bot détecte le PRNO et crée automatiquement la liaison avec son compte Telegram.
+            </div>
+            <div style="margin-bottom:8px">
+              <span style="color:var(--teal);font-weight:600">3.</span> Ses pointages (arrivée/départ) sont ensuite reconnus et enregistrés automatiquement.
+            </div>
+            <div style="padding:8px 12px;background:rgba(255,179,0,0.08);border:1px solid rgba(255,179,0,0.25);border-radius:8px;color:var(--amber)">
+              Si un employé n'a pas de smartphone, vous pouvez créer la liaison manuellement via le formulaire ci-contre.
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="table-card">
         <div class="table-header">
-          <div class="table-title">Liaisons Telegram — PRNO</div>
-          <div id="nonLiesAlert" style="font-size:12px;color:var(--amber)"></div>
+          <div>
+            <div class="table-title">Liaisons Telegram ↔ PRNO</div>
+            <div style="font-size:12px;color:var(--text-dim);margin-top:2px" id="liaisonsSubtitle">Chargement...</div>
+          </div>
+          <input type="text" class="search-box" id="searchLiaison" placeholder="Rechercher..." oninput="filterLiaisons()">
         </div>
         <div id="tableLiaisons"><div class="empty-state">Chargement...</div></div>
       </div>
@@ -479,12 +587,67 @@ tbody tr:hover td{background:rgba(0,191,165,0.04);}
             <textarea id="modeleCode" placeholder="2000tj0600;(2000di0600)" oninput="validerHoraireModele()" rows="3"></textarea>
             <div id="modelePreview" class="horaire-preview" style="display:none;margin-top:8px"></div>
           </div>
+          <div class="form-group">
+            <label>Commentaire <span style="font-size:11px;color:var(--text-muted);font-weight:400">(optionnel — pour horaires atypiques)</span></label>
+            <textarea id="modeleCommentaire" rows="2" placeholder="ex: Gardien travaillant 2 jours sur 3 en rotation"></textarea>
+          </div>
           <button class="btn btn-primary btn-full" onclick="creerModele()">Sauvegarder le modèle</button>
         </div>
         <div class="card">
           <div class="card-title">Modèles sauvegardés</div>
           <div id="listeModeles"><div class="empty-state">Aucun modèle sauvegardé</div></div>
         </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════
+         SECTION RELEVÉS DE PAIE
+    ════════════════════════════════════ -->
+    <div class="section" id="sec-releves">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Créer un relevé</div>
+          <div id="alertReleve" class="alert"></div>
+          <div style="font-size:12px;color:var(--text-dim);margin-bottom:14px;line-height:1.6;background:rgba(0,191,165,0.06);border:1px solid rgba(0,191,165,0.2);border-radius:8px;padding:10px 12px">
+            Le premier relevé doit être créé manuellement. Les suivants seront générés automatiquement à la clôture du précédent.
+          </div>
+          <div class="form-group">
+            <label>Libellé (optionnel)</label>
+            <input type="text" id="releveLibelle" placeholder="ex: Relevé Avril 2026">
+          </div>
+          <div class="form-group">
+            <label>Jour de paiement <span style="font-size:11px;color:var(--text-muted)">(le relevé va du jour J au jour J du mois suivant)</span></label>
+            <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
+              <span style="font-size:13px;color:var(--text-dim)">Du</span>
+              <select id="releveJourPaiement" style="background:var(--main-bg);border:1px solid var(--border);border-radius:8px;padding:7px 12px;color:var(--teal);font-family:'DM Mono',monospace;font-size:14px;font-weight:700;outline:none;cursor:pointer"></select>
+              <span style="font-size:13px;color:var(--text-dim)">au</span>
+              <span id="releveJourFin" style="font-family:'DM Mono',monospace;font-size:14px;font-weight:700;color:var(--teal);background:rgba(0,191,165,0.08);border:1px solid rgba(0,191,165,0.2);border-radius:8px;padding:7px 12px">—</span>
+              <span style="font-size:13px;color:var(--text-dim)">du mois suivant</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Mois de début <span style="font-size:11px;color:var(--text-muted)">(aaaa/mm)</span></label>
+            <input type="text" id="releveMoisDebut" placeholder="2026/04" maxlength="7"
+                   oninput="formatMoisInput(this);updateRelevePreview()"
+                   style="font-family:'DM Mono',monospace">
+          </div>
+          <div id="relevePreview" style="display:none;font-size:12px;color:var(--text-dim);background:rgba(0,191,165,0.06);border:1px solid rgba(0,191,165,0.2);border-radius:8px;padding:10px 12px;margin-bottom:10px"></div>
+          <button class="btn btn-primary btn-full" onclick="creerReleve()">Créer ce relevé</button>
+        </div>
+        <div class="card">
+          <div class="card-title">Relevé actif</div>
+          <div id="releveActifCard">
+            <div class="empty-state">Chargement...</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-card" style="margin-top:20px">
+        <div class="table-header">
+          <div class="table-title">Historique des relevés</div>
+          <button class="btn btn-primary btn-sm" onclick="loadReleves()">Actualiser</button>
+        </div>
+        <div id="tableReleves"><div class="empty-state">Chargement...</div></div>
       </div>
     </div>
 
@@ -515,14 +678,14 @@ const MODELE_STANDARD = {
 // ─── Navigation ──────────────────────────────────────────────────────────────
 function showSection(name, btn) {
   _currentSection = name;
-  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.section').forEach(s => s.style.display='none');
+  const sec = document.getElementById('sec-'+name);
+  if (sec) sec.style.display='block';
   document.querySelectorAll('.tab-admin').forEach(b => b.classList.remove('active'));
-  document.getElementById('sec-'+name).classList.add('active');
-  btn.classList.add('active');
-  if (name==='employes') loadEmployes();
+  if (btn) btn.classList.add('active');
   if (name==='feries')   loadFeries();
   if (name==='liaisons') loadLiaisons();
-  if (name==='modeles')  renderModeles();
+  if (name==='releves')  { loadReleves(); initReleveJourSelector(); }
 }
 
 // ─── Modèles rapides ─────────────────────────────────────────────────────────
@@ -649,33 +812,46 @@ async function loadEmployes() {
   allEmployes = await r.json();
   const horaires = await fetch('/api/admin/horaires').then(r=>r.json());
   const horMap = {};
-  horaires.forEach(h => horMap[h.prno] = h.code_horaire);
-
-  document.getElementById('sTotal').textContent   = allEmployes.filter(e=>e.actif).length;
-  document.getElementById('sLies').textContent    = allEmployes.filter(e=>e.lie&&e.actif).length;
-  document.getElementById('sNonLies').textContent = allEmployes.filter(e=>!e.lie&&e.actif).length;
-
-  renderEmpTable(allEmployes, horMap);
+  const dateEffetMap = {};
+  horaires.forEach(h => {
+    horMap[h.prno] = h.code_horaire;
+    dateEffetMap[h.prno] = h.date_effet;
+  });
+  renderEmpTable(allEmployes, horMap, dateEffetMap);
 }
 
-function renderEmpTable(data, horMap={}) {
+function renderEmpTable(data, horMap={}, dateEffetMap={}) {
   const el = document.getElementById('tableEmployes');
   if (!data.length) { el.innerHTML='<div class="empty-state">Aucun employé</div>'; return; }
   let html = `<div style="overflow-x:auto"><table><thead><tr>
-    <th>PRNO</th><th>Nom complet</th><th>Code horaire</th><th>Liaison</th><th>Lié le</th><th>Action</th>
+    <th>PRNO</th><th>Nom complet</th><th>Code horaire</th><th>Liaison</th><th>Lié le</th><th style="color:var(--teal)">Dès le</th><th>Action</th>
   </tr></thead><tbody>`;
   data.forEach(emp => {
     const bc = !emp.actif?'badge-inactif':emp.lie?'badge-lie':'badge-nonlie';
     const bl = !emp.actif?'Inactif':emp.lie?'Lié':'Non lié';
     const code = horMap[emp.prno];
     const codeCourt = code ? (code.length>40?code.slice(0,40)+'...':code) : '—';
-    const lieDate = emp.lie_le?emp.lie_le.slice(0,10):'—';
+    const lieDate = emp.lie_le?emp.lie_le.slice(0,10).replace(/-/g,'/'):'—';
+    const dateEffet = dateEffetMap[emp.prno];
+    const dateEffetAff = dateEffet ? dateEffet.replace(/-/g,'/') : '—';
+    const dateEffetCell = emp.actif && code
+      ? `<td><span
+           onclick="ouvrirModifHoraire('${emp.prno}','${code||''}')"
+           title="Cliquer pour modifier l'horaire"
+           style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:var(--teal);
+                  cursor:pointer;padding:3px 8px;border-radius:6px;border:1px solid rgba(0,191,165,0.35);
+                  background:rgba(0,191,165,0.08);transition:background 0.15s;"
+           onmouseover="this.style.background='rgba(0,191,165,0.18)'"
+           onmouseout="this.style.background='rgba(0,191,165,0.08)'"
+         >${dateEffetAff} ✏</span></td>`
+      : `<td style="color:var(--text-dim);font-size:12px">${dateEffetAff}</td>`;
     html += `<tr>
       <td class="td-prno">${emp.prno}</td>
       <td class="td-nom">${emp.nom_complet}</td>
       <td class="td-code" title="${code||''}">${codeCourt}</td>
       <td><span class="badge ${bc}">${bl}</span></td>
       <td style="color:var(--text-dim)">${lieDate}</td>
+      ${dateEffetCell}
       <td style="display:flex;gap:6px">
         ${emp.actif
           ? `<button class="btn btn-danger btn-sm" onclick="supprimerEmploye('${emp.prno}')">Désactiver</button>`
@@ -691,17 +867,39 @@ function renderEmpTable(data, horMap={}) {
 
 function filterEmp() {
   const q = document.getElementById('searchEmp').value.toLowerCase();
-  renderEmpTable(allEmployes.filter(e=>(e.prno+e.nom_complet+(e.username||'')).toLowerCase().includes(q)));
+  renderEmpTable(allEmployes.filter(e =>
+    (e.prno + e.nom_complet + (e.username||'')).toLowerCase().includes(q)
+  ));
+}
+
+// Format automatique yyyy/mm/dd pendant la saisie
+function formatDateEffetInput(el) {
+  let v = el.value.replace(/[^0-9]/g, '');
+  if (v.length > 4) v = v.slice(0,4) + '/' + v.slice(4);
+  if (v.length > 7) v = v.slice(0,7) + '/' + v.slice(7);
+  el.value = v.slice(0,10);
+}
+
+// Convertit yyyy/mm/dd → yyyy-mm-dd pour l'API
+function parseDateEffet(val) {
+  if (!val) return '';
+  return val.replace(/\//g, '-');
 }
 
 async function ajouterEmploye() {
-  const prno       = document.getElementById('inputPrno').value.trim();
+  const prno       = document.getElementById('inputPrno').value.trim().toLowerCase();
   const nom        = document.getElementById('inputNom').value.trim();
   const code       = document.getElementById('inputHoraire').value.trim();
-  const dateEffet  = document.getElementById('inputDateEffet').value;
+  const dateEffetRaw = document.getElementById('inputDateEffet').value.trim();
+  const dateEffet  = parseDateEffet(dateEffetRaw) || new Date().toISOString().slice(0,10);
   const alertEl    = document.getElementById('alertAjout');
 
   if (!prno || !nom) { showAlert(alertEl,'error','PRNO et nom complet obligatoires.'); return; }
+
+  // Valider date si saisie
+  if (dateEffetRaw && !/^\d{4}\/\d{2}\/\d{2}$/.test(dateEffetRaw)) {
+    showAlert(alertEl,'error','Format de date invalide — attendu yyyy/mm/dd'); return;
+  }
 
   if (code) {
     const val = await fetch('/api/admin/horaires/valider',{
@@ -718,16 +916,20 @@ async function ajouterEmploye() {
   const d1 = await r1.json();
   if (!d1.ok) { showAlert(alertEl,'error',`${d1.error}`); return; }
 
-  if (code && dateEffet) {
-    await fetch(`/api/admin/horaires/${prno}`,{
+  if (code) {
+    const r2 = await fetch(`/api/admin/horaires/${prno}`,{
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({code_horaire:code, date_effet:dateEffet})
     });
+    const d2 = await r2.json();
+    if (!d2.ok) { showAlert(alertEl,'error',`Employé créé mais horaire non appliqué : ${d2.error}`); loadEmployes(); return; }
   }
 
-  showAlert(alertEl,'success',`Employé ${prno} ajouté${code?' avec horaire':'.'}`);
+  showAlert(alertEl,'success',`Employé ${prno} ajouté${code?` avec horaire (dès ${dateEffet})`:'.'}`);
   document.getElementById('inputPrno').value = '';
   document.getElementById('inputNom').value  = '';
+  document.getElementById('inputHoraire').value = '';
+  document.getElementById('inputDateEffet').value = '';
   loadEmployes();
 }
 
@@ -772,28 +974,145 @@ async function loadFeries() {
   const data  = await fetch(`/api/jours_feries?annee=${annee}`).then(r=>r.json());
   const el    = document.getElementById('tableFeries');
   if (!data.length) { el.innerHTML='<div class="empty-state">Aucun jour férié pour cette année</div>'; return; }
-  let html = `<div style="overflow-x:auto"><table><thead><tr><th>Date</th><th>Libellé</th><th>Récurrent</th><th>Action</th></tr></thead><tbody>`;
-  data.forEach(f => {
-    html += `<tr>
-      <td><span class="badge badge-ferie">${f.date_str}</span></td>
-      <td class="td-nom">${f.libelle}</td>
-      <td style="color:var(--text-dim)">${f.recurrent?'Oui':'Non'}</td>
-      <td><button class="btn btn-danger btn-sm" onclick="supprimerFerie('${f.date_str}')">Supprimer</button></td>
-    </tr>`;
-  });
-  html += '</tbody></table></div>';
-  el.innerHTML = html;
+
+  const fixes     = data.filter(f => (f.type_ferie||'fixe') === 'fixe');
+  const variables = data.filter(f => (f.type_ferie||'fixe') === 'variable');
+
+  const renderRows = (liste) => {
+    if (!liste.length) return `<tr><td colspan="4" style="padding:14px;text-align:center;color:var(--text-muted);font-size:12px">Aucun</td></tr>`;
+    return liste.map(f => {
+      const dateAff = (f.date_str||'').replace(/-/g,'/');
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:8px 12px;font-family:'DM Mono',monospace;font-size:11px;color:var(--teal);font-weight:600">${dateAff}</td>
+        <td style="padding:8px 12px;color:var(--text)">${f.libelle}</td>
+        <td style="padding:8px 12px;text-align:center;color:var(--text-dim)">${f.recurrent?'✓':'—'}</td>
+        <td style="padding:8px 12px;text-align:right">
+          <button class="btn btn-danger btn-sm" onclick="supprimerFerie('${f.date_str}')">✕</button>
+        </td>
+      </tr>`;
+    }).join('');
+  };
+
+  el.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead>
+        <tr>
+          <th colspan="4" style="padding:8px 14px;background:rgba(0,191,165,0.07);border-bottom:1px solid var(--border);text-align:left">
+            <span style="background:rgba(0,191,165,0.15);color:var(--teal);padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;border:1px solid rgba(0,191,165,0.3)">● Fixes</span>
+            <span style="font-size:12px;color:var(--text-dim);margin-left:8px">${fixes.length} jour(s)</span>
+          </th>
+        </tr>
+        <tr style="background:var(--main-bg)">
+          <th style="padding:6px 12px;border-bottom:1px solid var(--border);text-align:left;font-size:10px;text-transform:uppercase;color:var(--text-dim)">Date</th>
+          <th style="padding:6px 12px;border-bottom:1px solid var(--border);text-align:left;font-size:10px;text-transform:uppercase;color:var(--text-dim)">Libellé</th>
+          <th style="padding:6px 12px;border-bottom:1px solid var(--border);text-align:center;font-size:10px;text-transform:uppercase;color:var(--text-dim)">Récurrent</th>
+          <th style="padding:6px 12px;border-bottom:1px solid var(--border)"></th>
+        </tr>
+      </thead>
+      <tbody>${renderRows(fixes)}</tbody>
+      <thead>
+        <tr>
+          <th colspan="4" style="padding:8px 14px;background:rgba(255,152,0,0.07);border-bottom:1px solid var(--border);border-top:2px solid var(--border);text-align:left">
+            <span style="background:rgba(255,152,0,0.15);color:#E65100;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;border:1px solid rgba(255,152,0,0.3)">◆ Variables</span>
+            <span style="font-size:12px;color:var(--text-dim);margin-left:8px">${variables.length} jour(s)</span>
+          </th>
+        </tr>
+        <tr style="background:var(--main-bg)">
+          <th style="padding:6px 12px;border-bottom:1px solid var(--border);text-align:left;font-size:10px;text-transform:uppercase;color:var(--text-dim)">Date</th>
+          <th style="padding:6px 12px;border-bottom:1px solid var(--border);text-align:left;font-size:10px;text-transform:uppercase;color:var(--text-dim)">Libellé</th>
+          <th style="padding:6px 12px;border-bottom:1px solid var(--border);text-align:center;font-size:10px;text-transform:uppercase;color:var(--text-dim)">Récurrent</th>
+          <th style="padding:6px 12px;border-bottom:1px solid var(--border)"></th>
+        </tr>
+      </thead>
+      <tbody>${renderRows(variables)}</tbody>
+    </table>`;
+}
+
+function formatFerieDateInput(el) {
+  let v = el.value.replace(/[^0-9]/g,'');
+  if (v.length > 4) v = v.slice(0,4)+'/'+v.slice(4);
+  if (v.length > 7) v = v.slice(0,7)+'/'+v.slice(7);
+  el.value = v.slice(0,10);
+}
+
+function setFerieType(type) {
+  document.getElementById('ferieTypeHidden').value = type;
+  const fixeEl = document.getElementById('ferieToggleFixe');
+  const varEl  = document.getElementById('ferieToggleVariable');
+  if (type === 'fixe') {
+    fixeEl.style.border = '2px solid var(--teal)';
+    fixeEl.style.background = 'rgba(0,191,165,0.1)';
+    fixeEl.querySelector('div > div').style.color = 'var(--teal)';
+    varEl.style.border = '2px solid var(--border)';
+    varEl.style.background = 'transparent';
+    varEl.querySelector('div > div').style.color = 'var(--text-dim)';
+  } else {
+    varEl.style.border = '2px solid #E65100';
+    varEl.style.background = 'rgba(255,152,0,0.1)';
+    varEl.querySelector('div > div').style.color = '#E65100';
+    fixeEl.style.border = '2px solid var(--border)';
+    fixeEl.style.background = 'transparent';
+    fixeEl.querySelector('div > div').style.color = 'var(--text-dim)';
+  }
 }
 
 async function ajouterFerie() {
-  const date_str=document.getElementById('ferieDate').value;
-  const libelle=document.getElementById('ferieLibelle').value.trim();
-  const recurrent=document.getElementById('ferieRecurrent').checked;
-  const alertEl=document.getElementById('alertFerie');
-  if(!date_str||!libelle){showAlert(alertEl,'error','Date et libellé obligatoires.');return;}
-  const d=await fetch('/api/jours_feries',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date_str,libelle,recurrent})}).then(r=>r.json());
-  if(d.ok){showAlert(alertEl,'success',`${libelle} (${date_str}) ajouté.`);document.getElementById('ferieDate').value='';document.getElementById('ferieLibelle').value='';loadFeries();}
-  else showAlert(alertEl,'error',`${d.error}`);
+  const dateRaw   = document.getElementById('ferieDate').value.trim();
+  const libelle   = document.getElementById('ferieLibelle').value.trim();
+  const recurrent = document.getElementById('ferieRecurrent').checked;
+  const type_ferie = document.getElementById('ferieTypeHidden').value || 'fixe';
+  const alertEl   = document.getElementById('alertFerie');
+  if (!dateRaw || !libelle) { showAlert(alertEl,'error','Date et libellé obligatoires.'); return; }
+  if (!/^\d{4}\/\d{2}\/\d{2}$/.test(dateRaw)) { showAlert(alertEl,'error','Format de date invalide — attendu yyyy/mm/dd'); return; }
+  const date_str = dateRaw.replace(/\//g,'-');
+  const d = await fetch('/api/jours_feries',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({date_str, libelle, recurrent, type_ferie})
+  }).then(r=>r.json());
+  if (d.ok) {
+    showAlert(alertEl,'success',`${libelle} (${dateRaw}) ajouté.`);
+    document.getElementById('ferieDate').value = '';
+    document.getElementById('ferieLibelle').value = '';
+    setFerieType('fixe');
+    loadFeries();
+  } else showAlert(alertEl,'error',`${d.error}`);
+}
+
+function toggleInsertFerieVariable(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const visible = el.style.display !== 'none';
+  el.style.display = visible ? 'none' : 'block';
+  if (!visible) el.querySelector('input').focus();
+}
+
+async function insererFerieVariable(inputId, libelle) {
+  const inputEl = document.getElementById(inputId);
+  const msgId   = inputId + 'Msg';
+  const msgEl   = document.getElementById(msgId);
+  const dateRaw = inputEl.value.trim();
+  if (!dateRaw) { msgEl.style.color='var(--red)'; msgEl.textContent='Date obligatoire.'; return; }
+  if (!/^\d{4}\/\d{2}\/\d{2}$/.test(dateRaw)) { msgEl.style.color='var(--red)'; msgEl.textContent='Format invalide — aaaa/mm/jj'; return; }
+  const date_str = dateRaw.replace(/\//g,'-');
+  const d = await fetch('/api/jours_feries',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({date_str, libelle, recurrent: false, type_ferie: 'variable'})
+  }).then(r=>r.json());
+  if (d.ok) {
+    msgEl.style.color='var(--green)';
+    msgEl.textContent=`✓ ${libelle} ajouté (${dateRaw})`;
+    inputEl.value = '';
+    loadFeries();
+    setTimeout(() => {
+      msgEl.textContent = '';
+      const panelId = inputId.replace('Date','');
+      const panel = document.getElementById(panelId);
+      if (panel) panel.style.display = 'none';
+    }, 2500);
+  } else {
+    msgEl.style.color='var(--red)';
+    msgEl.textContent = d.error || 'Erreur';
+  }
 }
 
 async function supprimerFerie(date_str) {
@@ -803,27 +1122,113 @@ async function supprimerFerie(date_str) {
 }
 
 // ─── LIAISONS ────────────────────────────────────────────────────────────────
+let allLiaisons = [];
+let allNonLies  = [];
+
 async function loadLiaisons() {
-  const [liaisons, nonLies] = await Promise.all([
+  const [liaisons, employes] = await Promise.all([
     fetch('/api/admin/liaisons').then(r=>r.json()),
-    fetch('/api/admin/non_lies').then(r=>r.json()),
+    fetch('/api/admin/employes').then(r=>r.json()),
   ]);
-  document.getElementById('nonLiesAlert').textContent = nonLies.length>0?`${nonLies.length} employé(s) sans liaison`:'';
-  const el = document.getElementById('tableLiaisons');
-  if(!liaisons.length){el.innerHTML='<div class="empty-state">Aucune liaison</div>';return;}
-  let html=`<div style="overflow-x:auto"><table><thead><tr><th>PRNO</th><th>Nom</th><th>Telegram ID</th><th>Username</th><th>Dans le groupe</th><th>Lié le</th></tr></thead><tbody>`;
-  liaisons.forEach(l=>{
-    html+=`<tr>
-      <td class="td-prno">${l.prno}</td><td class="td-nom">${l.nom_complet}</td>
-      <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-dim)">${l.telegram_id}</td>
-      <td style="color:var(--text-dim)">${l.username?'@'+l.username:'—'}</td>
-      <td><span class="badge ${l.dans_groupe?'badge-lie':'badge-nonlie'}">${l.dans_groupe?'Oui':'Non'}</span></td>
-      <td style="color:var(--text-dim)">${l.lie_le?l.lie_le.slice(0,10):'—'}</td>
-    </tr>`;
-  });
-  html+='</tbody></table></div>';
-  el.innerHTML=html;
+  allLiaisons = liaisons;
+  // Non liés = employés actifs sans liaison
+  const prnosLies = new Set(liaisons.map(l=>l.prno));
+  allNonLies = employes.filter(e => e.actif && !prnosLies.has(e.prno));
+
+  const subtitle = document.getElementById('liaisonsSubtitle');
+  if (subtitle) subtitle.textContent = `${liaisons.length} lié(s) · ${allNonLies.length} non lié(s)`;
+
+  renderLiaisonsTable(allLiaisons, allNonLies);
 }
+
+function renderLiaisonsTable(liaisons, nonLies) {
+  const el = document.getElementById('tableLiaisons');
+  let html = '';
+
+  // Section liés
+  if (liaisons.length) {
+    html += `<div style="padding:8px 14px;background:var(--teal-glow);border-bottom:1px solid var(--border);font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--teal)">Liés (${liaisons.length})</div>`;
+    html += `<div style="overflow-x:auto"><table><thead><tr>
+      <th>PRNO</th><th>Nom complet</th><th>Telegram ID</th><th>Username</th><th>Dans groupe</th><th>Lié le</th><th>Action</th>
+    </tr></thead><tbody>`;
+    liaisons.forEach(l => {
+      const lieDate = l.lie_le ? l.lie_le.slice(0,10).replace(/-/g,'/') : '—';
+      html += `<tr>
+        <td class="td-prno">${l.prno}</td>
+        <td class="td-nom">${l.nom_complet}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-dim)">${l.telegram_id}</td>
+        <td style="color:var(--text-dim)">${l.username ? '@'+l.username : '—'}</td>
+        <td><span class="badge ${l.dans_groupe?'badge-lie':'badge-nonlie'}">${l.dans_groupe?'Oui':'Non'}</span></td>
+        <td style="color:var(--text-dim)">${lieDate}</td>
+        <td>
+          <button class="btn btn-danger btn-sm" onclick="delierEmploye('${l.prno}')">Délier</button>
+        </td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+  }
+
+  // Section non liés
+  if (nonLies.length) {
+    html += `<div style="padding:8px 14px;background:rgba(255,179,0,0.07);border-top:1px solid var(--border);border-bottom:1px solid var(--border);font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--amber)">Non liés (${nonLies.length})</div>`;
+    html += `<div style="overflow-x:auto"><table><thead><tr>
+      <th>PRNO</th><th>Nom complet</th><th colspan="4">Statut</th><th>Action</th>
+    </tr></thead><tbody>`;
+    nonLies.forEach(e => {
+      html += `<tr>
+        <td class="td-prno">${e.prno}</td>
+        <td class="td-nom">${e.nom_complet}</td>
+        <td colspan="4" style="color:var(--amber);font-size:12px">En attente de liaison Telegram</td>
+        <td>
+          <button class="btn btn-ghost btn-sm" onclick="prefillLien('${e.prno}')">Lier manuellement</button>
+        </td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+  }
+
+  if (!liaisons.length && !nonLies.length) html = '<div class="empty-state">Aucune donnée</div>';
+  el.innerHTML = html;
+}
+
+function filterLiaisons() {
+  const q = document.getElementById('searchLiaison').value.toLowerCase();
+  const fl = allLiaisons.filter(l => (l.prno+l.nom_complet+(l.username||'')+l.telegram_id).toLowerCase().includes(q));
+  const fn = allNonLies.filter(e => (e.prno+e.nom_complet).toLowerCase().includes(q));
+  renderLiaisonsTable(fl, fn);
+}
+
+function prefillLien(prno) {
+  document.getElementById('liaisonPrno').value = prno;
+  document.getElementById('liaisonTelegram').focus();
+}
+
+async function lierManuellement() {
+  const prno     = document.getElementById('liaisonPrno').value.trim().toLowerCase();
+  const telegram = document.getElementById('liaisonTelegram').value.trim();
+  const alertEl  = document.getElementById('alertLiaison');
+  if (!prno || !telegram) { showAlert(alertEl,'error','PRNO et identifiant Telegram obligatoires'); return; }
+  const r = await fetch('/api/admin/lier',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({prno, telegram_id: telegram})
+  });
+  const d = await r.json();
+  if (d.ok) {
+    showAlert(alertEl,'success',`${prno} lié à ${telegram} avec succès`);
+    document.getElementById('liaisonPrno').value = '';
+    document.getElementById('liaisonTelegram').value = '';
+    loadLiaisons();
+  } else showAlert(alertEl,'error',d.error||'Erreur inconnue');
+}
+
+async function delierEmploye(prno) {
+  if (!confirm(`Délier ${prno} de son compte Telegram ? Il devra renvoyer son PRNO pour se relancer.`)) return;
+  const r = await fetch(`/api/admin/lier/${prno}`,{method:'DELETE'});
+  const d = await r.json();
+  if (d.ok) loadLiaisons();
+  else alert('Erreur : ' + (d.error||'inconnue'));
+}
+
 
 // ─── Utilitaires ─────────────────────────────────────────────────────────────
 function showAlert(el,type,msg){
@@ -832,9 +1237,9 @@ function showAlert(el,type,msg){
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
-const _todayAdmin = new Date().toLocaleDateString('fr-CA'); // YYYY-MM-DD
+const _todayAdmin = new Date().toISOString().slice(0,10).replace(/-/g,'/');
 document.getElementById('inputDateEffet').value = _todayAdmin;
-document.getElementById('ferieDate').value = _todayAdmin;
+// ferieDate est un champ texte, on le laisse vide par défaut
 initFerieAnnee();
 loadEmployes();
 renderModelesRapides();
@@ -863,6 +1268,10 @@ function ouvrirModifHoraire(prno, codeActuel) {
           <input type="date" id="mhDate">
         </div>
         <div id="mhPreview" style="font-size:12px;margin-bottom:16px;padding:10px;background:var(--main-bg);border-radius:8px;min-height:40px"></div>
+        <div class="form-group">
+          <label>Commentaire <span style="color:var(--text-muted);font-weight:400;font-size:11px">(optionnel — pour horaires atypiques ex: gardien 2j/3j)</span></label>
+          <textarea id="mhCommentaire" rows="2" placeholder="ex: Travaille 2 jours sur 3 en rotation — semaine A/B/C" style="font-size:12px;color:var(--text-dim)"></textarea>
+        </div>
         <div style="display:flex;gap:8px">
           <button class="btn btn-primary btn-full" onclick="sauvegarderModifHoraire()">Enregistrer</button>
           <button class="btn btn-danger" onclick="document.getElementById('modalHoraire').remove()">Annuler</button>
@@ -908,14 +1317,15 @@ async function validerMH() {
 }
 
 async function sauvegarderModifHoraire() {
-  const code = document.getElementById('mhCode')?.value?.trim();
-  const date_effet = document.getElementById('mhDate')?.value;
-  const alertEl = document.getElementById('mhAlert');
+  const code        = document.getElementById('mhCode')?.value?.trim();
+  const date_effet  = document.getElementById('mhDate')?.value;
+  const commentaire = document.getElementById('mhCommentaire')?.value?.trim() || null;
+  const alertEl     = document.getElementById('mhAlert');
   if (!code) { showAlert(alertEl,'error','Code horaire obligatoire'); return; }
   const r = await fetch(`/api/admin/horaires/${_modifPrno}`, {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({code_horaire: code, date_effet})
+    body: JSON.stringify({code_horaire: code, date_effet, commentaire})
   });
   const d = await r.json();
   if (d.ok) {
@@ -931,6 +1341,219 @@ async function reactiver(prno) {
   const r = await fetch(`/api/admin/employes/${prno}/reactiver`, {method:'POST'});
   const d = await r.json();
   if (d.ok) loadEmployes();
+  else alert('Erreur : ' + d.error);
+}
+
+// ─── RELEVÉS DE PAIE ─────────────────────────────────────────────────────────
+async function loadReleves() {
+  const [releves, actif] = await Promise.all([
+    fetch('/api/releves').then(r=>r.json()),
+    fetch('/api/releves/actif').then(r=>r.json())
+  ]);
+
+  // Carte relevé actif
+  const actifEl = document.getElementById('releveActifCard');
+  if (actif && actif.id) {
+    actifEl.innerHTML = `
+      <div style="background:var(--teal-glow);border:1px solid rgba(0,191,165,0.3);border-radius:10px;padding:16px">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--teal);font-weight:600;margin-bottom:8px">Relevé en cours</div>
+        <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">${actif.libelle || 'Relevé #' + actif.id}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--teal)">Du ${actif.date_debut} au ${actif.date_fin}</div>
+        <button class="btn btn-primary" style="margin-top:14px;width:100%" onclick="cloreReleve(${actif.id})">
+          Clore ce relevé et générer le suivant
+        </button>
+      </div>`;
+  } else {
+    actifEl.innerHTML = `<div class="empty-state" style="padding:20px">Aucun relevé actif — créez le premier manuellement</div>`;
+  }
+
+  // Tableau historique
+  const el = document.getElementById('tableReleves');
+  if (!releves.length) { el.innerHTML='<div class="empty-state">Aucun relevé créé</div>'; return; }
+  let html = `<div style="overflow-x:auto"><table><thead><tr>
+    <th>#</th><th>Libellé</th><th>Début</th><th>Fin</th><th>Durée</th><th>Statut</th><th>Actions</th>
+  </tr></thead><tbody>`;
+  releves.forEach(r => {
+    const d0   = new Date(r.date_debut + 'T12:00:00');
+    const d1   = new Date(r.date_fin   + 'T12:00:00');
+    const jours = Math.round((d1 - d0) / 86400000) + 1;
+    const clos  = r.clos === 1;
+    const statutLabel = clos
+      ? `<span class="badge" style="background:rgba(96,125,139,0.1);color:var(--slate);border:1px solid rgba(96,125,139,0.3)">Clos</span>`
+      : `<span class="badge" style="background:var(--teal-glow);color:var(--teal);border:1px solid rgba(0,191,165,0.3)">En cours</span>`;
+    const actions = clos
+      ? `<button class="btn btn-danger btn-sm" onclick="supprimerReleve(${r.id})">Supprimer</button>`
+      : `<button class="btn btn-primary btn-sm" onclick="cloreReleve(${r.id})">Clore</button>
+         <button class="btn btn-danger btn-sm" onclick="supprimerReleve(${r.id})" style="margin-left:6px">Supprimer</button>`;
+    const rowBg = clos ? 'opacity:0.6;' : '';
+    html += `<tr style="${rowBg}">
+      <td style="font-family:'DM Mono',monospace;color:var(--teal);font-weight:600">#${r.id}</td>
+      <td class="td-nom">${r.libelle || '—'}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px">${r.date_debut}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px">${r.date_fin}</td>
+      <td style="color:var(--text-dim)">${jours} jours</td>
+      <td>${statutLabel}</td>
+      <td>${actions}</td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+// ─── RELEVÉS DE PAIE ─────────────────────────────────────────────────────────
+function formatRelEveDateInput(el) {
+  let v = el.value.replace(/[^0-9]/g,'');
+  if (v.length > 4) v = v.slice(0,4)+'/'+v.slice(4);
+  if (v.length > 7) v = v.slice(0,7)+'/'+v.slice(7);
+  el.value = v.slice(0,10);
+}
+
+async function loadReleves() {
+  const [releves, actif] = await Promise.all([
+    fetch('/api/releves').then(r=>r.json()),
+    fetch('/api/releves/actif').then(r=>r.json())
+  ]);
+
+  // Carte relevé actif
+  const actifEl = document.getElementById('releveActifCard');
+  if (actif && actif.id) {
+    const d0Aff = (actif.date_debut||'').replace(/-/g,'/');
+    const d1Aff = (actif.date_fin||'').replace(/-/g,'/');
+    actifEl.innerHTML = `
+      <div style="background:var(--teal-glow);border:1px solid rgba(0,191,165,0.3);border-radius:10px;padding:16px">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--teal);font-weight:600;margin-bottom:8px">Relevé en cours</div>
+        <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">${actif.libelle || 'Relevé #' + actif.id}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--teal)">Du ${d0Aff} au ${d1Aff}</div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(0,191,165,0.2)">
+          <label style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:5px">Libellé du prochain relevé (optionnel)</label>
+          <input type="text" id="prochainLibelle" placeholder="ex: Relevé Mai 2026"
+                 style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--main-bg);color:var(--text);font-size:12px;outline:none;box-sizing:border-box">
+        </div>
+        <button class="btn btn-primary" style="margin-top:10px;width:100%" onclick="cloreReleve(${actif.id})">
+          Clore ce relevé et générer le suivant
+        </button>
+      </div>`;
+  } else {
+    actifEl.innerHTML = `<div class="empty-state" style="padding:20px">Aucun relevé actif — créez le premier manuellement</div>`;
+  }
+
+  // Tableau historique
+  const el = document.getElementById('tableReleves');
+  if (!releves.length) { el.innerHTML='<div class="empty-state">Aucun relevé créé</div>'; return; }
+  let html = `<div style="overflow-x:auto"><table><thead><tr>
+    <th>#</th><th>Libellé</th><th>Début</th><th>Fin</th><th>Durée</th><th>Statut</th><th>Actions</th>
+  </tr></thead><tbody>`;
+  releves.forEach(r => {
+    const d0   = new Date(r.date_debut + 'T12:00:00');
+    const d1   = new Date(r.date_fin   + 'T12:00:00');
+    const jours = Math.round((d1 - d0) / 86400000) + 1;
+    const clos  = r.clos === 1;
+    const d0Aff = (r.date_debut||'').replace(/-/g,'/');
+    const d1Aff = (r.date_fin||'').replace(/-/g,'/');
+    const statutLabel = clos
+      ? `<span class="badge" style="background:rgba(96,125,139,0.1);color:var(--slate);border:1px solid rgba(96,125,139,0.3)">Clos</span>`
+      : `<span class="badge" style="background:var(--teal-glow);color:var(--teal);border:1px solid rgba(0,191,165,0.3)">En cours</span>`;
+    const actions = clos
+      ? `<button class="btn btn-danger btn-sm" onclick="supprimerReleve(${r.id})">Supprimer</button>`
+      : `<button class="btn btn-primary btn-sm" onclick="cloreReleve(${r.id})">Clore</button>
+         <button class="btn btn-danger btn-sm" onclick="supprimerReleve(${r.id})" style="margin-left:6px">Supprimer</button>`;
+    const rowBg = clos ? 'opacity:0.6;' : '';
+    html += `<tr style="${rowBg}">
+      <td style="font-family:'DM Mono',monospace;color:var(--teal);font-weight:600">#${r.id}</td>
+      <td class="td-nom">${r.libelle || '—'}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px">${d0Aff}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px">${d1Aff}</td>
+      <td style="color:var(--text-dim)">${jours} jours</td>
+      <td>${statutLabel}</td>
+      <td>${actions}</td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+function initReleveJourSelector() {
+  const sel = document.getElementById('releveJourPaiement');
+  if (!sel || sel.options.length > 1) return;
+  for (let j = 1; j <= 28; j++) {
+    const o = document.createElement('option');
+    o.value = j; o.textContent = String(j).padStart(2,'0');
+    sel.appendChild(o);
+  }
+  sel.value = 25;
+  sel.addEventListener('change', updateRelevePreview);
+  updateRelevePreview();
+}
+
+function formatMoisInput(el) {
+  let v = el.value.replace(/[^0-9]/g,'');
+  if (v.length > 4) v = v.slice(0,4)+'/'+v.slice(4);
+  el.value = v.slice(0,7);
+}
+
+function updateRelevePreview() {
+  const jour = parseInt(document.getElementById('releveJourPaiement').value);
+  const finEl = document.getElementById('releveJourFin');
+  if (finEl) finEl.textContent = String(jour).padStart(2,'0');
+  const moisRaw = (document.getElementById('releveMoisDebut').value||'').trim();
+  const preview = document.getElementById('relevePreview');
+  if (!preview) return;
+  if (!/^\d{4}\/\d{2}$/.test(moisRaw)) { preview.style.display='none'; return; }
+  const [annee, mois] = moisRaw.split('/').map(Number);
+  const debutDate = `${annee}-${String(mois).padStart(2,'0')}-${String(jour).padStart(2,'0')}`;
+  // Mois suivant
+  let moisSuiv = mois + 1, anneeSuiv = annee;
+  if (moisSuiv > 12) { moisSuiv = 1; anneeSuiv++; }
+  const finDate = `${anneeSuiv}-${String(moisSuiv).padStart(2,'0')}-${String(jour).padStart(2,'0')}`;
+  preview.style.display = 'block';
+  preview.innerHTML = `Période : <strong style="color:var(--teal)">${debutDate.replace(/-/g,'/')}</strong> → <strong style="color:var(--teal)">${finDate.replace(/-/g,'/')}</strong>`;
+}
+
+async function creerReleve() {
+  const libelle  = document.getElementById('releveLibelle').value.trim() || null;
+  const alertEl  = document.getElementById('alertReleve');
+  const jour     = parseInt(document.getElementById('releveJourPaiement').value);
+  const moisRaw  = (document.getElementById('releveMoisDebut').value||'').trim();
+  if (!moisRaw || !/^\d{4}\/\d{2}$/.test(moisRaw)) {
+    showAlert(alertEl,'error','Mois de début obligatoire — format aaaa/mm'); return;
+  }
+  const [annee, mois] = moisRaw.split('/').map(Number);
+  const date_debut = `${annee}-${String(mois).padStart(2,'0')}-${String(jour).padStart(2,'0')}`;
+  let moisSuiv = mois + 1, anneeSuiv = annee;
+  if (moisSuiv > 12) { moisSuiv = 1; anneeSuiv++; }
+  const date_fin = `${anneeSuiv}-${String(moisSuiv).padStart(2,'0')}-${String(jour).padStart(2,'0')}`;
+  const d = await fetch('/api/releves',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({date_debut, date_fin, libelle})
+  }).then(r=>r.json());
+  if (d.ok) {
+    showAlert(alertEl,'success',`Relevé créé du ${date_debut.replace(/-/g,'/')} au ${date_fin.replace(/-/g,'/')}`);
+    document.getElementById('releveMoisDebut').value = '';
+    document.getElementById('releveLibelle').value = '';
+    document.getElementById('relevePreview').style.display = 'none';
+    loadReleves();
+  } else showAlert(alertEl,'error',d.error);
+}
+
+async function cloreReleve(id) {
+  const prochainLibelle = document.getElementById('prochainLibelle')?.value?.trim() || null;
+  if (!confirm('Clore ce relevé ? Le suivant sera généré automatiquement.')) return;
+  const body = prochainLibelle ? JSON.stringify({libelle_prochain: prochainLibelle}) : '{}';
+  const d = await fetch(`/api/releves/${id}/clore`,{
+    method:'POST', headers:{'Content-Type':'application/json'}, body
+  }).then(r=>r.json());
+  if (d.ok) {
+    const d0Aff = (d.prochain_debut||'').replace(/-/g,'/');
+    const d1Aff = (d.prochain_fin||'').replace(/-/g,'/');
+    alert(`Relevé clos ✓\nNouveau relevé créé du ${d0Aff} au ${d1Aff}${prochainLibelle ? '\nLibellé : '+prochainLibelle : ''}`);
+    loadReleves();
+  } else alert('Erreur : ' + d.error);
+}
+
+async function supprimerReleve(id) {
+  if (!confirm('Supprimer ce relevé définitivement ?')) return;
+  const d = await fetch(`/api/releves/${id}`,{method:'DELETE'}).then(r=>r.json());
+  if (d.ok) loadReleves();
   else alert('Erreur : ' + d.error);
 }
 </script>

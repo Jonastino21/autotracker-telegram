@@ -26,6 +26,8 @@ JOURS_FERIES_FIXES_MG = [
     ("11-02", "Fête des Morts"),
     ("12-25", "Noël"),
 ]
+# Jours fériés variables (dates qui changent chaque année, ex: Aïd)
+# Ces jours sont saisis manuellement via l'interface admin avec type='variable'
 
 
 def get_tz():
@@ -79,6 +81,7 @@ def init_db():
                 date_str    TEXT NOT NULL UNIQUE,
                 libelle     TEXT NOT NULL,
                 recurrent   INTEGER DEFAULT 0,
+                type_ferie  TEXT DEFAULT 'fixe',
                 created_at  TEXT DEFAULT (datetime('now'))
             );
             CREATE TABLE IF NOT EXISTS meta (
@@ -94,6 +97,7 @@ def init_db():
                 prno         TEXT PRIMARY KEY,
                 code_horaire TEXT NOT NULL,
                 date_effet   TEXT NOT NULL,
+                commentaire  TEXT,
                 created_at   TEXT DEFAULT (datetime('now')),
                 updated_at   TEXT DEFAULT (datetime('now')),
                 FOREIGN KEY(prno) REFERENCES employes(prno)
@@ -108,12 +112,73 @@ def init_db():
                 created_at   TEXT DEFAULT (datetime('now')),
                 FOREIGN KEY(prno) REFERENCES employes(prno)
             );
+
+            CREATE TABLE IF NOT EXISTS releves (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                date_debut  TEXT NOT NULL,
+                date_fin    TEXT NOT NULL,
+                libelle     TEXT,
+                clos        INTEGER DEFAULT 0,
+                created_at  TEXT DEFAULT (datetime('now'))
+            );
         """)
         conn.commit()
+        _migrate_db(conn)
         _seed_jours_feries(conn)
         logger.info("Base de données initialisée : %s", DB_PATH)
     finally:
         conn.close()
+
+
+def _migrate_db(conn):
+    """Migrations pour ajouter les nouvelles colonnes sur une base existante."""
+    try:
+        conn.execute("ALTER TABLE jours_feries ADD COLUMN type_ferie TEXT DEFAULT 'fixe'")
+        conn.commit()
+    except Exception:
+        pass  # Colonne déjà existante
+    try:
+        conn.execute("ALTER TABLE horaires ADD COLUMN commentaire TEXT")
+        conn.commit()
+    except Exception:
+        pass
+    # Table releves
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS releves (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            date_debut  TEXT NOT NULL,
+            date_fin    TEXT NOT NULL,
+            libelle     TEXT,
+            clos        INTEGER DEFAULT 0,
+            created_at  TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    conn.commit()
+
+    # ── Déduplication des pointages (doublons de type/session le même jour) ──
+    # Garde uniquement le premier pointage (id MIN) par combinaison unique.
+    try:
+        conn.execute("""
+            DELETE FROM pointages
+            WHERE id NOT IN (
+                SELECT MIN(id)
+                FROM pointages
+                GROUP BY prno, date_local, type_pointage, session
+            )
+        """)
+        conn.commit()
+    except Exception as e:
+        logger.warning("Deduplication pointages : %s", e)
+
+    # ── Index unique pour prévenir les futurs doublons ─────────────────────
+    try:
+        conn.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_pointages_unique_type_session
+            ON pointages(prno, date_local, type_pointage, session)
+        """)
+        conn.commit()
+    except Exception as e:
+        logger.warning("Index unique pointages : %s", e)
 
 
 def _seed_jours_feries(conn):
@@ -123,8 +188,8 @@ def _seed_jours_feries(conn):
         for mois_jour, libelle in JOURS_FERIES_FIXES_MG:
             date_str = f"{annee}-{mois_jour}"
             conn.execute("""
-                INSERT OR IGNORE INTO jours_feries(date_str, libelle, recurrent)
-                VALUES(?, ?, 1)
+                INSERT OR IGNORE INTO jours_feries(date_str, libelle, recurrent, type_ferie)
+                VALUES(?, ?, 1, 'fixe')
             """, (date_str, libelle))
     conn.commit()
 
@@ -182,15 +247,15 @@ def is_jour_ferie(date_str):
         conn.close()
 
 
-def ajouter_jour_ferie(date_str, libelle, recurrent=False):
+def ajouter_jour_ferie(date_str, libelle, recurrent=False, type_ferie='fixe'):
     conn = get_connection()
     try:
         conn.execute(
-            "INSERT OR REPLACE INTO jours_feries(date_str, libelle, recurrent) VALUES(?,?,?)",
-            (date_str, libelle, int(recurrent))
+            "INSERT OR REPLACE INTO jours_feries(date_str, libelle, recurrent, type_ferie) VALUES(?,?,?,?)",
+            (date_str, libelle, int(recurrent), type_ferie)
         )
         conn.commit()
-        return {"ok": True, "date_str": date_str, "libelle": libelle}
+        return {"ok": True, "date_str": date_str, "libelle": libelle, "type_ferie": type_ferie}
     except Exception as e:
         return {"ok": False, "error": str(e)}
     finally:
@@ -634,7 +699,7 @@ def init_horaires_table():
         conn.close()
 
 
-def set_horaire(prno: str, code_horaire: str, date_effet: str) -> dict:
+def set_horaire(prno: str, code_horaire: str, date_effet: str, commentaire: str = None) -> dict:
     """
     Définit ou met à jour le code horaire d'un employé.
     Archive l'ancien dans historique_horaires.
@@ -654,13 +719,14 @@ def set_horaire(prno: str, code_horaire: str, date_effet: str) -> dict:
 
         # Insérer ou mettre à jour
         conn.execute("""
-            INSERT INTO horaires(prno, code_horaire, date_effet)
-            VALUES(?, ?, ?)
+            INSERT INTO horaires(prno, code_horaire, date_effet, commentaire)
+            VALUES(?, ?, ?, ?)
             ON CONFLICT(prno) DO UPDATE SET
                 code_horaire = excluded.code_horaire,
                 date_effet   = excluded.date_effet,
+                commentaire  = excluded.commentaire,
                 updated_at   = datetime('now')
-        """, (prno, code_horaire, date_effet))
+        """, (prno, code_horaire, date_effet, commentaire))
         conn.commit()
         logger.info("Horaire défini : %s → %s (dès %s)", prno, code_horaire, date_effet)
         return {"ok": True, "prno": prno, "code_horaire": code_horaire}
@@ -766,7 +832,21 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
         prno    = emp["prno"]
         horaire = horaires.get(prno)
         code    = horaire["code_horaire"] if horaire else None
+        date_effet_emp = horaire["date_effet"] if horaire else None
         pts     = pointages.get(prno, [])
+
+        # Avant la date d'effet → employé pas encore en poste, jour exclu
+        if date_effet_emp and date_str < date_effet_emp:
+            result.append({
+                "prno": prno, "nom_prenom": emp["nom_complet"],
+                "code_horaire": code, "statut": "Exclu",
+                "theorique_label": "—", "reel_label": "—",
+                "ecart_label": "—", "ecart_type": "neutre",
+                "arr_mat": None, "dep_mat": None,
+                "arr_apm": None, "dep_apm": None,
+                "minutes_reels": 0, "ferie": False,
+            })
+            continue
 
         if code and pts:
             calc = calculer_temps_reel_plafonne(code, date_obj, pts)
@@ -786,10 +866,24 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
             plages_detail = []
 
         has_any = bool(pts)
+        # Détecter si le jour est exclu par le code horaire
+        jour_exclu = False
+        if code:
+            from parser import parse_code_horaire
+            parsed_h = parse_code_horaire(code)
+            date_obj_check = date_cls.fromisoformat(date_str)
+            jour_info_check = parsed_h.get(date_obj_check.weekday(), {})
+            jour_exclu = not jour_info_check.get("travaille", True)
+
         if ferie:
             statut = "Férié"
+        elif jour_exclu and not has_any:
+            statut = "Exclu"
         elif not has_any:
-            statut = "Absent"
+            if theorique == 0 and code:
+                statut = "Exclu"
+            else:
+                statut = "Absent"
         elif complet:
             statut = "Complet"
         else:
@@ -959,6 +1053,7 @@ def get_resume_periode_avec_synthese(date_debut: str, date_fin: str) -> list[dic
         prno    = emp["prno"]
         horaire = horaires.get(prno)
         code    = horaire["code_horaire"] if horaire else None
+        date_effet_emp = horaire["date_effet"] if horaire else None  # date de début de contrat
 
         dates_statuts   = {}
         total_theorique = 0
@@ -969,24 +1064,43 @@ def get_resume_periode_avec_synthese(date_debut: str, date_fin: str) -> list[dic
         nb_ferie        = 0
 
         for ds in all_dates:
+            # Avant la date d'effet de l'horaire → jour exclu (employé pas encore en poste)
+            if date_effet_emp and ds < date_effet_emp:
+                dates_statuts[ds] = "Exclu"
+                continue
+
             date_obj = date_cls.fromisoformat(ds)
             pts      = pts_index[prno][ds]
             is_ferie = ds in feries
 
             if code:
                 theo_jour = get_minutes_theoriques_jour(code, date_obj)
+                # Vérifier si ce jour est exclu dans le code horaire de l'employé
+                from parser import parse_code_horaire
+                parsed = parse_code_horaire(code)
+                jour_semaine = date_obj.weekday()  # 0=lundi, 6=dimanche
+                jour_info = parsed.get(jour_semaine, {})
+                jour_exclu = not jour_info.get("travaille", True)
             else:
-                theo_jour = 0
+                theo_jour  = 0
+                jour_exclu = False
 
             if is_ferie:
                 statut = "Férié"
                 nb_ferie += 1
                 total_theorique += theo_jour  # Jour férié = payé
                 total_reel      += theo_jour  # Compté comme accompli
+            elif jour_exclu and not pts:
+                # Jour exclu par l'horaire de l'employé → vide, pas absent
+                statut = "Exclu"
             elif not pts:
-                statut = "Absent"
-                nb_absent += 1
-                total_theorique += theo_jour
+                if theo_jour == 0:
+                    # Pas de travail prévu ce jour (ex: dimanche sans horaire défini)
+                    statut = "Exclu"
+                else:
+                    statut = "Absent"
+                    nb_absent += 1
+                    total_theorique += theo_jour
             elif code and pts:
                 calc    = calculer_temps_reel_plafonne(code, date_obj, pts)
                 reel_j  = calc["minutes_reels"]
@@ -1022,3 +1136,107 @@ def get_resume_periode_avec_synthese(date_debut: str, date_fin: str) -> list[dic
         })
 
     return sorted(result, key=lambda x: x["nom_prenom"])
+
+# ─── RELEVÉS ──────────────────────────────────────────────────────────────────
+
+def get_releves() -> list[dict]:
+    """Retourne tous les relevés triés du plus récent au plus ancien."""
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM releves ORDER BY date_debut DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_releve_actif() -> dict | None:
+    """Retourne le relevé en cours (non clos dont la date_fin >= aujourd'hui)."""
+    conn = get_connection()
+    try:
+        today = date.today().isoformat()
+        row = conn.execute("""
+            SELECT * FROM releves
+            WHERE clos=0 AND date_debut <= ? AND date_fin >= ?
+            ORDER BY date_debut DESC LIMIT 1
+        """, (today, today)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def get_releve_by_id(releve_id: int) -> dict | None:
+    conn = get_connection()
+    try:
+        row = conn.execute("SELECT * FROM releves WHERE id=?", (releve_id,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def creer_releve(date_debut: str, date_fin: str, libelle: str = None) -> dict:
+    """Crée un nouveau relevé. Vérifie qu'il n'y a pas de chevauchement."""
+    conn = get_connection()
+    try:
+        # Vérifier chevauchement
+        overlap = conn.execute("""
+            SELECT id FROM releves
+            WHERE NOT (date_fin < ? OR date_debut > ?)
+        """, (date_debut, date_fin)).fetchone()
+        if overlap:
+            return {"ok": False, "error": "Ce relevé chevauche un relevé existant."}
+        cur = conn.execute(
+            "INSERT INTO releves(date_debut, date_fin, libelle) VALUES(?,?,?)",
+            (date_debut, date_fin, libelle)
+        )
+        conn.commit()
+        new_id = cur.lastrowid
+        return {"ok": True, "id": new_id, "date_debut": date_debut, "date_fin": date_fin}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        conn.close()
+
+
+def clore_releve(releve_id: int, libelle_prochain: str = None) -> dict:
+    """Clôture un relevé et crée automatiquement le suivant (date_debut = date_fin + 1 mois)."""
+    import calendar
+    conn = get_connection()
+    try:
+        row = conn.execute("SELECT * FROM releves WHERE id=?", (releve_id,)).fetchone()
+        if not row:
+            return {"ok": False, "error": "Relevé introuvable"}
+        conn.execute("UPDATE releves SET clos=1 WHERE id=?", (releve_id,))
+        conn.commit()
+        # Générer automatiquement le relevé suivant
+        date_fin_actuel = date.fromisoformat(row["date_fin"])
+        new_debut = (date_fin_actuel + timedelta(days=1))
+        # Même durée que l'actuel
+        duree = (date_fin_actuel - date.fromisoformat(row["date_debut"])).days
+        new_fin = new_debut + timedelta(days=duree)
+        # Créer le suivant avec le libellé fourni si précisé
+        cur = conn.execute(
+            "INSERT INTO releves(date_debut, date_fin, libelle) VALUES(?,?,?)",
+            (new_debut.isoformat(), new_fin.isoformat(), libelle_prochain or None)
+        )
+        conn.commit()
+        return {"ok": True, "prochain_id": cur.lastrowid,
+                "prochain_debut": new_debut.isoformat(),
+                "prochain_fin": new_fin.isoformat()}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        conn.close()
+
+
+def supprimer_releve(releve_id: int) -> dict:
+    conn = get_connection()
+    try:
+        conn.execute("DELETE FROM releves WHERE id=?", (releve_id,))
+        conn.commit()
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        conn.close()
