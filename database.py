@@ -121,6 +121,15 @@ def init_db():
                 clos        INTEGER DEFAULT 0,
                 created_at  TEXT DEFAULT (datetime('now'))
             );
+            CREATE TABLE IF NOT EXISTS exceptions_horaires (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                prno         TEXT NOT NULL,
+                date_str     TEXT NOT NULL,
+                code_horaire TEXT NOT NULL,
+                motif        TEXT,
+                created_at   TEXT DEFAULT (datetime('now')),
+                UNIQUE(prno, date_str)
+            );
         """)
         conn.commit()
         _migrate_db(conn)
@@ -702,22 +711,40 @@ def init_horaires_table():
 def set_horaire(prno: str, code_horaire: str, date_effet: str, commentaire: str = None) -> dict:
     """
     Définit ou met à jour le code horaire d'un employé.
-    Archive l'ancien dans historique_horaires.
+    Archive l'ancien dans historique_horaires avec date_fin = date_effet - 1 jour.
+    Les données passées restent toujours accessibles via l'historique.
     """
     prno = prno.strip().lower()
     conn = get_connection()
     try:
-        # Archiver l'ancien horaire si existant
+        from datetime import date as _date, timedelta
+        date_effet_obj = _date.fromisoformat(date_effet)
+        date_fin_ancien = (date_effet_obj - timedelta(days=1)).isoformat()
+
+        # Archiver l'ancien horaire si existant et différent
         ancien = conn.execute(
             "SELECT code_horaire, date_effet FROM horaires WHERE prno=?", (prno,)
         ).fetchone()
         if ancien:
-            conn.execute("""
-                INSERT INTO historique_horaires(prno, code_horaire, date_effet, date_fin)
-                VALUES(?, ?, ?, ?)
-            """, (prno, ancien["code_horaire"], ancien["date_effet"], date_effet))
+            # Ne pas archiver si c'est le même code à la même date (pas de changement réel)
+            if ancien["code_horaire"] == code_horaire and ancien["date_effet"] == date_effet:
+                return {"ok": True, "prno": prno, "code_horaire": code_horaire}
+            # Archiver avec date_fin = veille de la nouvelle date_effet
+            # Mettre à jour date_fin si l'entrée existe déjà, sinon insérer
+            existing = conn.execute("""
+                SELECT id FROM historique_horaires WHERE prno=? AND date_effet=?
+            """, (prno, ancien["date_effet"])).fetchone()
+            if existing:
+                conn.execute("""
+                    UPDATE historique_horaires SET date_fin=? WHERE prno=? AND date_effet=?
+                """, (date_fin_ancien, prno, ancien["date_effet"]))
+            else:
+                conn.execute("""
+                    INSERT INTO historique_horaires(prno, code_horaire, date_effet, date_fin)
+                    VALUES(?, ?, ?, ?)
+                """, (prno, ancien["code_horaire"], ancien["date_effet"], date_fin_ancien))
 
-        # Insérer ou mettre à jour
+        # Insérer ou mettre à jour l'horaire actuel
         conn.execute("""
             INSERT INTO horaires(prno, code_horaire, date_effet, commentaire)
             VALUES(?, ?, ?, ?)
@@ -739,19 +766,29 @@ def set_horaire(prno: str, code_horaire: str, date_effet: str, commentaire: str 
 def get_horaire(prno: str, date_str: str = None) -> dict | None:
     """
     Retourne le code horaire actif pour un employé à une date donnée.
+    Priorité : exceptions_horaires > horaires (actuel) > historique_horaires.
     Si date_str=None, retourne le code actuel.
     """
     prno = prno.strip().lower()
     conn = get_connection()
     try:
         if date_str:
-            # Chercher dans l'historique le code actif à cette date
+            # 1. Vérifier d'abord les exceptions ponctuelles
+            exception = conn.execute("""
+                SELECT code_horaire, date_str as date_effet
+                FROM exceptions_horaires
+                WHERE prno=? AND date_str=?
+            """, (prno, date_str)).fetchone()
+            if exception:
+                return {**dict(exception), "est_exception": True}
+
+            # 2. Chercher dans l'historique le code actif à cette date
             row = conn.execute("""
                 SELECT code_horaire, date_effet FROM historique_horaires
                 WHERE prno=? AND date_effet <= ?
                 ORDER BY date_effet DESC LIMIT 1
             """, (prno, date_str)).fetchone()
-            # Comparer avec l'horaire actuel
+            # 3. Comparer avec l'horaire actuel
             actuel = conn.execute(
                 "SELECT code_horaire, date_effet FROM horaires WHERE prno=?", (prno,)
             ).fetchone()
@@ -764,6 +801,59 @@ def get_horaire(prno: str, date_str: str = None) -> dict | None:
                 "SELECT * FROM horaires WHERE prno=?", (prno,)
             ).fetchone()
             return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+# ── Exceptions horaires ───────────────────────────────────────────────────────
+
+def get_exceptions_horaires(prno: str) -> list[dict]:
+    """Retourne toutes les exceptions ponctuelles d'un employé, triées par date."""
+    conn = get_connection()
+    try:
+        rows = conn.execute("""
+            SELECT * FROM exceptions_horaires
+            WHERE prno=? ORDER BY date_str
+        """, (prno,)).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def set_exception_horaire(prno: str, date_str: str, code_horaire: str, motif: str = None) -> dict:
+    """Ajoute ou remplace une exception horaire pour une date précise."""
+    prno = prno.strip().lower()
+    conn = get_connection()
+    try:
+        conn.execute("""
+            INSERT INTO exceptions_horaires(prno, date_str, code_horaire, motif)
+            VALUES(?, ?, ?, ?)
+            ON CONFLICT(prno, date_str) DO UPDATE SET
+                code_horaire = excluded.code_horaire,
+                motif        = excluded.motif
+        """, (prno, date_str, code_horaire, motif))
+        conn.commit()
+        logger.info("Exception horaire ajoutée : %s le %s → %s", prno, date_str, code_horaire)
+        return {"ok": True, "prno": prno, "date_str": date_str}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        conn.close()
+
+
+def supprimer_exception_horaire(prno: str, date_str: str) -> dict:
+    """Supprime une exception horaire pour une date précise."""
+    prno = prno.strip().lower()
+    conn = get_connection()
+    try:
+        conn.execute("""
+            DELETE FROM exceptions_horaires WHERE prno=? AND date_str=?
+        """, (prno, date_str))
+        conn.commit()
+        logger.info("Exception horaire supprimée : %s le %s", prno, date_str)
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
     finally:
         conn.close()
 
@@ -822,7 +912,6 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
     from datetime import date as date_cls
 
     employes  = get_all_employes()
-    horaires  = get_all_horaires()
     pointages = get_pointages_bruts_jour(date_str)
     ferie     = is_jour_ferie(date_str)
     date_obj  = date_cls.fromisoformat(date_str)
@@ -830,9 +919,10 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
     result = []
     for emp in employes:
         prno    = emp["prno"]
-        horaire = horaires.get(prno)
+        # Utiliser get_horaire(prno, date_str) pour prendre en compte les exceptions
+        horaire = get_horaire(prno, date_str)
         code    = horaire["code_horaire"] if horaire else None
-        date_effet_emp = horaire["date_effet"] if horaire else None
+        date_effet_emp = horaire.get("date_effet") if horaire else None
         pts     = pointages.get(prno, [])
 
         # Avant la date d'effet → employé pas encore en poste, jour exclu
@@ -1026,7 +1116,6 @@ def get_resume_periode_avec_synthese(date_debut: str, date_fin: str) -> list[dic
         d += timedelta(days=1)
 
     employes = get_all_employes()
-    horaires = get_all_horaires()
 
     # Récupérer tous les pointages de la période en une requête
     conn = get_connection()
@@ -1051,9 +1140,9 @@ def get_resume_periode_avec_synthese(date_debut: str, date_fin: str) -> list[dic
     result = []
     for emp in employes:
         prno    = emp["prno"]
-        horaire = horaires.get(prno)
-        code    = horaire["code_horaire"] if horaire else None
-        date_effet_emp = horaire["date_effet"] if horaire else None  # date de début de contrat
+        # Récupérer l'horaire de base (sans date) pour la date_effet de début de contrat
+        horaire_base = get_horaire(prno)
+        date_effet_emp = horaire_base["date_effet"] if horaire_base else None
 
         dates_statuts   = {}
         total_theorique = 0
@@ -1064,10 +1153,13 @@ def get_resume_periode_avec_synthese(date_debut: str, date_fin: str) -> list[dic
         nb_ferie        = 0
 
         for ds in all_dates:
-            # Avant la date d'effet de l'horaire → jour exclu (employé pas encore en poste)
+            # Avant la date d'effet → employé pas encore en poste
             if date_effet_emp and ds < date_effet_emp:
                 dates_statuts[ds] = "Exclu"
                 continue
+            # Récupérer l'horaire pour ce jour précis (prend en compte les exceptions)
+            horaire = get_horaire(prno, ds)
+            code    = horaire["code_horaire"] if horaire else None
 
             date_obj = date_cls.fromisoformat(ds)
             pts      = pts_index[prno][ds]
@@ -1240,3 +1332,18 @@ def supprimer_releve(releve_id: int) -> dict:
         return {"ok": False, "error": str(e)}
     finally:
         conn.close()
+
+
+def close_db():
+    """
+    Force le checkpoint WAL : fusionne presences.db-wal dans presences.db
+    avant l'arrêt du serveur, pour éviter toute perte de données.
+    À appeler via atexit dans tracker.py.
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        conn.close()
+        logger.info("WAL checkpoint effectué — base de données correctement fermée.")
+    except Exception as e:
+        logger.error("Erreur lors du checkpoint WAL à l'arrêt : %s", e)

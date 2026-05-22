@@ -1249,46 +1249,184 @@ let _modifPrno = null;
 
 function ouvrirModifHoraire(prno, codeActuel) {
   _modifPrno = prno;
-  let modal = document.getElementById('modalHoraire');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'modalHoraire';
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px';
-    modal.innerHTML = `
-      <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:28px;width:100%;max-width:520px;box-shadow:0 24px 60px rgba(0,0,0,0.2)">
-        <div style="font-size:15px;font-weight:700;margin-bottom:20px;color:var(--text)">Modifier horaire — <span id="mhPrno"></span></div>
+  document.getElementById('modalHoraire')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'modalHoraire';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto';
+  modal.innerHTML = `
+    <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:28px;width:100%;max-width:560px;box-shadow:0 24px 60px rgba(0,0,0,0.2)">
+      <div style="font-size:15px;font-weight:700;margin-bottom:16px;color:var(--text)">Horaire — <span id="mhPrno"></span></div>
+
+      <!-- Onglets -->
+      <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px">
+        <button id="mhTabPermanent" onclick="mhSwitchTab('permanent')"
+          style="padding:8px 16px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;color:var(--teal);border-bottom:2px solid var(--teal);margin-bottom:-2px">
+          Horaire permanent
+        </button>
+        <button id="mhTabException" onclick="mhSwitchTab('exception')"
+          style="padding:8px 16px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;color:var(--text-muted);border-bottom:2px solid transparent;margin-bottom:-2px">
+          Exceptions ponctuelles
+        </button>
+      </div>
+
+      <!-- ONGLET PERMANENT -->
+      <div id="mhPanelPermanent">
         <div id="mhAlert" class="alert" style="margin-bottom:14px"></div>
+        <div style="background:rgba(255,193,7,0.1);border:1px solid rgba(255,193,7,0.4);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text);margin-bottom:14px">
+          ⚠️ Un changement permanent conserve toutes les données passées — l'ancien horaire reste actif pour les dates antérieures.
+        </div>
         <div class="form-group">
           <label>Code horaire</label>
           <div class="modeles-grid" id="mhModeles" style="margin-bottom:8px"></div>
           <textarea id="mhCode" rows="3" oninput="validerMH()" placeholder="0800tj1200;1400tj1700;..."></textarea>
         </div>
         <div class="form-group">
-          <label>Date d'effet</label>
+          <label>Date d'effet <span style="font-size:11px;color:var(--text-muted)">(le nouvel horaire s'applique à partir de cette date)</span></label>
           <input type="date" id="mhDate">
         </div>
         <div id="mhPreview" style="font-size:12px;margin-bottom:16px;padding:10px;background:var(--main-bg);border-radius:8px;min-height:40px"></div>
         <div class="form-group">
-          <label>Commentaire <span style="color:var(--text-muted);font-weight:400;font-size:11px">(optionnel — pour horaires atypiques ex: gardien 2j/3j)</span></label>
-          <textarea id="mhCommentaire" rows="2" placeholder="ex: Travaille 2 jours sur 3 en rotation — semaine A/B/C" style="font-size:12px;color:var(--text-dim)"></textarea>
+          <label>Commentaire <span style="color:var(--text-muted);font-weight:400;font-size:11px">(optionnel)</span></label>
+          <textarea id="mhCommentaire" rows="2" placeholder="ex: Passage à temps partiel" style="font-size:12px;color:var(--text-dim)"></textarea>
         </div>
         <div style="display:flex;gap:8px">
           <button class="btn btn-primary btn-full" onclick="sauvegarderModifHoraire()">Enregistrer</button>
           <button class="btn btn-danger" onclick="document.getElementById('modalHoraire').remove()">Annuler</button>
         </div>
-      </div>`;
-    document.body.appendChild(modal);
-    modal.addEventListener('click', e => { if(e.target===modal) modal.remove(); });
-  }
+      </div>
+
+      <!-- ONGLET EXCEPTIONS -->
+      <div id="mhPanelException" style="display:none">
+        <div id="mhExAlert" class="alert" style="margin-bottom:14px"></div>
+        <div style="background:rgba(0,191,165,0.08);border:1px solid rgba(0,191,165,0.3);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text);margin-bottom:14px">
+          💡 Une exception remplace l'horaire uniquement pour la date choisie. L'horaire permanent n'est pas touché.
+        </div>
+        <div class="form-group">
+          <label>Date de l'exception</label>
+          <input type="date" id="mhExDate">
+        </div>
+        <div class="form-group">
+          <label>Code horaire pour cette date</label>
+          <div class="modeles-grid" id="mhExModeles" style="margin-bottom:8px"></div>
+          <textarea id="mhExCode" rows="3" oninput="validerMHEx()" placeholder="0800tj1200;1300tj1550;..."></textarea>
+        </div>
+        <div id="mhExPreview" style="font-size:12px;margin-bottom:12px;padding:10px;background:var(--main-bg);border-radius:8px;min-height:32px"></div>
+        <div class="form-group">
+          <label>Motif <span style="color:var(--text-muted);font-weight:400;font-size:11px">(optionnel)</span></label>
+          <input type="text" id="mhExMotif" placeholder="ex: Examen, Rendez-vous médical...">
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:20px">
+          <button class="btn btn-primary btn-full" onclick="ajouterException()">Ajouter l'exception</button>
+          <button class="btn btn-danger" onclick="document.getElementById('modalHoraire').remove()">Fermer</button>
+        </div>
+        <!-- Liste des exceptions existantes -->
+        <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Exceptions enregistrées</div>
+        <div id="mhExListe" style="font-size:13px"></div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if(e.target===modal) modal.remove(); });
+
   document.getElementById('mhPrno').textContent = prno;
   document.getElementById('mhCode').value = codeActuel || '';
   document.getElementById('mhDate').value = new Date().toLocaleDateString('en-CA');
+  document.getElementById('mhExDate').value = new Date().toLocaleDateString('en-CA');
+
   const mhMod = document.getElementById('mhModeles');
-  mhMod.innerHTML = `<div class="modele-chip" onclick="document.getElementById('mhCode').value='0800tj1200;1400tj1700;(1000tj1010);(1600tj1610);(0800di1200);(1400di1700)';validerMH()">Standard 40h</div>`;
+  const mhExMod = document.getElementById('mhExModeles');
+  const chips = `<div class="modele-chip" onclick="document.getElementById('mhCode').value='0800tj1200;1400tj1700;(1000tj1010);(1600tj1610);(di)';validerMH()">Standard</div>`;
+  const chipsEx = `<div class="modele-chip" onclick="document.getElementById('mhExCode').value='0800tj1200;1300tj1550;(1000tj1010);(1600tj1610);(di)';validerMHEx()">Examen</div>`;
+  mhMod.innerHTML = chips;
+  mhExMod.innerHTML = chipsEx;
   modeles.forEach(m => {
     mhMod.innerHTML += `<div class="modele-chip" onclick="document.getElementById('mhCode').value='${m.code}';validerMH()">${m.nom}</div>`;
+    mhExMod.innerHTML += `<div class="modele-chip" onclick="document.getElementById('mhExCode').value='${m.code}';validerMHEx()">${m.nom}</div>`;
   });
   validerMH();
+  chargerExceptions(prno);
+}
+
+function mhSwitchTab(tab) {
+  const isPerm = tab === 'permanent';
+  document.getElementById('mhPanelPermanent').style.display = isPerm ? '' : 'none';
+  document.getElementById('mhPanelException').style.display = isPerm ? 'none' : '';
+  document.getElementById('mhTabPermanent').style.cssText = `padding:8px 16px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;color:${isPerm?'var(--teal)':'var(--text-muted)'};border-bottom:2px solid ${isPerm?'var(--teal)':'transparent'};margin-bottom:-2px`;
+  document.getElementById('mhTabException').style.cssText = `padding:8px 16px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;color:${!isPerm?'var(--teal)':'var(--text-muted)'};border-bottom:2px solid ${!isPerm?'var(--teal)':'transparent'};margin-bottom:-2px`;
+}
+
+async function validerMHEx() {
+  const code = document.getElementById('mhExCode')?.value?.trim();
+  const prev = document.getElementById('mhExPreview');
+  if (!prev || !code) { if(prev) prev.innerHTML=''; return; }
+  try {
+    const r = await fetch('/api/admin/horaires/valider', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({code_horaire: code})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      prev.innerHTML = `<span style="color:var(--teal);font-weight:600">${d.label_semaine} / semaine</span>`;
+    } else {
+      prev.innerHTML = `<span style="color:var(--red);font-size:12px">${d.error}</span>`;
+    }
+  } catch(e) { prev.innerHTML = ''; }
+}
+
+async function chargerExceptions(prno) {
+  const liste = document.getElementById('mhExListe');
+  if (!liste) return;
+  try {
+    const data = await fetch(`/api/admin/horaires/${prno}/exceptions`).then(r=>r.json());
+    if (!data.length) {
+      liste.innerHTML = '<div style="color:var(--text-muted);font-size:12px;font-style:italic">Aucune exception enregistrée.</div>';
+      return;
+    }
+    liste.innerHTML = data.map(ex => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--main-bg);border-radius:8px;margin-bottom:6px;gap:8px">
+        <div>
+          <span style="font-weight:700;color:var(--teal)">${ex.date_str}</span>
+          <span style="color:var(--text-muted);margin:0 6px">→</span>
+          <span style="font-family:'DM Mono',monospace;font-size:11px">${ex.code_horaire.length>40?ex.code_horaire.slice(0,40)+'...':ex.code_horaire}</span>
+          ${ex.motif?`<span style="color:var(--text-muted);font-size:11px;margin-left:6px">(${ex.motif})</span>`:''}
+        </div>
+        <button onclick="supprimerException('${prno}','${ex.date_str}')"
+          style="background:rgba(239,83,80,0.12);color:var(--red);border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;white-space:nowrap">
+          Supprimer
+        </button>
+      </div>`).join('');
+  } catch(e) {
+    liste.innerHTML = '<div style="color:var(--red);font-size:12px">Erreur de chargement</div>';
+  }
+}
+
+async function ajouterException() {
+  const date_str     = document.getElementById('mhExDate')?.value;
+  const code_horaire = document.getElementById('mhExCode')?.value?.trim();
+  const motif        = document.getElementById('mhExMotif')?.value?.trim() || null;
+  const alertEl      = document.getElementById('mhExAlert');
+  if (!date_str || !code_horaire) { showAlert(alertEl,'error','Date et code horaire obligatoires'); return; }
+  const r = await fetch(`/api/admin/horaires/${_modifPrno}/exceptions`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({date_str, code_horaire, motif})
+  });
+  const d = await r.json();
+  if (d.ok) {
+    showAlert(alertEl,'success','Exception ajoutée !');
+    document.getElementById('mhExCode').value = '';
+    document.getElementById('mhExMotif').value = '';
+    document.getElementById('mhExPreview').innerHTML = '';
+    chargerExceptions(_modifPrno);
+  } else {
+    showAlert(alertEl,'error', d.error);
+  }
+}
+
+async function supprimerException(prno, date_str) {
+  if (!confirm(`Supprimer l'exception du ${date_str} ?`)) return;
+  const r = await fetch(`/api/admin/horaires/${prno}/exceptions/${date_str}`, {method:'DELETE'});
+  const d = await r.json();
+  if (d.ok) chargerExceptions(prno);
+  else alert('Erreur : ' + d.error);
 }
 
 async function validerMH() {

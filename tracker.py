@@ -1,3 +1,4 @@
+import atexit
 import logging
 import os
 import sys
@@ -22,6 +23,9 @@ BOT_TOKEN     = os.getenv("TELEGRAM_BOT_TOKEN", "")
 GROUP_ID      = int(os.getenv("TELEGRAM_GROUP_ID", "0"))
 TIMEZONE      = os.getenv("TIMEZONE", "Indian/Antananarivo")
 POLL_INTERVAL = int(os.getenv("POLL_INTERVAL_SEC", "120"))
+
+# Garantit la sauvegarde WAL même en cas d'arrêt brutal
+atexit.register(db.close_db)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -391,6 +395,7 @@ def main():
         polling_loop()
     except KeyboardInterrupt:
         scheduler.shutdown()
+        db.close_db()
         sys.exit(0)
 
 
