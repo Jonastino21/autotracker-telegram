@@ -1,5 +1,5 @@
 """
-database.py — Toutes les opérations SQLite/Turso pour le tracker KAROKA.
+database.py — PostgreSQL (Neon) pour le tracker KAROKA.
 Tables : employes, liaisons, pointages, jours_feries, meta
 """
 
@@ -9,22 +9,119 @@ from collections import defaultdict
 from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
 import os
-
-# ── Driver : Turso (cloud) ou SQLite local (fallback dev) ────────────────────
-TURSO_URL   = os.getenv("TURSO_DB_URL", "")
-TURSO_TOKEN = os.getenv("TURSO_AUTH_TOKEN", "")
-
-if TURSO_URL and TURSO_TOKEN:
-    import libsql_client as _driver
-    _USE_TURSO = True
-else:
-    import sqlite3 as _driver   # type: ignore
-    _USE_TURSO = False
+import psycopg2
+import psycopg2.extras
 
 logger = logging.getLogger(__name__)
 
-DB_PATH  = os.getenv("DB_PATH",  "presences.db")   # utilisé uniquement en mode SQLite local
-TIMEZONE = os.getenv("TIMEZONE", "Indian/Antananarivo")
+from dotenv import load_dotenv
+load_dotenv()
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+TIMEZONE     = os.getenv("TIMEZONE", "Indian/Antananarivo")
+
+
+def get_connection():
+    conn = psycopg2.connect(DATABASE_URL)
+    conn.autocommit = False
+    return _PGConn(conn)
+
+
+class _Row(dict):
+    """Mimics sqlite3.Row — access by column name or index."""
+    def __init__(self, cursor, row):
+        cols = [d[0] for d in cursor.description]
+        super().__init__(zip(cols, row))
+        self._list = list(row)
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return self._list[key]
+        return super().__getitem__(key)
+    def keys(self):
+        return super().keys()
+
+
+class _Cursor:
+    def __init__(self, pg_cursor):
+        self._cur = pg_cursor
+        self.description = None
+        self.rowcount = 0
+        self.lastrowid = None
+
+    def execute(self, sql, params=None):
+        # Convert SQLite ? placeholders to psycopg2 %s
+        sql = sql.replace("?", "%s")
+        # Convert SQLite-specific syntax
+        sql = sql.replace("INSERT OR IGNORE INTO", "INSERT INTO").replace(
+              "INSERT OR REPLACE INTO", "INSERT INTO").replace(
+              "NOW()", "NOW()").replace(
+              'NOW()', 'NOW()')
+        # Handle ON CONFLICT for INSERT OR REPLACE (meta table)
+        if "INSERT INTO meta" in sql and "ON CONFLICT" not in sql:
+            sql = sql.rstrip().rstrip(")") 
+            sql = "INSERT INTO meta(key,value) VALUES (%s,%s) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value"
+        try:
+            self._cur.execute(sql, params)
+        except Exception as e:
+            raise
+        self.description = self._cur.description
+        self.rowcount = self._cur.rowcount
+        # Get lastrowid via RETURNING if INSERT
+        return self
+
+    def fetchone(self):
+        row = self._cur.fetchone()
+        if row is None:
+            return None
+        return _Row(self._cur, row)
+
+    def fetchall(self):
+        rows = self._cur.fetchall()
+        return [_Row(self._cur, r) for r in rows]
+
+    def close(self):
+        self._cur.close()
+
+
+class _PGConn:
+    """Wraps psycopg2 connection to mimic sqlite3 interface."""
+    def __init__(self, conn):
+        self._conn = conn
+
+    def cursor(self):
+        return _Cursor(self._conn.cursor())
+
+    def execute(self, sql, params=None):
+        cur = _Cursor(self._conn.cursor())
+        try:
+            cur.execute(sql, params)
+        except Exception:
+            self._conn.rollback()
+            raise
+        return cur
+
+    def executescript(self, sql):
+        # Split on ; and execute each statement
+        for stmt in sql.split(";"):
+            stmt = stmt.strip()
+            if stmt:
+                self._conn.cursor().execute(stmt)
+
+    def commit(self):
+        self._conn.commit()
+
+    def rollback(self):
+        self._conn.rollback()
+
+    def close(self):
+        self._conn.close()
+
+    @property
+    def row_factory(self):
+        return None
+
+    @row_factory.setter
+    def row_factory(self, val):
+        pass  # handled by _Row
 
 JOURS_FERIES_FIXES_MG = [
     ("01-01", "Jour de l'An"),
@@ -44,110 +141,81 @@ def get_tz():
     return ZoneInfo(TIMEZONE)
 
 
-def get_connection():
-    if _USE_TURSO:
-        conn = _driver.connect(TURSO_URL, auth_token=TURSO_TOKEN)
-    else:
-        conn = _driver.connect(DB_PATH, check_same_thread=False)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA foreign_keys=ON")
-    conn.row_factory = _driver.Row
-    return conn
+
 
 
 def init_db():
     conn = get_connection()
     try:
-        conn.executescript("""
-            CREATE TABLE IF NOT EXISTS employes (
-                prno        TEXT PRIMARY KEY,
-                nom_complet TEXT NOT NULL,
-                email       TEXT,
-                actif       INTEGER DEFAULT 1,
-                created_at  TEXT DEFAULT (datetime('now')),
-                updated_at  TEXT DEFAULT (datetime('now'))
-            );
-            CREATE TABLE IF NOT EXISTS liaisons (
-                telegram_id  INTEGER PRIMARY KEY,
-                prno         TEXT NOT NULL,
-                username     TEXT,
-                dans_groupe  INTEGER DEFAULT 1,
-                lie_le       TEXT DEFAULT (datetime('now')),
+        stmts = [
+            """CREATE TABLE IF NOT EXISTS employes (
+                prno TEXT PRIMARY KEY, nom_complet TEXT NOT NULL,
+                email TEXT, actif INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW()
+            )""",
+            """CREATE TABLE IF NOT EXISTS liaisons (
+                telegram_id BIGINT PRIMARY KEY, prno TEXT NOT NULL,
+                username TEXT, dans_groupe INTEGER DEFAULT 1,
+                lie_le TIMESTAMP DEFAULT NOW(),
                 FOREIGN KEY(prno) REFERENCES employes(prno)
-            );
-            CREATE TABLE IF NOT EXISTS pointages (
-                id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                message_id      INTEGER NOT NULL,
-                telegram_id     INTEGER NOT NULL,
-                prno            TEXT NOT NULL,
-                date_local      TEXT NOT NULL,
-                heure_locale    TEXT NOT NULL,
-                type_pointage   TEXT NOT NULL,
-                session         TEXT NOT NULL,
-                raw_text        TEXT,
-                created_at      TEXT DEFAULT (datetime('now')),
-                UNIQUE(message_id),
+            )""",
+            """CREATE TABLE IF NOT EXISTS pointages (
+                id SERIAL PRIMARY KEY, message_id TEXT NOT NULL UNIQUE,
+                telegram_id BIGINT NOT NULL, prno TEXT NOT NULL,
+                date_local TEXT NOT NULL, heure_locale TEXT NOT NULL,
+                type_pointage TEXT NOT NULL, session TEXT NOT NULL,
+                raw_text TEXT, created_at TIMESTAMP DEFAULT NOW(),
                 FOREIGN KEY(prno) REFERENCES employes(prno)
-            );
-            CREATE TABLE IF NOT EXISTS jours_feries (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                date_str    TEXT NOT NULL UNIQUE,
-                libelle     TEXT NOT NULL,
-                recurrent   INTEGER DEFAULT 0,
-                type_ferie  TEXT DEFAULT 'fixe',
-                created_at  TEXT DEFAULT (datetime('now'))
-            );
-            CREATE TABLE IF NOT EXISTS meta (
-                key   TEXT PRIMARY KEY,
-                value TEXT
-            );
-            CREATE INDEX IF NOT EXISTS idx_pointages_date ON pointages(date_local);
-            CREATE INDEX IF NOT EXISTS idx_pointages_prno ON pointages(prno);
-            CREATE INDEX IF NOT EXISTS idx_pointages_tgid ON pointages(telegram_id);
-            CREATE INDEX IF NOT EXISTS idx_liaisons_prno  ON liaisons(prno);
-
-            CREATE TABLE IF NOT EXISTS horaires (
-                prno         TEXT PRIMARY KEY,
-                code_horaire TEXT NOT NULL,
-                date_effet   TEXT NOT NULL,
-                commentaire  TEXT,
-                created_at   TEXT DEFAULT (datetime('now')),
-                updated_at   TEXT DEFAULT (datetime('now')),
+            )""",
+            """CREATE TABLE IF NOT EXISTS jours_feries (
+                id SERIAL PRIMARY KEY, date_str TEXT NOT NULL UNIQUE,
+                libelle TEXT NOT NULL, recurrent INTEGER DEFAULT 0,
+                type_ferie TEXT DEFAULT 'fixe', created_at TIMESTAMP DEFAULT NOW()
+            )""",
+            "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)",
+            """CREATE TABLE IF NOT EXISTS horaires (
+                prno TEXT PRIMARY KEY, code_horaire TEXT NOT NULL,
+                date_effet TEXT NOT NULL, commentaire TEXT,
+                created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW(),
                 FOREIGN KEY(prno) REFERENCES employes(prno)
-            );
-
-            CREATE TABLE IF NOT EXISTS historique_horaires (
-                id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                prno         TEXT NOT NULL,
-                code_horaire TEXT NOT NULL,
-                date_effet   TEXT NOT NULL,
-                date_fin     TEXT,
-                created_at   TEXT DEFAULT (datetime('now')),
+            )""",
+            """CREATE TABLE IF NOT EXISTS historique_horaires (
+                id SERIAL PRIMARY KEY, prno TEXT NOT NULL,
+                code_horaire TEXT NOT NULL, date_effet TEXT NOT NULL,
+                date_fin TEXT, created_at TIMESTAMP DEFAULT NOW(),
                 FOREIGN KEY(prno) REFERENCES employes(prno)
-            );
-
-            CREATE TABLE IF NOT EXISTS releves (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                date_debut  TEXT NOT NULL,
-                date_fin    TEXT NOT NULL,
-                libelle     TEXT,
-                clos        INTEGER DEFAULT 0,
-                created_at  TEXT DEFAULT (datetime('now'))
-            );
-            CREATE TABLE IF NOT EXISTS exceptions_horaires (
-                id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                prno         TEXT NOT NULL,
-                date_str     TEXT NOT NULL,
-                code_horaire TEXT NOT NULL,
-                motif        TEXT,
-                created_at   TEXT DEFAULT (datetime('now')),
+            )""",
+            """CREATE TABLE IF NOT EXISTS releves (
+                id SERIAL PRIMARY KEY, date_debut TEXT NOT NULL,
+                date_fin TEXT NOT NULL, libelle TEXT,
+                clos INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT NOW()
+            )""",
+            """CREATE TABLE IF NOT EXISTS exceptions_horaires (
+                id SERIAL PRIMARY KEY, prno TEXT NOT NULL,
+                date_str TEXT NOT NULL, code_horaire TEXT NOT NULL,
+                motif TEXT, created_at TIMESTAMP DEFAULT NOW(),
                 UNIQUE(prno, date_str)
-            );
-        """)
-        conn.commit()
+            )""",
+            """CREATE TABLE IF NOT EXISTS liaisons_empreintes (
+                fingerprint_id INTEGER, pin_id INTEGER UNIQUE,
+                prno TEXT NOT NULL, enregistre_le TIMESTAMP DEFAULT NOW(),
+                FOREIGN KEY(prno) REFERENCES employes(prno)
+            )""",
+            "CREATE INDEX IF NOT EXISTS idx_pointages_date ON pointages(date_local)",
+            "CREATE INDEX IF NOT EXISTS idx_pointages_prno ON pointages(prno)",
+            "CREATE INDEX IF NOT EXISTS idx_pointages_tgid ON pointages(telegram_id)",
+            "CREATE INDEX IF NOT EXISTS idx_liaisons_prno  ON liaisons(prno)",
+        ]
+        for stmt in stmts:
+            try:
+                conn.execute(stmt)
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                logger.debug("init_db stmt ignoré (déjà existant) : %s", e)
         _migrate_db(conn)
         _seed_jours_feries(conn)
-        logger.info("Base de données initialisée : %s", DB_PATH)
+        logger.info("Base de données PostgreSQL initialisée.")
     finally:
         conn.close()
 
@@ -167,12 +235,12 @@ def _migrate_db(conn):
     # Table releves
     conn.execute("""
         CREATE TABLE IF NOT EXISTS releves (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            id          SERIAL PRIMARY KEY,
             date_debut  TEXT NOT NULL,
             date_fin    TEXT NOT NULL,
             libelle     TEXT,
             clos        INTEGER DEFAULT 0,
-            created_at  TEXT DEFAULT (datetime('now'))
+            created_at  TEXT DEFAULT NOW()
         )
     """)
     conn.commit()
@@ -210,8 +278,8 @@ def _seed_jours_feries(conn):
         for mois_jour, libelle in JOURS_FERIES_FIXES_MG:
             date_str = f"{annee}-{mois_jour}"
             conn.execute("""
-                INSERT OR IGNORE INTO jours_feries(date_str, libelle, recurrent, type_ferie)
-                VALUES(?, ?, 1, 'fixe')
+                INSERT INTO jours_feries(date_str, libelle, recurrent, type_ferie)
+                VALUES (%s, %s, 1, 'fixe') ON CONFLICT(date_str) DO NOTHING
             """, (date_str, libelle))
     conn.commit()
 
@@ -221,16 +289,18 @@ def _seed_jours_feries(conn):
 def get_meta(key, default=None):
     conn = get_connection()
     try:
-        row = conn.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
+        row = conn.execute("SELECT value FROM meta WHERE key=%s", (key,)).fetchone()
         return row["value"] if row else default
-    finally:
-        conn.close()
+    finally:        conn.close()
 
 
 def set_meta(key, value):
     conn = get_connection()
     try:
-        conn.execute("INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)", (key, str(value)))
+        conn.execute(
+            "INSERT INTO meta(key,value) VALUES (%s,%s) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value",
+            (key, str(value))
+        )
         conn.commit()
     finally:
         conn.close()
@@ -243,7 +313,7 @@ def get_jours_feries(annee=None):
     try:
         if annee:
             rows = conn.execute(
-                "SELECT * FROM jours_feries WHERE date_str LIKE ? ORDER BY date_str",
+                "SELECT * FROM jours_feries WHERE date_str LIKE %s ORDER BY date_str",
                 (f"{annee}%",)
             ).fetchall()
         else:
@@ -262,7 +332,7 @@ def is_jour_ferie(date_str):
     conn = get_connection()
     try:
         row = conn.execute(
-            "SELECT id FROM jours_feries WHERE date_str=?", (date_str,)
+            "SELECT id FROM jours_feries WHERE date_str=%s", (date_str,)
         ).fetchone()
         return row is not None
     finally:
@@ -273,7 +343,7 @@ def ajouter_jour_ferie(date_str, libelle, recurrent=False, type_ferie='fixe'):
     conn = get_connection()
     try:
         conn.execute(
-            "INSERT OR REPLACE INTO jours_feries(date_str, libelle, recurrent, type_ferie) VALUES(?,?,?,?)",
+            "INSERT OR REPLACE INTO jours_feries(date_str, libelle, recurrent, type_ferie) VALUES (%s,%s,%s,%s)",
             (date_str, libelle, int(recurrent), type_ferie)
         )
         conn.commit()
@@ -287,7 +357,7 @@ def ajouter_jour_ferie(date_str, libelle, recurrent=False, type_ferie='fixe'):
 def supprimer_jour_ferie(date_str):
     conn = get_connection()
     try:
-        conn.execute("DELETE FROM jours_feries WHERE date_str=?", (date_str,))
+        conn.execute("DELETE FROM jours_feries WHERE date_str=%s", (date_str,))
         conn.commit()
         return {"ok": True}
     except Exception as e:
@@ -312,11 +382,11 @@ def import_csv_employes(csv_path):
                     continue
                 conn.execute("""
                     INSERT INTO employes(prno, nom_complet, email)
-                    VALUES(?,?,?)
+                    VALUES (%s,%s,%s)
                     ON CONFLICT(prno) DO UPDATE SET
-                        nom_complet=excluded.nom_complet,
-                        email=excluded.email,
-                        updated_at=datetime('now')
+                        nom_complet=EXCLUDED.nom_complet,
+                        email=EXCLUDED.email,
+                        updated_at=NOW()
                 """, (prno, nom, f"{prno}.karoka@gmail.com"))
                 result["imported"] += 1
         conn.commit()
@@ -338,10 +408,10 @@ def ajouter_employe(prno, nom_complet):
     try:
         conn.execute("""
             INSERT INTO employes(prno, nom_complet, email)
-            VALUES(?,?,?)
+            VALUES (%s,%s,%s)
             ON CONFLICT(prno) DO UPDATE SET
-                nom_complet=excluded.nom_complet,
-                updated_at=datetime('now')
+                nom_complet=EXCLUDED.nom_complet,
+                updated_at=NOW()
         """, (prno, nom_complet, f"{prno}.karoka@gmail.com"))
         conn.commit()
         return {"ok": True, "prno": prno, "nom_complet": nom_complet}
@@ -362,15 +432,15 @@ def desactiver_employe(prno):
     conn = get_connection()
     try:
         conn.execute(
-            "UPDATE employes SET actif=0, updated_at=datetime('now') WHERE prno=?",
+            "UPDATE employes SET actif=0, updated_at=NOW() WHERE prno=%s",
             (prno,)
         )
         row = conn.execute(
-            "SELECT telegram_id FROM liaisons WHERE prno=?", (prno,)
+            "SELECT telegram_id FROM liaisons WHERE prno=%s", (prno,)
         ).fetchone()
         telegram_id = row["telegram_id"] if row else None
         # Supprimer la liaison → permet re-onboarding si l'employé est réactivé
-        conn.execute("DELETE FROM liaisons WHERE prno=?", (prno,))
+        conn.execute("DELETE FROM liaisons WHERE prno=%s", (prno,))
         conn.commit()
         return {"ok": True, "telegram_id": telegram_id}
     except Exception as e:
@@ -385,7 +455,7 @@ def reactiver_employe(prno: str) -> dict:
     conn = get_connection()
     try:
         conn.execute(
-            "UPDATE employes SET actif=1, updated_at=datetime('now') WHERE prno=?",
+            "UPDATE employes SET actif=1, updated_at=NOW() WHERE prno=%s",
             (prno,)
         )
         conn.commit()
@@ -411,7 +481,7 @@ def get_all_employes(actifs_only=True):
 def get_employe_by_prno(prno):
     conn = get_connection()
     try:
-        row = conn.execute("SELECT * FROM employes WHERE prno=?", (prno.lower(),)).fetchone()
+        row = conn.execute("SELECT * FROM employes WHERE prno=%s", (prno.lower(),)).fetchone()
         return dict(row) if row else None
     finally:
         conn.close()
@@ -425,7 +495,7 @@ def get_liaison(telegram_id):
         row = conn.execute("""
             SELECT l.*, e.nom_complet, e.email, e.actif
             FROM liaisons l JOIN employes e ON l.prno=e.prno
-            WHERE l.telegram_id=?
+            WHERE l.telegram_id=%s
         """, (telegram_id,)).fetchone()
         return dict(row) if row else None
     finally:
@@ -435,7 +505,7 @@ def get_liaison(telegram_id):
 def get_liaison_by_prno(prno):
     conn = get_connection()
     try:
-        row = conn.execute("SELECT * FROM liaisons WHERE prno=?", (prno.lower(),)).fetchone()
+        row = conn.execute("SELECT * FROM liaisons WHERE prno=%s", (prno.lower(),)).fetchone()
         return dict(row) if row else None
     finally:
         conn.close()
@@ -470,7 +540,7 @@ def creer_liaison(telegram_id, prno, username=""):
     try:
         conn.execute("""
             INSERT INTO liaisons(telegram_id, prno, username, dans_groupe)
-            VALUES(?,?,?,0)
+            VALUES (%s,%s,%s,0)
         """, (telegram_id, prno, username or ""))
         conn.commit()
         logger.info("Liaison créée : %s ↔ %s (%s)", telegram_id, prno, employe["nom_complet"])
@@ -489,7 +559,7 @@ def creer_liaison(telegram_id, prno, username=""):
 def marquer_dans_groupe(telegram_id, dans_groupe):
     conn = get_connection()
     try:
-        conn.execute("UPDATE liaisons SET dans_groupe=? WHERE telegram_id=?",
+        conn.execute("UPDATE liaisons SET dans_groupe=%s WHERE telegram_id=%s",
                      (int(dans_groupe), telegram_id))
         conn.commit()
     finally:
@@ -499,10 +569,10 @@ def marquer_dans_groupe(telegram_id, dans_groupe):
 def retirer_liaison(telegram_id):
     conn = get_connection()
     try:
-        row = conn.execute("SELECT prno FROM liaisons WHERE telegram_id=?", (telegram_id,)).fetchone()
+        row = conn.execute("SELECT prno FROM liaisons WHERE telegram_id=%s", (telegram_id,)).fetchone()
         if row:
-            conn.execute("UPDATE liaisons SET dans_groupe=0 WHERE telegram_id=?", (telegram_id,))
-            conn.execute("UPDATE employes SET actif=0, updated_at=datetime('now') WHERE prno=?",
+            conn.execute("UPDATE liaisons SET dans_groupe=0 WHERE telegram_id=%s", (telegram_id,))
+            conn.execute("UPDATE employes SET actif=0, updated_at=NOW() WHERE prno=%s",
                          (row["prno"],))
             conn.commit()
             logger.info("Retrait liaison : telegram_id=%s prno=%s", telegram_id, row["prno"])
@@ -547,7 +617,7 @@ def get_dernier_pointage_type(prno: str, date_local: str) -> str | None:
     try:
         row = conn.execute("""
             SELECT type_pointage FROM pointages
-            WHERE prno=? AND date_local=?
+            WHERE prno=%s AND date_local=%s
             ORDER BY heure_locale DESC LIMIT 1
         """, (prno, date_local)).fetchone()
         return row["type_pointage"] if row else None
@@ -560,10 +630,10 @@ def insert_pointage(message_id, telegram_id, prno, date_local, heure_locale,
     conn = get_connection()
     try:
         cur = conn.execute("""
-            INSERT OR IGNORE INTO pointages
+            INSERT INTO pointages
                 (message_id, telegram_id, prno, date_local, heure_locale,
                  type_pointage, session, raw_text)
-            VALUES (?,?,?,?,?,?,?,?)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
         """, (message_id, telegram_id, prno, date_local, heure_locale,
               type_pointage, session, raw_text))
         conn.commit()
@@ -581,7 +651,7 @@ def get_pointages_du_jour(date_str):
         rows = conn.execute("""
             SELECT p.*, e.nom_complet FROM pointages p
             LEFT JOIN employes e ON p.prno=e.prno
-            WHERE p.date_local=? ORDER BY p.heure_locale
+            WHERE p.date_local=%s ORDER BY p.heure_locale
         """, (date_str,)).fetchall()
         return [dict(r) for r in rows]
     finally:
@@ -644,7 +714,7 @@ def get_resume_periode(date_debut, date_fin):
     try:
         rows = conn.execute("""
             SELECT p.prno, p.date_local, p.session, p.type_pointage, p.heure_locale
-            FROM pointages p WHERE p.date_local BETWEEN ? AND ?
+            FROM pointages p WHERE p.date_local BETWEEN %s AND %s
             ORDER BY p.date_local, p.heure_locale
         """, (date_debut, date_fin)).fetchall()
     finally:
@@ -701,18 +771,18 @@ def init_horaires_table():
                 prno         TEXT PRIMARY KEY,
                 code_horaire TEXT NOT NULL,
                 date_effet   TEXT NOT NULL,
-                created_at   TEXT DEFAULT (datetime('now')),
-                updated_at   TEXT DEFAULT (datetime('now')),
+                created_at   TEXT DEFAULT NOW(),
+                updated_at   TEXT DEFAULT NOW(),
                 FOREIGN KEY(prno) REFERENCES employes(prno)
             );
 
             CREATE TABLE IF NOT EXISTS historique_horaires (
-                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                id           SERIAL PRIMARY KEY,
                 prno         TEXT NOT NULL,
                 code_horaire TEXT NOT NULL,
                 date_effet   TEXT NOT NULL,
                 date_fin     TEXT,
-                created_at   TEXT DEFAULT (datetime('now')),
+                created_at   TEXT DEFAULT NOW(),
                 FOREIGN KEY(prno) REFERENCES employes(prno)
             );
         """)
@@ -736,7 +806,7 @@ def set_horaire(prno: str, code_horaire: str, date_effet: str, commentaire: str 
 
         # Archiver l'ancien horaire si existant et différent
         ancien = conn.execute(
-            "SELECT code_horaire, date_effet FROM horaires WHERE prno=?", (prno,)
+            "SELECT code_horaire, date_effet FROM horaires WHERE prno=%s", (prno,)
         ).fetchone()
         if ancien:
             # Ne pas archiver si c'est le même code à la même date (pas de changement réel)
@@ -745,27 +815,27 @@ def set_horaire(prno: str, code_horaire: str, date_effet: str, commentaire: str 
             # Archiver avec date_fin = veille de la nouvelle date_effet
             # Mettre à jour date_fin si l'entrée existe déjà, sinon insérer
             existing = conn.execute("""
-                SELECT id FROM historique_horaires WHERE prno=? AND date_effet=?
+                SELECT id FROM historique_horaires WHERE prno=%s AND date_effet=%s
             """, (prno, ancien["date_effet"])).fetchone()
             if existing:
                 conn.execute("""
-                    UPDATE historique_horaires SET date_fin=? WHERE prno=? AND date_effet=?
+                    UPDATE historique_horaires SET date_fin=%s WHERE prno=%s AND date_effet=%s
                 """, (date_fin_ancien, prno, ancien["date_effet"]))
             else:
                 conn.execute("""
                     INSERT INTO historique_horaires(prno, code_horaire, date_effet, date_fin)
-                    VALUES(?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s)
                 """, (prno, ancien["code_horaire"], ancien["date_effet"], date_fin_ancien))
 
         # Insérer ou mettre à jour l'horaire actuel
         conn.execute("""
             INSERT INTO horaires(prno, code_horaire, date_effet, commentaire)
-            VALUES(?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s)
             ON CONFLICT(prno) DO UPDATE SET
-                code_horaire = excluded.code_horaire,
-                date_effet   = excluded.date_effet,
-                commentaire  = excluded.commentaire,
-                updated_at   = datetime('now')
+                code_horaire = EXCLUDED.code_horaire,
+                date_effet   = EXCLUDED.date_effet,
+                commentaire  = EXCLUDED.commentaire,
+                updated_at   = NOW()
         """, (prno, code_horaire, date_effet, commentaire))
         conn.commit()
         logger.info("Horaire défini : %s → %s (dès %s)", prno, code_horaire, date_effet)
@@ -790,7 +860,7 @@ def get_horaire(prno: str, date_str: str = None) -> dict | None:
             exception = conn.execute("""
                 SELECT code_horaire, date_str as date_effet
                 FROM exceptions_horaires
-                WHERE prno=? AND date_str=?
+                WHERE prno=%s AND date_str=%s
             """, (prno, date_str)).fetchone()
             if exception:
                 return {**dict(exception), "est_exception": True}
@@ -798,12 +868,12 @@ def get_horaire(prno: str, date_str: str = None) -> dict | None:
             # 2. Chercher dans l'historique le code actif à cette date
             row = conn.execute("""
                 SELECT code_horaire, date_effet FROM historique_horaires
-                WHERE prno=? AND date_effet <= ?
+                WHERE prno=%s AND date_effet <= %s
                 ORDER BY date_effet DESC LIMIT 1
             """, (prno, date_str)).fetchone()
             # 3. Comparer avec l'horaire actuel
             actuel = conn.execute(
-                "SELECT code_horaire, date_effet FROM horaires WHERE prno=?", (prno,)
+                "SELECT code_horaire, date_effet FROM horaires WHERE prno=%s", (prno,)
             ).fetchone()
             if actuel and actuel["date_effet"] <= date_str:
                 if not row or actuel["date_effet"] >= row["date_effet"]:
@@ -811,7 +881,7 @@ def get_horaire(prno: str, date_str: str = None) -> dict | None:
             return dict(row) if row else None
         else:
             row = conn.execute(
-                "SELECT * FROM horaires WHERE prno=?", (prno,)
+                "SELECT * FROM horaires WHERE prno=%s", (prno,)
             ).fetchone()
             return dict(row) if row else None
     finally:
@@ -826,7 +896,7 @@ def get_exceptions_horaires(prno: str) -> list[dict]:
     try:
         rows = conn.execute("""
             SELECT * FROM exceptions_horaires
-            WHERE prno=? ORDER BY date_str
+            WHERE prno=%s ORDER BY date_str
         """, (prno,)).fetchall()
         return [dict(r) for r in rows]
     finally:
@@ -840,10 +910,10 @@ def set_exception_horaire(prno: str, date_str: str, code_horaire: str, motif: st
     try:
         conn.execute("""
             INSERT INTO exceptions_horaires(prno, date_str, code_horaire, motif)
-            VALUES(?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s)
             ON CONFLICT(prno, date_str) DO UPDATE SET
-                code_horaire = excluded.code_horaire,
-                motif        = excluded.motif
+                code_horaire = EXCLUDED.code_horaire,
+                motif        = EXCLUDED.motif
         """, (prno, date_str, code_horaire, motif))
         conn.commit()
         logger.info("Exception horaire ajoutée : %s le %s → %s", prno, date_str, code_horaire)
@@ -860,7 +930,7 @@ def supprimer_exception_horaire(prno: str, date_str: str) -> dict:
     conn = get_connection()
     try:
         conn.execute("""
-            DELETE FROM exceptions_horaires WHERE prno=? AND date_str=?
+            DELETE FROM exceptions_horaires WHERE prno=%s AND date_str=%s
         """, (prno, date_str))
         conn.commit()
         logger.info("Exception horaire supprimée : %s le %s", prno, date_str)
@@ -876,7 +946,7 @@ def get_historique_horaires(prno: str) -> list[dict]:
     conn = get_connection()
     try:
         rows = conn.execute("""
-            SELECT * FROM historique_horaires WHERE prno=?
+            SELECT * FROM historique_horaires WHERE prno=%s
             ORDER BY date_effet DESC
         """, (prno,)).fetchall()
         return [dict(r) for r in rows]
@@ -900,7 +970,7 @@ def get_pointages_bruts_jour(date_str: str) -> dict:
     try:
         rows = conn.execute("""
             SELECT prno, type_pointage, heure_locale
-            FROM pointages WHERE date_local=?
+            FROM pointages WHERE date_local=%s
             ORDER BY heure_locale
         """, (date_str,)).fetchall()
     finally:
@@ -1136,7 +1206,7 @@ def get_resume_periode_avec_synthese(date_debut: str, date_fin: str) -> list[dic
         rows = conn.execute("""
             SELECT prno, date_local, type_pointage, heure_locale
             FROM pointages
-            WHERE date_local BETWEEN ? AND ?
+            WHERE date_local BETWEEN %s AND %s
             ORDER BY date_local, heure_locale
         """, (date_debut, date_fin)).fetchall()
     finally:
@@ -1263,7 +1333,7 @@ def get_releve_actif() -> dict | None:
         today = date.today().isoformat()
         row = conn.execute("""
             SELECT * FROM releves
-            WHERE clos=0 AND date_debut <= ? AND date_fin >= ?
+            WHERE clos=0 AND date_debut <= %s AND date_fin >= %s
             ORDER BY date_debut DESC LIMIT 1
         """, (today, today)).fetchone()
         return dict(row) if row else None
@@ -1274,7 +1344,7 @@ def get_releve_actif() -> dict | None:
 def get_releve_by_id(releve_id: int) -> dict | None:
     conn = get_connection()
     try:
-        row = conn.execute("SELECT * FROM releves WHERE id=?", (releve_id,)).fetchone()
+        row = conn.execute("SELECT * FROM releves WHERE id=%s", (releve_id,)).fetchone()
         return dict(row) if row else None
     finally:
         conn.close()
@@ -1287,12 +1357,12 @@ def creer_releve(date_debut: str, date_fin: str, libelle: str = None) -> dict:
         # Vérifier chevauchement
         overlap = conn.execute("""
             SELECT id FROM releves
-            WHERE NOT (date_fin < ? OR date_debut > ?)
+            WHERE NOT (date_fin < %s OR date_debut > %s)
         """, (date_debut, date_fin)).fetchone()
         if overlap:
             return {"ok": False, "error": "Ce relevé chevauche un relevé existant."}
         cur = conn.execute(
-            "INSERT INTO releves(date_debut, date_fin, libelle) VALUES(?,?,?)",
+            "INSERT INTO releves(date_debut, date_fin, libelle) VALUES (%s,%s,%s)",
             (date_debut, date_fin, libelle)
         )
         conn.commit()
@@ -1309,10 +1379,10 @@ def clore_releve(releve_id: int, libelle_prochain: str = None) -> dict:
     import calendar
     conn = get_connection()
     try:
-        row = conn.execute("SELECT * FROM releves WHERE id=?", (releve_id,)).fetchone()
+        row = conn.execute("SELECT * FROM releves WHERE id=%s", (releve_id,)).fetchone()
         if not row:
             return {"ok": False, "error": "Relevé introuvable"}
-        conn.execute("UPDATE releves SET clos=1 WHERE id=?", (releve_id,))
+        conn.execute("UPDATE releves SET clos=1 WHERE id=%s", (releve_id,))
         conn.commit()
         # Générer automatiquement le relevé suivant
         date_fin_actuel = date.fromisoformat(row["date_fin"])
@@ -1322,7 +1392,7 @@ def clore_releve(releve_id: int, libelle_prochain: str = None) -> dict:
         new_fin = new_debut + timedelta(days=duree)
         # Créer le suivant avec le libellé fourni si précisé
         cur = conn.execute(
-            "INSERT INTO releves(date_debut, date_fin, libelle) VALUES(?,?,?)",
+            "INSERT INTO releves(date_debut, date_fin, libelle) VALUES (%s,%s,%s)",
             (new_debut.isoformat(), new_fin.isoformat(), libelle_prochain or None)
         )
         conn.commit()
@@ -1338,7 +1408,7 @@ def clore_releve(releve_id: int, libelle_prochain: str = None) -> dict:
 def supprimer_releve(releve_id: int) -> dict:
     conn = get_connection()
     try:
-        conn.execute("DELETE FROM releves WHERE id=?", (releve_id,))
+        conn.execute("DELETE FROM releves WHERE id=%s", (releve_id,))
         conn.commit()
         return {"ok": True}
     except Exception as e:
@@ -1348,18 +1418,5 @@ def supprimer_releve(releve_id: int) -> dict:
 
 
 def close_db():
-    """
-    En mode Turso : rien à faire (pas de WAL local).
-    En mode SQLite local : checkpoint WAL avant arrêt.
-    """
-    if _USE_TURSO:
-        logger.info("Turso — pas de checkpoint WAL nécessaire.")
-        return
-    try:
-        import sqlite3 as _sq3
-        conn = _sq3.connect(DB_PATH)
-        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        conn.close()
-        logger.info("WAL checkpoint effectué — base de données correctement fermée.")
-    except Exception as e:
-        logger.error("Erreur lors du checkpoint WAL à l'arrêt : %s", e)
+    """PostgreSQL — pas de WAL local à fermer."""
+    logger.info("PostgreSQL — fermeture propre.")
