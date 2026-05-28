@@ -61,7 +61,7 @@ def get_session(heure_locale, prno: str = None, date_local: str = None) -> str:
     from datetime import date as date_cls
 
     h_min = int(heure_locale.split(":")[0]) * 60 + int(heure_locale.split(":")[1])
-    TOLERANCE = 30  # minutes de tolérance autour de chaque plage
+    TOLERANCE = 60  # minutes de tolérance autour de chaque plage
 
     if prno and date_local:
         try:
@@ -173,6 +173,81 @@ def retirer_du_groupe(telegram_id):
         return False
 
 
+
+def traiter_scan(prno, nom_complet, type_pointage, dt_local, msg_id, raw_text, source="empreinte"):
+    """
+    Logique commune de traitement d'un pointage.
+    Utilisée par Telegram (process_group_message) et ESP32 (webhook).
+    """
+    from parser import est_dans_plage_horaire, get_session_depuis_horaire
+    from datetime import date as date_cls
+
+    date_local   = dt_local.strftime("%Y-%m-%d")
+    heure_locale = dt_local.strftime("%H:%M:%S")
+
+    # ── 1. Vérifier plage horaire valide ±1h ──
+    horaire = db.get_horaire(prno, date_local)
+    if horaire and horaire.get("code_horaire"):
+        code_h   = horaire["code_horaire"]
+        date_obj = date_cls.fromisoformat(date_local)
+        if not est_dans_plage_horaire(code_h, date_obj, heure_locale, tolerance=60):
+            logger.info(
+                "%s — pointage ignoré (hors plage ±1h) : %s à %s [%s]",
+                prno, date_local, heure_locale[:5], source
+            )
+            return {"ok": False, "raison": "hors_plage", "prno": prno}
+        session = get_session_depuis_horaire(code_h, date_obj, heure_locale)
+    else:
+        session = get_session(heure_locale)
+
+    # ── 2. Doublon par type ──
+    dernier_type = db.get_dernier_pointage_type(prno, date_local)
+    if dernier_type == type_pointage:
+        logger.debug(
+            "%s — doublon de type '%s' ignoré à %s [%s]",
+            prno, type_pointage, heure_locale[:5], source
+        )
+        return {"ok": False, "raison": "doublon_type", "prno": prno}
+
+    # ── 3. Insérer ──
+    inserted = db.insert_pointage(
+        message_id    = msg_id,
+        telegram_id   = msg_id,
+        prno          = prno,
+        date_local    = date_local,
+        heure_locale  = heure_locale,
+        type_pointage = type_pointage,
+        session       = session,
+        raw_text      = str(raw_text)[:500],
+    )
+
+    if inserted:
+        type_label    = "Arrivée" if type_pointage == "arrivee" else "Départ"
+        session_label = "matin" if session == "matin" else "après-midi"
+        logger.info(
+            "%s — %s [%s] %s à %s [%s]",
+            prno, type_label, session_label, date_local, heure_locale, source
+        )
+        payload = {
+            "prno":          prno,
+            "nom_complet":   nom_complet,
+            "type_pointage": type_pointage,
+            "type_label":    type_label,
+            "session":       session,
+            "session_label": session_label,
+            "heure":         heure_locale[:5],
+            "date":          date_local,
+            "source":        source,
+        }
+        dashboard.emit_pointage(payload)
+        threading.Thread(target=_regenerer_excel, args=(date_local,), daemon=True).start()
+        return {"ok": True, "inserted": True, "type_pointage": type_pointage,
+                "session": session, "heure": heure_locale, "date": date_local,
+                "prno": prno, "nom": nom_complet}
+
+    return {"ok": True, "inserted": False, "raison": "doublon_message_id", "prno": prno}
+
+
 def process_group_message(message):
     if message.chat.id != GROUP_ID:
         return
@@ -216,7 +291,7 @@ def process_group_message(message):
     if horaire and horaire.get("code_horaire"):
         code_h   = horaire["code_horaire"]
         date_obj = date_cls.fromisoformat(date_local)
-        if not est_dans_plage_horaire(code_h, date_obj, heure_locale, tolerance=30):
+        if not est_dans_plage_horaire(code_h, date_obj, heure_locale, tolerance=60):
             logger.info(
                 "%s — pointage ignoré (hors plage horaire) : %s à %s",
                 prno, date_local, heure_locale[:5]

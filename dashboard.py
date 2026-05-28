@@ -1,7 +1,9 @@
 """
 dashboard.py — Flask + SocketIO + Auth pour KAROKA.
 """
-
+from flask_cors import CORS
+import jwt as pyjwt
+import datetime as _dt
 import os, logging, threading
 from datetime import date, timedelta, datetime
 from functools import wraps
@@ -34,8 +36,10 @@ def _parse_credentials():
 CREDENTIALS = _parse_credentials()
 
 app           = Flask(__name__)
+CORS(app, origins="*", supports_credentials=False)
+JWT_SECRET = os.getenv("JWT_SECRET", SECRET_KEY)
 app.secret_key= SECRET_KEY
-socketio      = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading", logger=False, engineio_logger=False)
 
 _bot      = None
 _group_id = None
@@ -45,6 +49,7 @@ def set_bot(bot_instance, group_id):
     global _bot, _group_id
     _bot      = bot_instance
     _group_id = group_id
+    _init_liaisons_empreintes()  
 
 
 def emit_pointage(payload):
@@ -70,9 +75,26 @@ def get_today():
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not session.get("logged_in"):
-            return redirect(url_for("login", next=request.url))
-        return f(*args, **kwargs)
+        # Vérification JWT (frontend Netlify)
+        auth = request.headers.get('Authorization', '')
+        if auth.startswith('Bearer '):
+            token = auth[7:]
+            try:
+                pyjwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+                return f(*args, **kwargs)
+            except pyjwt.ExpiredSignatureError:
+                return jsonify({"error": "Session expirée"}), 401
+            except pyjwt.InvalidTokenError:
+                return jsonify({"error": "Token invalide"}), 401
+
+        # Vérification session Flask (accès direct local)
+        if session.get("logged_in"):
+            return f(*args, **kwargs)
+
+        # Ni l'un ni l'autre
+        if request.path.startswith('/api/'):
+            return jsonify({"error": "Non autorisé"}), 401
+        return redirect(url_for("login", next=request.url))
     return decorated
 
 
@@ -142,6 +164,21 @@ def logout():
     session.clear()
     return redirect(url_for("login"))
 
+@app.route("/api/login", methods=["POST"])
+def api_login():
+    data = request.get_json(force=True) or {}
+    u = data.get("username", "").strip()
+    p = data.get("password", "").strip()
+    if CREDENTIALS.get(u) == p:
+        payload = {
+            "sub": u,
+            "role": u,
+            "iat": _dt.datetime.utcnow(),
+            "exp": _dt.datetime.utcnow() + _dt.timedelta(hours=12),
+        }
+        token = pyjwt.encode(payload, JWT_SECRET, algorithm="HS256")
+        return jsonify({"token": token, "role": u})
+    return jsonify({"error": "Identifiants incorrects."}), 401
 
 # ─── Pages HTML ───────────────────────────────────────────────────────────────
 
@@ -273,9 +310,18 @@ def api_employes():
 @app.route("/api/admin/employes", methods=["POST"])
 @login_required
 def api_ajouter_employe():
-    data = request.get_json()
-    result = db.ajouter_employe((data.get("prno") or "").strip(), (data.get("nom_complet") or "").strip())
+    data           = request.get_json()
+    prno           = (data.get("prno")        or "").strip()
+    nom            = (data.get("nom_complet") or "").strip()
+    fingerprint_id = data.get("fingerprint_id")
+    pin_id         = data.get("pin_id")
+
+    result = db.ajouter_employe(prno, nom)
     if result["ok"]:
+        if fingerprint_id:
+            lier_empreinte(int(fingerprint_id), prno)
+        if pin_id:
+            lier_pin(int(pin_id), prno)
         emit_admin_update("admin_employes_updated")
     return jsonify(result), (200 if result["ok"] else 400)
 
@@ -335,6 +381,7 @@ def run_dashboard():
 if __name__ == "__main__":
     load_dotenv()
     db.init_db()
+    _init_liaisons_empreintes()   # table empreintes
     run_dashboard()
 
 
@@ -412,48 +459,6 @@ def api_modifier_horaire(prno):
     result = db.set_horaire(prno, code_horaire, date_effet, commentaire)
     if result["ok"]:
         result["heures_semaine"] = validation["label_semaine"]
-    return jsonify(result), (200 if result["ok"] else 400)
-
-
-# ─── API Exceptions horaires ──────────────────────────────────────────────────
-
-@app.route("/api/admin/horaires/<prno>/exceptions", methods=["GET"])
-@login_required
-def api_get_exceptions(prno):
-    """Liste toutes les exceptions ponctuelles d'un employé."""
-    return jsonify(db.get_exceptions_horaires(prno))
-
-
-@app.route("/api/admin/horaires/<prno>/exceptions", methods=["POST"])
-@login_required
-def api_ajouter_exception(prno):
-    """Ajoute ou remplace une exception horaire pour une date précise."""
-    data         = request.get_json()
-    date_str     = (data.get("date_str")     or "").strip()
-    code_horaire = (data.get("code_horaire") or "").strip()
-    motif        = (data.get("motif")        or "").strip() or None
-
-    if not date_str or not code_horaire:
-        return jsonify({"ok": False, "error": "date_str et code_horaire obligatoires"}), 400
-
-    from parser import valider_code_horaire
-    validation = valider_code_horaire(code_horaire)
-    if not validation["ok"]:
-        return jsonify({"ok": False, "error": " | ".join(validation["erreurs"])}), 400
-
-    result = db.set_exception_horaire(prno, date_str, code_horaire, motif)
-    if result["ok"]:
-        emit_admin_update("admin_employes_updated")
-    return jsonify(result), (200 if result["ok"] else 400)
-
-
-@app.route("/api/admin/horaires/<prno>/exceptions/<date_str>", methods=["DELETE"])
-@login_required
-def api_supprimer_exception(prno, date_str):
-    """Supprime une exception horaire pour une date précise."""
-    result = db.supprimer_exception_horaire(prno, date_str)
-    if result["ok"]:
-        emit_admin_update("admin_employes_updated")
     return jsonify(result), (200 if result["ok"] else 400)
 
 
@@ -548,3 +553,262 @@ def api_renvoi_lien(prno):
     tracker_mod = importlib.import_module("tracker")
     ok = tracker_mod.renvoi_lien_groupe(telegram_id, nom)
     return jsonify({"ok": ok, "message": "Lien renvoyé" if ok else "Fallback — RH doit ajouter manuellement"})
+
+# ─── EMPREINTES : table de liaison ───────────────────────────────────────────
+
+def _init_liaisons_empreintes():
+    """Crée la table liaisons_empreintes si elle n'existe pas + migration pin_id."""
+    conn = db.get_connection()
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS liaisons_empreintes (
+                fingerprint_id  INTEGER,
+                pin_id          INTEGER UNIQUE,
+                prno            TEXT NOT NULL,
+                enregistre_le   TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY(prno) REFERENCES employes(prno)
+            )
+        """)
+        # Migration : ajouter pin_id si table existante sans cette colonne
+        try:
+            conn.execute("ALTER TABLE liaisons_empreintes ADD COLUMN pin_id INTEGER UNIQUE")
+        except Exception:
+            pass  # colonne déjà présente
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_liaison_empreinte(fingerprint_id: int):
+    conn = db.get_connection()
+    try:
+        row = conn.execute("""
+            SELECT le.fingerprint_id, le.prno, e.nom_complet
+            FROM liaisons_empreintes le
+            JOIN employes e ON le.prno = e.prno
+            WHERE le.fingerprint_id = ?
+        """, (fingerprint_id,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def lier_empreinte(fingerprint_id: int, prno: str):
+    conn = db.get_connection()
+    try:
+        conn.execute("""
+            INSERT INTO liaisons_empreintes(fingerprint_id, prno)
+            VALUES(?, ?)
+            ON CONFLICT(fingerprint_id) DO UPDATE SET
+                prno = excluded.prno,
+                enregistre_le = datetime('now')
+        """, (fingerprint_id, prno.strip().lower()))
+        conn.commit()
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        conn.close()
+
+
+def get_liaison_par_pin(pin_id: int):
+    conn = db.get_connection()
+    try:
+        row = conn.execute("""
+            SELECT le.pin_id, le.fingerprint_id, le.prno, e.nom_complet
+            FROM liaisons_empreintes le
+            JOIN employes e ON le.prno = e.prno
+            WHERE le.pin_id = ?
+        """, (pin_id,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def lier_pin(pin_id: int, prno: str):
+    conn = db.get_connection()
+    try:
+        # Si l'employé a déjà une ligne → UPDATE pin_id
+        # Sinon → INSERT nouvelle ligne
+        existing = conn.execute(
+            "SELECT fingerprint_id FROM liaisons_empreintes WHERE prno=?",
+            (prno.strip().lower(),)
+        ).fetchone()
+        if existing:
+            conn.execute("""
+                UPDATE liaisons_empreintes SET pin_id=?, enregistre_le=datetime('now')
+                WHERE prno=?
+            """, (pin_id, prno.strip().lower()))
+        else:
+            conn.execute("""
+                INSERT INTO liaisons_empreintes(pin_id, prno) VALUES(?, ?)
+            """, (pin_id, prno.strip().lower()))
+        conn.commit()
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        conn.close()
+
+
+# ─── WEBHOOK TUYA ─────────────────────────────────────────────────────────────
+
+@app.route("/api/webhook/tuya", methods=["POST"])
+def tuya_webhook():
+    """
+    Reçoit les événements du lock ESP32.
+    Payload : {"id": "6", "type": "badge|fingerprint|pin", "timestamp": 1779512566}
+    """
+    import json
+    from tracker import traiter_scan
+
+    payload = request.get_json(silent=True)
+    if not payload:
+        return jsonify({"ok": False, "error": "payload invalide"}), 400
+
+    logger.info("Webhook ESP32 reçu : %s", json.dumps(payload))
+
+    scan_id    = payload.get("id")
+    type_acces = payload.get("type", "badge")
+    ts         = payload.get("timestamp")
+
+    if not scan_id:
+        return jsonify({"ok": False, "error": "id manquant"}), 400
+
+    scan_id  = int(scan_id)
+    tz       = ZoneInfo(TIMEZONE)
+    dt_local = datetime.fromtimestamp(int(ts), tz=tz) if ts else datetime.now(tz)
+
+    # ── Résoudre prno selon le type ──
+    if type_acces == "pin":
+        liaison = get_liaison_par_pin(scan_id)
+    else:
+        liaison = get_liaison_empreinte(scan_id)
+
+    if not liaison:
+        logger.warning("ID #%d (type=%s) non lié à aucun employé", scan_id, type_acces)
+        return jsonify({
+            "ok": True,
+            "results": [{"id": scan_id, "type": type_acces,
+                         "ok": False, "error": "non enregistré dans le système"}]
+        })
+
+    prno        = liaison["prno"]
+    nom_complet = liaison["nom_complet"]
+
+    date_local    = dt_local.strftime("%Y-%m-%d")
+    dernier_type  = db.get_dernier_pointage_type(prno, date_local)
+    type_pointage = "depart" if dernier_type == "arrivee" else "arrivee"
+
+    msg_id = f"esp_{type_acces}_{scan_id}_{int(dt_local.timestamp())}"
+    result = traiter_scan(
+        prno          = prno,
+        nom_complet   = nom_complet,
+        type_pointage = type_pointage,
+        dt_local      = dt_local,
+        msg_id        = msg_id,
+        raw_text      = json.dumps(payload),
+        source        = type_acces,
+    )
+
+    return jsonify({"ok": True, "results": [result]})
+
+
+@app.route("/api/admin/empreintes", methods=["GET"])
+@login_required
+def api_get_empreintes():
+    """Liste toutes les liaisons empreinte+pin ↔ employé."""
+    conn = db.get_connection()
+    try:
+        rows = conn.execute("""
+            SELECT le.fingerprint_id, le.pin_id, le.prno, e.nom_complet, le.enregistre_le
+            FROM liaisons_empreintes le
+            JOIN employes e ON le.prno = e.prno
+            ORDER BY le.prno
+        """).fetchall()
+        return jsonify([dict(r) for r in rows])
+    finally:
+        conn.close()
+
+
+@app.route("/api/admin/empreintes", methods=["POST"])
+@login_required
+def api_lier_empreinte():
+    """Lie un fingerprint_id à un prno employé."""
+    data           = request.get_json()
+    fingerprint_id = data.get("fingerprint_id")
+    prno           = (data.get("prno") or "").strip()
+    if not fingerprint_id or not prno:
+        return jsonify({"ok": False, "error": "fingerprint_id et prno obligatoires"}), 400
+    result = lier_empreinte(int(fingerprint_id), prno)
+    return jsonify(result), (200 if result["ok"] else 400)
+
+
+@app.route("/api/admin/empreintes/<int:fingerprint_id>", methods=["DELETE"])
+@login_required
+def api_supprimer_empreinte(fingerprint_id):
+    """Supprime la liaison d'une empreinte."""
+    conn = db.get_connection()
+    try:
+        conn.execute("DELETE FROM liaisons_empreintes WHERE fingerprint_id=?", (fingerprint_id,))
+        conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    finally:
+        conn.close()
+
+@app.route("/api/admin/employes/<prno>/empreinte", methods=["PUT"])
+@login_required
+def api_lier_empreinte_employe(prno):
+    """Lie ou met à jour l'empreinte d'un employé existant."""
+    data           = request.get_json()
+    fingerprint_id = data.get("fingerprint_id")
+    if not fingerprint_id:
+        return jsonify({"ok": False, "error": "fingerprint_id obligatoire"}), 400
+    # S'assurer que l'employé a une ligne dans liaisons_empreintes
+    conn = db.get_connection()
+    try:
+        conn.execute("""
+            INSERT INTO liaisons_empreintes(fingerprint_id, prno)
+            VALUES(?, ?)
+            ON CONFLICT(fingerprint_id) DO UPDATE SET
+                prno = excluded.prno,
+                enregistre_le = datetime('now')
+        """, (int(fingerprint_id), prno.strip().lower()))
+        conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/admin/employes/<prno>/pin", methods=["PUT"])
+@login_required
+def api_lier_pin_employe(prno):
+    """Lie ou met à jour le PIN d'un employé existant."""
+    data   = request.get_json()
+    pin_id = data.get("pin_id")
+    if not pin_id:
+        return jsonify({"ok": False, "error": "pin_id obligatoire"}), 400
+    result = lier_pin(int(pin_id), prno)
+    if result["ok"]:
+        emit_admin_update("admin_employes_updated")
+    return jsonify(result), (200 if result["ok"] else 400)
+
+
+@app.route("/api/admin/employes/<prno>/pin", methods=["DELETE"])
+@login_required
+def api_supprimer_pin_employe(prno):
+    """Supprime le PIN d'un employé."""
+    conn = db.get_connection()
+    try:
+        conn.execute("UPDATE liaisons_empreintes SET pin_id=NULL WHERE prno=?",
+                     (prno.strip().lower(),))
+        conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    finally:
+        conn.close()

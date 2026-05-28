@@ -6,262 +6,545 @@
 <title>KAROKA — Dashboard Présences</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<!-- TODO PROD : remplacer par un build Tailwind purgé (npm run build) -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['DM Sans', 'sans-serif'],
+          mono: ['DM Mono', 'monospace'],
+        },
+        colors: {
+          'sidebar-bg':   '#1A1F2E',
+          'main-bg':      '#F0F2F8',
+          'main-bg2':     '#E8EBF4',
+          teal:           '#00BFA5',
+          'teal-dark':    '#00897B',
+          amber:          '#FFB300',
+          red:            '#EF5350',
+          green:          '#4CAF50',
+          purple:         '#9C27B0',
+          slate:          '#607D8B',
+          'navy-mid':     '#2A3347',
+          'text-main':    '#1A1F2E',
+          'text-dim':     '#5A6A82',
+          'text-muted':   '#9AAABB',
+          'sidebar-text': '#E8EDF2',
+          'sidebar-muted':'#7B8BA8',
+        },
+        borderRadius: { card: '18px', input: '12px' },
+        keyframes: {
+          pulse:   { '0%,100%': { opacity:'1', transform:'scale(1)' }, '50%': { opacity:'0.3', transform:'scale(0.6)' } },
+          spin:    { to: { transform:'rotate(360deg)' } },
+          modalIn: { from: { opacity:'0', transform:'scale(0.96) translateY(10px)' }, to: { opacity:'1', transform:'none' } },
+        },
+        animation: {
+          pulse:   'pulse 1.5s infinite',
+          spin:    'spin 0.8s linear infinite',
+          modalIn: 'modalIn 0.2s ease',
+        },
+      }
+    }
+  }
+</script>
 <style>
-:root{
-  --sidebar-bg:#1A1F2E;--sidebar-text:#E8EDF2;--sidebar-muted:#7B8BA8;--sidebar-active:#FFFFFF;--sidebar-hover:rgba(255,255,255,0.07);
-  --main-bg:#F0F2F8;--main-bg2:#E8EBF4;--card-bg:#FFFFFF;--card-shadow:0 2px 12px rgba(0,0,0,0.07);
-  --text:#1A1F2E;--text-dim:#5A6A82;--text-muted:#9AAABB;
-  --teal:#00BFA5;--teal-dark:#00897B;--teal-glow:rgba(0,191,165,0.15);
-  --amber:#FFB300;--amber-soft:rgba(255,179,0,0.12);
-  --red:#EF5350;--red-soft:rgba(239,83,80,0.12);
-  --green:#4CAF50;--green-soft:rgba(76,175,80,0.12);
-  --purple:#9C27B0;--purple-soft:rgba(156,39,176,0.12);
-  --slate:#607D8B;--slate-soft:rgba(96,125,139,0.10);
-  --border:rgba(0,0,0,0.07);--border-mid:rgba(0,191,165,0.2);
-  --navy-mid:#2A3347;
-  --radius:12px;--radius-lg:18px;
-}
-.sidebar-logo img{width:38px;height:38px;object-fit:contain;}
-*{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'DM Sans',sans-serif;background:var(--main-bg);color:var(--text);min-height:100vh;display:flex;overflow-x:hidden;}
-.sidebar{width:220px;min-height:100vh;background:var(--sidebar-bg);display:flex;flex-direction:column;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto;padding:28px 0 24px;}
-.sidebar-logo{display:flex;align-items:center;gap:10px;padding:0 24px 28px;}
-.logo-text{font-size:17px;font-weight:700;color:var(--sidebar-text);}
-.logo-sub{font-size:10px;color:var(--sidebar-muted);letter-spacing:1.5px;text-transform:uppercase;}
-.sidebar-nav{display:flex;flex-direction:column;gap:2px;padding:0 12px;flex:1;}
-.nav-section-label{font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:var(--sidebar-muted);padding:14px 14px 6px;opacity:0.7;}
-.nav-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:500;color:var(--sidebar-muted);text-decoration:none;cursor:pointer;transition:all 0.2s;border:none;background:transparent;font-family:'DM Sans',sans-serif;width:100%;text-align:left;}
-.nav-item:hover{color:var(--sidebar-active);background:var(--sidebar-hover);}
-.nav-item.active{color:var(--sidebar-active);background:rgba(255,255,255,0.1);font-weight:600;}
-.nav-icon{font-size:15px;width:20px;text-align:center;flex-shrink:0;}
-.sidebar-footer{padding:16px 12px 0;border-top:1px solid rgba(255,255,255,0.07);margin-top:auto;display:flex;flex-direction:column;gap:6px;}
-.live-badge{display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;font-size:11px;color:var(--teal);background:var(--teal-glow);}
-.live-dot{width:6px;height:6px;border-radius:50%;background:var(--teal);animation:pulse 1.5s infinite;}
-@keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.3;transform:scale(0.6);}}
-.page-body{flex:1;display:flex;flex-direction:column;min-width:0;}
-.topbar{display:flex;align-items:center;gap:12px;padding:20px 28px 0;flex-shrink:0;}
-.topbar-date-display{font-size:13px;color:var(--teal);font-family:'DM Mono',monospace;font-weight:600;margin-top:2px;}
-.topbar-title{font-size:22px;font-weight:700;color:var(--text);flex:1;}
-.date-picker-wrap{display:flex;align-items:center;gap:8px;background:var(--card-bg);border:1px solid rgba(0,191,165,0.45);border-radius:var(--radius);padding:7px 14px;box-shadow:0 0 0 3px rgba(0,191,165,0.08),var(--card-shadow);cursor:text;transition:border-color 0.2s,box-shadow 0.2s;}
-.date-picker-wrap:hover{border-color:var(--teal);box-shadow:0 0 0 4px rgba(0,191,165,0.15),var(--card-shadow);}
-.date-picker-wrap label{font-size:11px;color:var(--teal);text-transform:uppercase;letter-spacing:1px;font-weight:700;}
-input[type="date"]{background:transparent;border:none;color:var(--teal);font-family:'DM Mono',monospace;font-size:13px;outline:none;cursor:pointer;}
-input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1) hue-rotate(130deg);cursor:pointer;}
-.btn-excel{background:linear-gradient(135deg,#2E7D32,#43A047);color:white;border:none;border-radius:var(--radius);padding:8px 16px;font-size:12px;font-family:'DM Sans',sans-serif;font-weight:600;cursor:pointer;text-decoration:none;transition:opacity 0.2s;box-shadow:0 2px 8px rgba(46,125,50,0.3);}
-.btn-excel:hover{opacity:0.88;}
-.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding:20px 28px 0;}
-.stat-card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px 22px;position:relative;overflow:hidden;transition:transform 0.2s,box-shadow 0.2s;box-shadow:var(--card-shadow);}
-.stat-card:hover{transform:translateY(-2px);box-shadow:0 6px 24px rgba(0,0,0,0.1);}
-.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;border-radius:var(--radius-lg) var(--radius-lg) 0 0;}
-.stat-card.total::before{background:linear-gradient(90deg,var(--teal),var(--teal-dark));}
-.stat-card.complet::before{background:linear-gradient(90deg,var(--green),#388E3C);}
-.stat-card.incomplet::before{background:linear-gradient(90deg,var(--amber),#F57F17);}
-.stat-card.absent::before{background:linear-gradient(90deg,var(--red),#C62828);}
-.stat-label{font-size:11px;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-dim);margin-bottom:8px;font-weight:600;}
-.stat-value{font-size:36px;font-weight:700;line-height:1;letter-spacing:-1px;}
-.stat-card.total .stat-value{color:var(--teal);}
-.stat-card.complet .stat-value{color:var(--green);}
-.stat-card.incomplet .stat-value{color:var(--amber);}
-.stat-card.absent .stat-value{color:var(--red);}
-.tabs-wrap{padding:20px 28px 0;}
-.tabs{display:flex;gap:4px;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:5px;width:fit-content;box-shadow:var(--card-shadow);}
-.tab-btn{background:transparent;border:none;color:var(--text-dim);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;padding:8px 18px;border-radius:10px;cursor:pointer;transition:all 0.2s;white-space:nowrap;}
-.tab-btn:hover{color:var(--text);background:rgba(0,0,0,0.05);}
-.tab-btn.active{background:linear-gradient(135deg,var(--teal-dark),var(--teal));color:white;font-weight:600;box-shadow:0 2px 12px rgba(0,191,165,0.3);}
-.main-content{padding:20px 28px 40px;}
-.table-card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--card-shadow);}
-.table-header{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;}
-.table-title{font-size:15px;font-weight:700;color:var(--text);}
-.table-subtitle{font-size:12px;color:var(--text-dim);margin-top:2px;}
-.search-box{background:var(--main-bg);border:1px solid var(--border);border-radius:8px;padding:8px 14px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;width:200px;transition:border-color 0.2s;}
-.search-box:focus{border-color:var(--teal);}
-.search-box::placeholder{color:var(--text-muted);}
-.data-table{width:100%;border-collapse:collapse;font-size:13px;}
-.data-table th{background:var(--main-bg);color:var(--text-dim);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.8px;padding:10px 14px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--border);}
-.data-table td{padding:10px 14px;border-bottom:1px solid var(--border);font-family:'DM Mono',monospace;font-size:12px;white-space:nowrap;color:var(--text);}
-.data-table tr:last-child td{border-bottom:none;}
-.data-table tr:hover td{background:rgba(0,191,165,0.04);}
-.td-name{font-family:'DM Sans',sans-serif !important;font-weight:500;color:var(--text);}
-.td-prno{color:var(--teal);font-weight:600;}
-.td-time{color:var(--text);}
-.td-empty{color:var(--text-muted);}
-.td-dur{color:var(--text-dim);}
-.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;font-family:'DM Sans',sans-serif;letter-spacing:0.3px;}
-.badge-complet{background:var(--green-soft);color:#2E7D32;border:1px solid rgba(76,175,80,0.3);}
-.badge-incomplet{background:var(--amber-soft);color:#E65100;border:1px solid rgba(255,179,0,0.3);}
-.badge-absent{background:var(--red-soft);color:#C62828;border:1px solid rgba(239,83,80,0.3);}
-.badge-ferie{background:var(--purple-soft);color:#6A1B9A;border:1px solid rgba(156,39,176,0.3);}
-.badge-exclu{background:var(--slate-soft);color:var(--slate);border:1px solid rgba(96,125,139,0.2);}
-.periode-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
-.periode-table{width:100%;border-collapse:collapse;font-size:12px;min-width:600px;}
-.periode-table th{background:var(--main-bg);color:var(--text-dim);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;padding:8px 10px;border:1px solid var(--border);white-space:nowrap;cursor:pointer;text-align:center;}
-.periode-table th:hover{color:var(--teal);}
-.periode-table th.th-ferie{background:rgba(156,39,176,0.08);color:var(--purple);}
-.periode-table td{border:1px solid var(--border);padding:7px 8px;text-align:center;font-size:11px;transition:filter 0.15s;}
-.periode-table td:hover{filter:brightness(0.95);cursor:pointer;}
-.periode-table .td-prno-col{font-family:'DM Mono',monospace;color:var(--teal);font-weight:500;font-size:11px;text-align:left;padding-left:14px;background:var(--main-bg);white-space:nowrap;}
-.periode-table .td-nom-col{font-family:'DM Sans',sans-serif;color:var(--text);font-weight:500;text-align:left;padding-left:10px;background:var(--main-bg);white-space:nowrap;min-width:140px;}
-.cel-complet{background:rgba(76,175,80,0.14);color:#2E7D32;font-weight:600;}
-.cel-incomplet{background:rgba(255,179,0,0.14);color:#E65100;font-weight:600;}
-.cel-absent{background:rgba(239,83,80,0.1);color:#C62828;font-weight:600;}
-.cel-ferie{background:rgba(156,39,176,0.1);color:#6A1B9A;font-weight:600;}
-.cel-exclu{background:rgba(96,125,139,0.04);color:var(--text-muted);font-size:10px;}
-.smois-week-row{cursor:pointer;}
-.smois-week-row:hover td{background:rgba(0,191,165,0.06);}
-.smois-detail-row{display:none;}
-.smois-detail-row.open{display:table-row;}
-.smois-toggle{font-size:10px;color:var(--teal);margin-left:6px;display:inline-block;transition:transform 0.2s;}
-.smois-toggle.open{transform:rotate(90deg);}
-.loading-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px;gap:16px;color:var(--text-dim);}
-.spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--teal);border-radius:50%;animation:spin 0.8s linear infinite;}
-@keyframes spin{to{transform:rotate(360deg);}}
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(6px);z-index:500;align-items:center;justify-content:center;padding:20px;}
-.modal-overlay.open{display:flex;}
-.modal{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-lg);width:100%;max-width:960px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,0.18);animation:modalIn 0.2s ease;}
-@keyframes modalIn{from{opacity:0;transform:scale(0.96) translateY(10px);}to{opacity:1;transform:none;}}
-.modal-header{padding:20px 26px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;flex-shrink:0;}
-.modal-date-badge{background:var(--teal-glow);border:1px solid var(--border-mid);border-radius:8px;padding:4px 12px;font-family:'DM Mono',monospace;font-size:13px;color:var(--teal);font-weight:600;}
-.modal-title{font-size:17px;font-weight:700;color:var(--text);}
-.modal-close{margin-left:auto;background:var(--main-bg);border:1px solid var(--border);border-radius:8px;color:var(--text-dim);width:32px;height:32px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all 0.15s;}
-.modal-close:hover{background:var(--red-soft);color:var(--red);}
-.modal-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:16px 26px;border-bottom:1px solid var(--border);flex-shrink:0;}
-.modal-stat{background:var(--main-bg);border:1px solid var(--border);border-radius:10px;padding:12px 16px;text-align:center;}
-.modal-stat-label{font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-dim);font-weight:600;}
-.modal-stat-value{font-size:26px;font-weight:700;margin-top:4px;}
-.modal-stat.total .modal-stat-value{color:var(--teal);}
-.modal-stat.complet .modal-stat-value{color:var(--green);}
-.modal-stat.incomplet .modal-stat-value{color:var(--amber);}
-.modal-stat.absent .modal-stat-value{color:var(--red);}
-.modal-body{overflow-y:auto;flex:1;padding:0;}
-#toast{position:fixed;bottom:24px;right:24px;z-index:999;display:flex;flex-direction:column;gap:8px;pointer-events:none;}
-.toast-item{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;font-size:13px;display:flex;align-items:center;gap:10px;transform:translateX(120px);opacity:0;transition:all 0.3s;pointer-events:none;max-width:320px;box-shadow:0 4px 20px rgba(0,0,0,0.12);}
-.toast-item.show{transform:none;opacity:1;}
-.toast-item.pointage{border-left:3px solid var(--teal);}
-.toast-avatar{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--teal-dark),var(--teal));display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:white;flex-shrink:0;}
-.toast-content{flex:1;}
-.toast-name{font-weight:600;color:var(--text);font-size:13px;}
-.toast-detail{font-size:11px;color:var(--text-dim);margin-top:2px;}
-.ferie-banner{background:rgba(156,39,176,0.07);border:1px solid rgba(156,39,176,0.25);border-radius:var(--radius);padding:10px 16px;margin:12px 16px 0;display:flex;align-items:center;gap:10px;font-size:13px;color:#6A1B9A;}
-::-webkit-scrollbar{width:6px;height:6px;}
-::-webkit-scrollbar-track{background:transparent;}
-::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.15);border-radius:3px;}
-@media(max-width:900px){
-  .sidebar{width:64px;}
-  .nav-section-label,.nav-item span,.logo-text,.logo-sub,.live-badge span{display:none;}
-  .nav-item{justify-content:center;padding:12px;}
-  .nav-icon{width:auto;}
-}
-@media(max-width:640px){
-  .stats-row{grid-template-columns:repeat(2,1fr);}
-  .stats-row,.tabs-wrap,.main-content,.topbar{padding-left:16px;padding-right:16px;}
-  .modal-stats{grid-template-columns:repeat(2,1fr);}
-}
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
+
+  /* ── stat-card top accent lines ── */
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    border-radius: 18px 18px 0 0;
+  }
+  .stat-card.total::before    { background: linear-gradient(90deg, #00BFA5, #00897B); }
+  .stat-card.complet::before  { background: linear-gradient(90deg, #4CAF50, #388E3C); }
+  .stat-card.incomplet::before{ background: linear-gradient(90deg, #FFB300, #F57F17); }
+  .stat-card.absent::before   { background: linear-gradient(90deg, #EF5350, #C62828); }
+
+  /* ── Native date input ── */
+  input[type="date"] { background: transparent; border: none; color: #00BFA5; font-family: 'DM Mono', monospace; font-size: 13px; outline: none; cursor: pointer; }
+  input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.4) sepia(1) hue-rotate(130deg); cursor: pointer; }
+
+  /* ── Table hover rows ── */
+  .data-table tr:hover td { background: rgba(0,191,165,0.04); }
+  .periode-table td:hover { filter: brightness(0.95); cursor: pointer; }
+  .smois-week-row:hover td { background: rgba(0,191,165,0.06); }
+
+  /* ── Smois toggle ── */
+  .smois-toggle { font-size: 10px; color: #00BFA5; margin-left: 6px; display: inline-block; transition: transform 0.2s; }
+  .smois-toggle.open { transform: rotate(90deg); }
+  .smois-detail-row { display: none; }
+  .smois-detail-row.open { display: table-row; }
+
+  /* ── Modal animation ── */
+  .modal-overlay.open { display: flex; }
+
+  /* ── Toast animation ── */
+  .toast-item { transform: translateX(120px); opacity: 0; transition: all 0.3s; }
+  .toast-item.show { transform: none; opacity: 1; }
+
+  /* ── FIX 3 : Sidebar mobile — cachée sous 768px, overlay hamburger ── */
+  #sidebar-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(2px); z-index: 40;
+  }
+  #sidebar-overlay.open { display: block; }
+  #hamburger { display: none; }
+  @media (max-width: 767px) {
+    /* Sidebar : fixée hors écran, slide-in à l'ouverture
+       Le !important écrase le max-[900px]:w-16 de Tailwind */
+    #sidebar {
+      position: fixed !important;
+      top: 0 !important; left: 0 !important;
+      height: 100dvh !important;
+      width: 220px !important;
+      min-height: 100dvh !important;
+      z-index: 50;
+      transform: translateX(-100%);
+      transition: transform 0.25s ease;
+    }
+    #sidebar.open { transform: translateX(0) !important; }
+    /* Réafficher le texte du logo et la nav masqués par max-[900px]:hidden */
+    #sidebar .max-\[900px\]\:hidden { display: block !important; }
+    #sidebar nav a .max-\[900px\]\:hidden { display: inline !important; }
+    #sidebar nav a.max-\[900px\]\:justify-center { justify-content: flex-start !important; }
+    #sidebar nav a.max-\[900px\]\:px-3 { padding-left: 14px !important; padding-right: 14px !important; }
+    #hamburger { display: flex; }
+    .main-content { margin-left: 0 !important; }
+
+    /* Topbar mobile : 2 lignes propres */
+    .topbar-row1 { display: flex; align-items: center; gap: 10px; width: 100%; }
+    .topbar-row2 { display: flex; align-items: center; gap: 8px; width: 100%; flex-wrap: wrap; }
+  }
+  @media (min-width: 768px) {
+    #hamburger { display: none !important; }
+    #sidebar-close { display: none !important; }
+  }
+
+  /* ── FIX 5 : Tabs — scroll horizontal sur petit écran ── */
+  .tabs-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .tabs-scroll::-webkit-scrollbar { display: none; }
+
+  /* ── FIX 6 : Stats — tabular nums, pas de layout shift ── */
+  .stat-number { font-variant-numeric: tabular-nums; min-height: 44px; }
+
+  /* ── FIX 7 : Modal accessibilité ── */
+  .modal-overlay { display: none; }
+  .modal-overlay.open { display: flex; }
+
+  /* ── FIX 8 : Toast safe area mobile ── */
+  #toast { bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px)); }
+
+  /* ══ Styles pour HTML injecté par JS (déplacés depuis body) ══ */
+
+  /* Data table */
+  .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .data-table th {
+    background: #F0F2F8; color: #5A6A82; font-weight: 600; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.8px; padding: 10px 14px;
+    text-align: left; white-space: nowrap; border-bottom: 1px solid rgba(0,0,0,0.07);
+  }
+  .data-table td {
+    padding: 10px 14px; border-bottom: 1px solid rgba(0,0,0,0.07);
+    font-family: 'DM Mono', monospace; font-size: 12px; white-space: nowrap; color: #1A1F2E;
+  }
+  .data-table tr:last-child td { border-bottom: none; }
+  .td-name  { font-family: 'DM Sans', sans-serif !important; font-weight: 500; color: #1A1F2E; }
+  .td-prno  { color: #00BFA5; font-weight: 600; }
+  .td-time  { color: #1A1F2E; }
+  .td-empty { color: #9AAABB; }
+  .td-dur   { color: #5A6A82; }
+
+  /* Badges */
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    font-family: 'DM Sans', sans-serif; letter-spacing: 0.3px;
+  }
+  .badge-complet  { background: rgba(76,175,80,0.12);  color: #2E7D32;  border: 1px solid rgba(76,175,80,0.3);  }
+  .badge-incomplet{ background: rgba(255,179,0,0.12);  color: #E65100;  border: 1px solid rgba(255,179,0,0.3);  }
+  .badge-absent   { background: rgba(239,83,80,0.10);  color: #C62828;  border: 1px solid rgba(239,83,80,0.3);  }
+  .badge-ferie    { background: rgba(156,39,176,0.10); color: #6A1B9A;  border: 1px solid rgba(156,39,176,0.3); }
+  .badge-exclu    { background: rgba(96,125,139,0.04); color: #607D8B;  border: 1px solid rgba(96,125,139,0.2); }
+
+  /* Période table */
+  .periode-scroll { overflow-x: auto; }
+  .periode-table  { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 600px; }
+  .periode-table th {
+    background: #F0F2F8; color: #5A6A82; font-size: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.6px; padding: 8px 10px;
+    border: 1px solid rgba(0,0,0,0.07); white-space: nowrap; cursor: pointer; text-align: center;
+  }
+  .periode-table th:hover { color: #00BFA5; }
+  .periode-table th.th-ferie { background: rgba(156,39,176,0.08); color: #9C27B0; }
+  .periode-table td { border: 1px solid rgba(0,0,0,0.07); padding: 7px 8px; text-align: center; font-size: 11px; transition: filter 0.15s; }
+  .td-prno-col {
+    font-family: 'DM Mono', monospace; color: #00BFA5; font-weight: 500; font-size: 11px;
+    text-align: left; padding-left: 14px; background: #F0F2F8; white-space: nowrap;
+  }
+  .td-nom-col {
+    font-family: 'DM Sans', sans-serif; color: #1A1F2E; font-weight: 500;
+    text-align: left; padding-left: 10px; background: #F0F2F8; white-space: nowrap; min-width: 140px;
+  }
+  .cel-complet  { background: rgba(76,175,80,0.14);  color: #2E7D32;  font-weight: 600; }
+  .cel-incomplet{ background: rgba(255,179,0,0.14);  color: #E65100;  font-weight: 600; }
+  .cel-absent   { background: rgba(239,83,80,0.10);  color: #C62828;  font-weight: 600; }
+  .cel-ferie    { background: rgba(156,39,176,0.10); color: #6A1B9A;  font-weight: 600; }
+  .cel-exclu    { background: rgba(96,125,139,0.04); color: #9AAABB;  font-size: 10px;  }
+
+  /* Loading / spinner */
+  .loading-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px; gap: 16px; color: #5A6A82; }
+  .spinner { width: 32px; height: 32px; border: 3px solid rgba(0,0,0,0.07); border-top-color: #00BFA5; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Ferie banner */
+  .ferie-banner {
+    background: rgba(156,39,176,0.07); border: 1px solid rgba(156,39,176,0.25);
+    border-radius: 12px; padding: 10px 16px; margin: 12px 16px 0;
+    display: flex; align-items: center; gap: 10px; font-size: 13px; color: #6A1B9A;
+  }
+
+  /* Toast item */
+  .toast-item {
+    background: white; border: 1px solid rgba(0,0,0,0.07); border-radius: 12px;
+    padding: 12px 16px; font-size: 13px; display: flex; align-items: center; gap: 10px;
+    pointer-events: none; max-width: 320px; box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+  }
+  .toast-item.pointage { border-left: 3px solid #00BFA5; }
+  .toast-avatar {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: linear-gradient(135deg, #00897B, #00BFA5);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; color: white; flex-shrink: 0;
+  }
+  .toast-content { flex: 1; }
+  .toast-name   { font-weight: 600; color: #1A1F2E; font-size: 13px; }
+  .toast-detail { font-size: 11px; color: #5A6A82; margin-top: 2px; }
 </style>
 </head>
-<body>
+<body class="font-sans bg-[#F0F2F8] text-[#1A1F2E] min-h-screen flex overflow-x-hidden">
 
-<aside class="sidebar">
-  <div class="sidebar-logo">
-    <img src="{{ url_for('static', filename='assets/logo.png') }}" alt="logo">
-    <div><div class="logo-text">KAROKA</div><div class="logo-sub">Présences</div></div>
+<!-- FIX 3 : Overlay mobile pour fermer la sidebar -->
+<div id="sidebar-overlay" onclick="closeSidebar()" aria-hidden="true"></div>
+
+<!-- ══════════════════════════════════════════════
+     SIDEBAR
+══════════════════════════════════════════════ -->
+<aside id="sidebar"
+       class="w-[220px] min-h-screen bg-[#1A1F2E] flex flex-col flex-shrink-0 sticky top-0 h-screen overflow-y-auto py-7
+              max-[900px]:w-16"
+       aria-label="Navigation principale">
+
+  <!-- Logo + bouton fermer (mobile) -->
+  <div class="flex items-center gap-2.5 px-6 pb-7">
+    <!--
+      FIX logo : fallback textuel si url_for échoue (aperçu statique)
+    -->
+    <img src="{{ url_for('static', filename='assets/logo.png') }}" alt="Logo KAROKA"
+         class="w-[38px] h-[38px] object-contain flex-shrink-0"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+    <span style="display:none;width:38px;height:38px;background:linear-gradient(135deg,#00897B,#00BFA5);border-radius:10px;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:white;flex-shrink:0;">K</span>
+    <div class="max-[900px]:hidden flex-1">
+      <div class="text-[17px] font-bold text-[#E8EDF2]">KAROKA</div>
+      <div class="text-[10px] text-[#7B8BA8] tracking-[1.5px] uppercase">Présences</div>
+    </div>
+    <!-- Bouton ✕ visible uniquement sur mobile quand sidebar ouverte -->
+    <button onclick="closeSidebar()"
+            class="hidden ml-auto text-[#7B8BA8] hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10"
+            id="sidebar-close" aria-label="Fermer le menu">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
   </div>
-  <nav class="sidebar-nav">
-    <div class="nav-section-label">Présence</div>
-    <a href="/" class="nav-item active"><span class="nav-icon">◉</span><span>Tableau de bord</span></a>
-    <div class="nav-section-label">Liaison</div>
-    <a href="/admin" class="nav-item"><span class="nav-icon">◎</span><span>Administration</span></a>
+
+  <!-- Nav -->
+  <nav class="flex flex-col gap-0.5 px-3 flex-1" aria-label="Menu">
+    <div class="text-[9px] font-bold tracking-[1.8px] uppercase text-[#7B8BA8] px-3.5 pt-3.5 pb-1.5 opacity-70 max-[900px]:hidden" aria-hidden="true">Présence</div>
+    <a href="/" aria-label="Tableau de bord"
+       class="flex items-center gap-2.5 px-3.5 py-2.5 rounded-[10px] text-[13px] font-semibold text-white bg-white/10 no-underline transition-all duration-200
+              max-[900px]:justify-center max-[900px]:px-3">
+      <span class="text-[15px] w-5 text-center flex-shrink-0" aria-hidden="true">◉</span>
+      <span class="max-[900px]:hidden">Tableau de bord</span>
+    </a>
+    <div class="text-[9px] font-bold tracking-[1.8px] uppercase text-[#7B8BA8] px-3.5 pt-3.5 pb-1.5 opacity-70 max-[900px]:hidden" aria-hidden="true">Liaison</div>
+    <a href="/admin" aria-label="Administration"
+       class="flex items-center gap-2.5 px-3.5 py-2.5 rounded-[10px] text-[13px] font-medium text-[#7B8BA8] no-underline transition-all duration-200 hover:text-white hover:bg-white/[0.07]
+              max-[900px]:justify-center max-[900px]:px-3">
+      <span class="text-[15px] w-5 text-center flex-shrink-0" aria-hidden="true">◎</span>
+      <span class="max-[900px]:hidden">Administration</span>
+    </a>
   </nav>
-  <div class="sidebar-footer">
-    <div class="live-badge"><div class="live-dot"></div><span>Temps réel</span></div>
-    <a href="/logout" class="nav-item"><span class="nav-icon">←</span><span>Déconnexion</span></a>
+
+  <!-- Footer sidebar -->
+  <div class="px-3 pt-4 border-t border-white/[0.07] mt-auto flex flex-col gap-1.5">
+    <div class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[11px] text-teal bg-[rgba(0,191,165,0.15)]"
+         role="status" aria-label="Connexion temps réel active">
+      <div class="w-1.5 h-1.5 rounded-full bg-teal animate-pulse flex-shrink-0" aria-hidden="true"></div>
+      <span class="max-[900px]:hidden">Temps réel</span>
+    </div>
+    <a href="/logout" aria-label="Se déconnecter"
+       class="flex items-center gap-2.5 px-3.5 py-2.5 rounded-[10px] text-[13px] font-medium text-[#7B8BA8] no-underline transition-all duration-200 hover:text-white hover:bg-white/[0.07]
+              max-[900px]:justify-center max-[900px]:px-3">
+      <span class="text-[15px] w-5 text-center flex-shrink-0" aria-hidden="true">←</span>
+      <span class="max-[900px]:hidden">Déconnexion</span>
+    </a>
   </div>
 </aside>
 
-<div class="page-body">
-<div class="topbar">
-  <div>
-    <div class="topbar-title">Présences</div>
-  </div>
-  <!-- Bannière relevé inline -->
-  <div id="releveBanner" style="display:none;align-items:center;gap:8px;background:rgba(0,191,165,0.08);border:1px solid rgba(0,191,165,0.25);border-radius:10px;padding:6px 14px;font-size:12px;color:var(--teal);flex:1;max-width:380px">
-    <span style="font-weight:700">◉</span>
-    <span id="releveBannerText" style="font-family:'DM Mono',monospace;font-size:11px;flex:1"></span>
-    <button onclick="clearReleve()" style="background:transparent;border:1px solid rgba(0,191,165,0.4);border-radius:6px;color:var(--teal);font-size:10px;padding:2px 7px;cursor:pointer;white-space:nowrap">✕ Désactiver</button>
-  </div>
-  <div class="date-picker-wrap" id="releveSelectorWrap" style="display:none">
-    <select id="releveSelector" onchange="onReleveChange(this.value)"
-            style="background:transparent;border:none;color:var(--teal);font-family:'DM Mono',monospace;font-size:12px;outline:none;max-width:200px">
-      <option value="">— Choisir un relevé —</option>
-    </select>
-  </div>
-  <div class="date-picker-wrap" onclick="document.getElementById('nativeDatePicker').showPicker ? document.getElementById('nativeDatePicker').showPicker() : document.getElementById('nativeDatePicker').click()" style="cursor:pointer;position:relative;">
-    <label style="cursor:pointer;">Date</label>
-    <span id="globalDate" style="width:110px;color:var(--teal);font-family:'DM Mono',monospace;font-weight:700;font-size:13px;cursor:pointer;">—</span>
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--teal);opacity:0.6;flex-shrink:0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-    <input type="date" id="nativeDatePicker" onchange="onNativeDateChange(this.value)"
-           style="position:absolute;opacity:0;width:0;height:0;pointer-events:none;">
-  </div>
-  <a href="/api/download_excel" class="btn-excel">Exporter Excel</a>
-</div>
+<!-- ══════════════════════════════════════════════
+     PAGE BODY
+══════════════════════════════════════════════ -->
+<div class="flex-1 flex flex-col min-w-0 main-content">
 
-<div class="stats-row">
-  <div class="stat-card total"><div class="stat-label">Total</div><div class="stat-value" id="statTotal">—</div></div>
-  <div class="stat-card complet"><div class="stat-label">Complets</div><div class="stat-value" id="statComplets">—</div></div>
-  <div class="stat-card incomplet"><div class="stat-label">Incomplets</div><div class="stat-value" id="statIncomplets">—</div></div>
-  <div class="stat-card absent"><div class="stat-label">Absents</div><div class="stat-value" id="statAbsents">—</div></div>
-</div>
+  <!-- TOPBAR : flex-col sur mobile, flex-row sur desktop -->
+  <div class="flex flex-col gap-2 px-4 pt-4 flex-shrink-0 sm:flex-row sm:items-center sm:px-7 sm:pt-5 sm:gap-3 sm:flex-wrap">
 
-<div class="tabs-wrap">
-  <div class="tabs">
-    <button class="tab-btn active" onclick="switchTab('jour')">Jour</button>
-    <button class="tab-btn" onclick="switchTab('semaine')">Semaine</button>
-    <button class="tab-btn" onclick="switchTab('s_mois')">S-Mois</button>
-    <button class="tab-btn" onclick="switchTab('mois')">Mois</button>
-  </div>
-</div>
-
-<div class="main-content">
-  <div class="table-card" id="tableCard">
-    <div class="table-header">
-      <div><div class="table-title" id="tableTitle">Présences du jour</div><div class="table-subtitle" id="tableSubtitle">Chargement...</div></div>
-      <input type="text" class="search-box" id="searchBox" placeholder="Rechercher..." oninput="filterTable()">
+    <!-- Ligne 1 mobile : hamburger + titre -->
+    <div class="flex items-center gap-3 w-full sm:w-auto sm:flex-1 sm:min-w-0">
+      <!-- Hamburger (mobile uniquement) -->
+      <button id="hamburger"
+              onclick="openSidebar()"
+              class="flex-shrink-0 w-9 h-9 rounded-[10px] bg-[#1A1F2E] text-white flex items-center justify-center hover:bg-[#2A3347] transition-colors"
+              aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="sidebar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <div class="text-[22px] font-bold text-[#1A1F2E]">Présences</div>
     </div>
-    <div id="ferierBanner"></div>
-    <div id="tableBody"><div class="loading-state"><div class="spinner"></div><span>Chargement...</span></div></div>
+
+    <!-- Bannière relevé (pleine largeur quand visible) -->
+    <div id="releveBanner"
+         class="hidden items-center gap-2 bg-[rgba(0,191,165,0.08)] border border-[rgba(0,191,165,0.25)] rounded-[10px] px-3.5 py-1.5 text-[12px] text-teal w-full sm:flex-1 sm:max-w-[380px]"
+         role="status">
+      <span class="font-bold" aria-hidden="true">◉</span>
+      <span id="releveBannerText" class="font-mono text-[11px] flex-1"></span>
+      <button onclick="clearReleve()"
+              class="bg-transparent border border-[rgba(0,191,165,0.4)] rounded-md text-teal text-[10px] px-1.5 py-0.5 cursor-pointer whitespace-nowrap hover:bg-[rgba(0,191,165,0.1)] transition-colors"
+              aria-label="Désactiver le relevé actif">
+        ✕ Désactiver
+      </button>
+    </div>
+
+    <!-- Ligne 2 mobile : relevé + date + excel -->
+    <div class="flex items-center gap-2 w-full sm:w-auto sm:contents flex-wrap">
+
+      <!-- Sélecteur relevé -->
+      <div id="releveSelectorWrap"
+           class="hidden items-center gap-2 bg-white border border-[rgba(0,191,165,0.45)] rounded-[12px] px-3.5 py-[7px] shadow-[0_0_0_3px_rgba(0,191,165,0.08),0_2px_12px_rgba(0,0,0,0.07)] flex-1 sm:flex-initial
+                  hover:border-teal hover:shadow-[0_0_0_4px_rgba(0,191,165,0.15),0_2px_12px_rgba(0,0,0,0.07)] transition-all duration-200">
+        <label for="releveSelector" class="sr-only">Choisir un relevé</label>
+        <select id="releveSelector" onchange="onReleveChange(this.value)"
+                class="bg-transparent border-none text-teal font-mono text-[12px] outline-none w-full sm:max-w-[200px] cursor-pointer">
+          <option value="">— Choisir un relevé —</option>
+        </select>
+      </div>
+
+      <!-- Date picker -->
+      <div class="flex items-center gap-2 bg-white border border-[rgba(0,191,165,0.45)] rounded-[12px] px-3.5 py-[7px] shadow-[0_0_0_3px_rgba(0,191,165,0.08),0_2px_12px_rgba(0,0,0,0.07)] cursor-pointer relative flex-1 sm:flex-initial
+                  hover:border-teal hover:shadow-[0_0_0_4px_rgba(0,191,165,0.15),0_2px_12px_rgba(0,0,0,0.07)] transition-all duration-200"
+           role="button" tabindex="0" aria-label="Sélectionner une date"
+           onclick="document.getElementById('nativeDatePicker').showPicker ? document.getElementById('nativeDatePicker').showPicker() : document.getElementById('nativeDatePicker').click()"
+           onkeydown="if(event.key==='Enter'||event.key===' '){document.getElementById('nativeDatePicker').click()}">
+        <span class="text-[11px] text-teal uppercase tracking-[1px] font-bold" aria-hidden="true">Date</span>
+        <span id="globalDate" class="flex-1 text-teal font-mono font-bold text-[13px]" aria-live="polite">—</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-teal opacity-60 flex-shrink-0" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
+          <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+        </svg>
+        <input type="date" id="nativeDatePicker" onchange="onNativeDateChange(this.value)"
+               class="absolute opacity-0 w-0 h-0 pointer-events-none" aria-hidden="true" tabindex="-1">
+      </div>
+
+      <!-- Export Excel -->
+      <a href="/api/download_excel"
+         class="bg-gradient-to-br from-[#2E7D32] to-[#43A047] text-white border-none rounded-[12px] px-4 py-2 text-[12px] font-semibold font-sans cursor-pointer no-underline shadow-[0_2px_8px_rgba(46,125,50,0.3)] transition-opacity hover:opacity-[0.88] whitespace-nowrap text-center flex-shrink-0">
+        Exporter Excel
+      </a>
+
+    </div><!-- /ligne 2 -->
+  </div>
+
+  <!-- STATS ROW -->
+  <div class="grid grid-cols-4 gap-4 px-7 pt-5
+              max-[640px]:grid-cols-2 max-[640px]:px-4">
+
+    <div class="stat-card total relative bg-white border border-[rgba(0,0,0,0.07)] rounded-[18px] px-4 sm:px-[22px] py-5 overflow-hidden transition-transform duration-200 shadow-[0_2px_12px_rgba(0,0,0,0.07)] hover:-translate-y-0.5 hover:shadow-[0_6px_24px_rgba(0,0,0,0.1)]">
+      <div class="text-[10px] sm:text-[11px] uppercase tracking-[0.8px] sm:tracking-[1.2px] text-[#5A6A82] mb-2 font-semibold whitespace-nowrap overflow-hidden text-ellipsis">Total</div>
+      <div class="stat-number text-[32px] sm:text-[36px] font-bold leading-none tracking-[-1px] text-teal" id="statTotal">—</div>
+    </div>
+
+    <div class="stat-card complet relative bg-white border border-[rgba(0,0,0,0.07)] rounded-[18px] px-4 sm:px-[22px] py-5 overflow-hidden transition-transform duration-200 shadow-[0_2px_12px_rgba(0,0,0,0.07)] hover:-translate-y-0.5 hover:shadow-[0_6px_24px_rgba(0,0,0,0.1)]">
+      <div class="text-[10px] sm:text-[11px] uppercase tracking-[0.8px] sm:tracking-[1.2px] text-[#5A6A82] mb-2 font-semibold whitespace-nowrap overflow-hidden text-ellipsis">Complets</div>
+      <div class="stat-number text-[32px] sm:text-[36px] font-bold leading-none tracking-[-1px] text-green" id="statComplets">—</div>
+    </div>
+
+    <div class="stat-card incomplet relative bg-white border border-[rgba(0,0,0,0.07)] rounded-[18px] px-4 sm:px-[22px] py-5 overflow-hidden transition-transform duration-200 shadow-[0_2px_12px_rgba(0,0,0,0.07)] hover:-translate-y-0.5 hover:shadow-[0_6px_24px_rgba(0,0,0,0.1)]">
+      <div class="text-[10px] sm:text-[11px] uppercase tracking-[0.8px] sm:tracking-[1.2px] text-[#5A6A82] mb-2 font-semibold whitespace-nowrap overflow-hidden text-ellipsis">Incomplets</div>
+      <div class="stat-number text-[32px] sm:text-[36px] font-bold leading-none tracking-[-1px] text-amber" id="statIncomplets">—</div>
+    </div>
+
+    <div class="stat-card absent relative bg-white border border-[rgba(0,0,0,0.07)] rounded-[18px] px-4 sm:px-[22px] py-5 overflow-hidden transition-transform duration-200 shadow-[0_2px_12px_rgba(0,0,0,0.07)] hover:-translate-y-0.5 hover:shadow-[0_6px_24px_rgba(0,0,0,0.1)]">
+      <div class="text-[10px] sm:text-[11px] uppercase tracking-[0.8px] sm:tracking-[1.2px] text-[#5A6A82] mb-2 font-semibold whitespace-nowrap overflow-hidden text-ellipsis">Absents</div>
+      <div class="stat-number text-[32px] sm:text-[36px] font-bold leading-none tracking-[-1px] text-red" id="statAbsents">—</div>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="px-7 pt-5 max-[640px]:px-4">
+    <div class="tabs-scroll">
+    <div class="flex gap-1 bg-white border border-[rgba(0,0,0,0.07)] rounded-[18px] p-[5px] w-fit shadow-[0_2px_12px_rgba(0,0,0,0.07)]">
+      <button onclick="switchTab('jour')"
+              class="tab-btn active bg-gradient-to-br from-[#00897B] to-teal text-white font-semibold shadow-[0_2px_12px_rgba(0,191,165,0.3)] border-none font-sans text-[13px] px-[18px] py-2 rounded-[10px] cursor-pointer transition-all duration-200 whitespace-nowrap">
+        Jour
+      </button>
+      <button onclick="switchTab('semaine')"
+              class="tab-btn border-none font-sans text-[13px] font-medium px-[18px] py-2 rounded-[10px] cursor-pointer transition-all duration-200 whitespace-nowrap text-[#5A6A82] bg-transparent hover:text-[#1A1F2E] hover:bg-black/[0.05]">
+        Semaine
+      </button>
+      <button onclick="switchTab('s_mois')"
+              class="tab-btn border-none font-sans text-[13px] font-medium px-[18px] py-2 rounded-[10px] cursor-pointer transition-all duration-200 whitespace-nowrap text-[#5A6A82] bg-transparent hover:text-[#1A1F2E] hover:bg-black/[0.05]">
+        S-Mois
+      </button>
+      <button onclick="switchTab('mois')"
+              class="tab-btn border-none font-sans text-[13px] font-medium px-[18px] py-2 rounded-[10px] cursor-pointer transition-all duration-200 whitespace-nowrap text-[#5A6A82] bg-transparent hover:text-[#1A1F2E] hover:bg-black/[0.05]">
+        Mois
+      </button>
+    </div>
+    </div>
+  </div>
+
+  <!-- MAIN TABLE CARD -->
+  <div class="px-7 pt-5 pb-10 max-[640px]:px-4">
+    <div id="tableCard" class="bg-white border border-[rgba(0,0,0,0.07)] rounded-[18px] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.07)]">
+
+      <!-- Table header -->
+      <div class="px-[22px] py-[18px] border-b border-[rgba(0,0,0,0.07)] flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <div class="text-[15px] font-bold text-[#1A1F2E]" id="tableTitle">Présences du jour</div>
+          <div class="text-[12px] text-[#5A6A82] mt-0.5" id="tableSubtitle">Chargement...</div>
+        </div>
+        <label for="searchBox" class="sr-only">Rechercher un employé</label>
+        <input type="text"
+               class="bg-[#F0F2F8] border border-[rgba(0,0,0,0.07)] rounded-lg px-3.5 py-2 text-[#1A1F2E] font-sans text-[13px] outline-none w-[200px] max-[640px]:w-full placeholder-[#9AAABB] focus:border-teal transition-colors"
+               id="searchBox" placeholder="Rechercher..." oninput="filterTable()" autocomplete="off">
+      </div>
+
+      <div id="ferierBanner"></div>
+      <div id="tableBody" aria-live="polite" aria-atomic="false">
+        <div class="flex flex-col items-center justify-center py-16 gap-4 text-[#5A6A82]">
+          <div class="w-8 h-8 border-[3px] border-[rgba(0,0,0,0.07)] border-t-teal rounded-full animate-spin"></div>
+          <span>Chargement...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /page-body -->
+
+<!-- ══════════════════════════════════════════════
+     MODAL
+══════════════════════════════════════════════ -->
+<div class="modal-overlay fixed inset-0 bg-black/50 backdrop-blur-md z-[500] items-center justify-center p-4 sm:p-5"
+     id="modalOverlay" onclick="closeModalOnBg(event)"
+     role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="bg-white border border-[rgba(0,0,0,0.07)] rounded-[18px] w-full max-w-[960px] max-h-[88vh] flex flex-col shadow-[0_24px_80px_rgba(0,0,0,0.18)] animate-modalIn">
+
+    <!-- Modal header -->
+    <div class="px-4 sm:px-[26px] py-5 border-b border-[rgba(0,0,0,0.07)] flex items-center gap-4 flex-shrink-0">
+      <div id="modalDate" class="bg-[rgba(0,191,165,0.15)] border border-[rgba(0,191,165,0.2)] rounded-lg px-3 py-1 font-mono text-[13px] text-teal font-semibold" aria-hidden="true">—</div>
+      <div id="modalTitle" class="text-[17px] font-bold text-[#1A1F2E]">Détail du jour</div>
+      <button onclick="closeModal()" id="modalClose"
+              class="ml-auto bg-[#F0F2F8] border border-[rgba(0,0,0,0.07)] rounded-lg text-[#5A6A82] w-8 h-8 cursor-pointer text-base flex items-center justify-center transition-all hover:bg-[rgba(239,83,80,0.12)] hover:text-red"
+              aria-label="Fermer la fenêtre de détail">
+        ✕
+      </button>
+    </div>
+
+    <!-- Modal stats -->
+    <div class="grid grid-cols-4 gap-3 px-4 sm:px-[26px] py-4 border-b border-[rgba(0,0,0,0.07)] flex-shrink-0
+                max-[640px]:grid-cols-2">
+      <div class="modal-stat total bg-[#F0F2F8] border border-[rgba(0,0,0,0.07)] rounded-[10px] px-4 py-3 text-center">
+        <div class="text-[10px] uppercase tracking-[0.8px] text-[#5A6A82] font-semibold">Total</div>
+        <div class="text-[26px] font-bold mt-1 text-teal" id="mStatTotal">—</div>
+      </div>
+      <div class="modal-stat complet bg-[#F0F2F8] border border-[rgba(0,0,0,0.07)] rounded-[10px] px-4 py-3 text-center">
+        <div class="text-[10px] uppercase tracking-[0.8px] text-[#5A6A82] font-semibold">Complets</div>
+        <div class="text-[26px] font-bold mt-1 text-green" id="mStatComplets">—</div>
+      </div>
+      <div class="modal-stat incomplet bg-[#F0F2F8] border border-[rgba(0,0,0,0.07)] rounded-[10px] px-4 py-3 text-center">
+        <div class="text-[10px] uppercase tracking-[0.8px] text-[#5A6A82] font-semibold">Incomplets</div>
+        <div class="text-[26px] font-bold mt-1 text-amber" id="mStatIncomplets">—</div>
+      </div>
+      <div class="modal-stat absent bg-[#F0F2F8] border border-[rgba(0,0,0,0.07)] rounded-[10px] px-4 py-3 text-center">
+        <div class="text-[10px] uppercase tracking-[0.8px] text-[#5A6A82] font-semibold">Absents</div>
+        <div class="text-[26px] font-bold mt-1 text-red" id="mStatAbsents">—</div>
+      </div>
+    </div>
+
+    <div class="overflow-y-auto flex-1 px-0" id="modalBody" aria-live="polite">
+      <div class="flex flex-col items-center justify-center py-16 gap-4 text-[#5A6A82]">
+        <div class="w-8 h-8 border-[3px] border-[rgba(0,0,0,0.07)] border-t-teal rounded-full animate-spin"></div>
+      </div>
+    </div>
   </div>
 </div>
 
-<div class="modal-overlay" id="modalOverlay" onclick="closeModalOnBg(event)">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-date-badge" id="modalDate">—</div>
-      <div class="modal-title" id="modalTitle">Détail du jour</div>
-      <button class="modal-close" onclick="closeModal()">✕</button>
-    </div>
-    <div class="modal-stats">
-      <div class="modal-stat total"><div class="modal-stat-label">Total</div><div class="modal-stat-value" id="mStatTotal">—</div></div>
-      <div class="modal-stat complet"><div class="modal-stat-label">Complets</div><div class="modal-stat-value" id="mStatComplets">—</div></div>
-      <div class="modal-stat incomplet"><div class="modal-stat-label">Incomplets</div><div class="modal-stat-value" id="mStatIncomplets">—</div></div>
-      <div class="modal-stat absent"><div class="modal-stat-label">Absents</div><div class="modal-stat-value" id="mStatAbsents">—</div></div>
-    </div>
-    <div class="modal-body" id="modalBody"><div class="loading-state"><div class="spinner"></div></div></div>
-  </div>
-</div>
-<div id="toast"></div>
-</div>
+<!-- TOAST -->
+<div id="toast" class="fixed bottom-6 right-6 z-[999] flex flex-col gap-2 pointer-events-none"></div>
+
+
 
 <script>
+// ── Sidebar mobile ────────────────────────────────────────────────────────
+function openSidebar() {
+  const sidebar  = document.getElementById('sidebar');
+  const overlay  = document.getElementById('sidebar-overlay');
+  const hamburger = document.getElementById('hamburger');
+  const closeBtn = document.getElementById('sidebar-close');
+  sidebar.classList.add('open');
+  overlay.classList.add('open');
+  hamburger.setAttribute('aria-expanded', 'true');
+  if (closeBtn) closeBtn.style.display = 'flex';
+  sidebar.querySelector('nav a')?.focus();
+}
+
+function closeSidebar() {
+  const sidebar  = document.getElementById('sidebar');
+  const overlay  = document.getElementById('sidebar-overlay');
+  const hamburger = document.getElementById('hamburger');
+  const closeBtn = document.getElementById('sidebar-close');
+  sidebar.classList.remove('open');
+  overlay.classList.remove('open');
+  hamburger.setAttribute('aria-expanded', 'false');
+  if (closeBtn) closeBtn.style.display = 'none';
+  hamburger.focus();
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('sidebar')?.classList.contains('open')) {
+    closeSidebar();
+  }
+});
+
 const socket = io();
+
 let currentTab = 'jour';
-const todayStr = '{{ today }}';  // format YYYY-MM-DD from server
+const todayStr = '{{ today }}';
 let currentDate = '{{ date_param }}' || todayStr;
 if (!currentDate || currentDate === 'None' || currentDate === '') currentDate = todayStr;
 let allRowsData = [];
 
-// Convertit YYYY-MM-DD → yyyy/mm/dd pour affichage
 function toDisplayDate(iso) { return iso ? iso.replace(/-/g, '/') : ''; }
-// Convertit yyyy/mm/dd → YYYY-MM-DD pour les APIs
-function toISODate(disp) { return disp ? disp.replace(/\//g, '-') : ''; }
+function toISODate(disp)    { return disp ? disp.replace(/\//g, '-') : ''; }
 
 function setDateDisplay(iso) {
   const disp = toDisplayDate(iso);
@@ -269,10 +552,6 @@ function setDateDisplay(iso) {
   if (el) el.textContent = disp;
   const picker = document.getElementById('nativeDatePicker');
   if (picker) picker.value = iso;
-  const d = new Date(iso + 'T12:00:00');
-  const label = d.toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
-  const topEl = document.getElementById('topbarDateDisplay');
-  if (topEl) topEl.textContent = label;
 }
 
 function onNativeDateChange(iso) {
@@ -294,7 +573,6 @@ if (dateParam) {
   setTimeout(() => openModal(dateParam), 600);
 }
 
-// ── Format de date court : "di 04 26" ─────────────────────────────────────
 const JOURS_ABRV = ['lu','ma','me','je','ve','sa','di'];
 function formatDateCourt(ds) {
   const d = new Date(ds + 'T12:00:00');
@@ -333,33 +611,29 @@ function playBeep() {
   } catch(e) {}
 }
 
-// ── État relevé actif ──────────────────────────────────────────────────────
-let activeReleveId = null;  // null = mode libre, sinon ID du relevé sélectionné
+// ── Relevé ────────────────────────────────────────────────────────────────
+let activeReleveId = null;
 
-// Charger la liste des relevés dans le sélecteur du topbar
 async function loadTopbarReleves() {
   try {
     const releves = await (await fetch('/api/releves')).json();
-    const sel = document.getElementById('releveSelector');
+    const sel  = document.getElementById('releveSelector');
     const wrap = document.getElementById('releveSelectorWrap');
     if (!releves.length) return;
     wrap.style.display = 'flex';
-    // Vider sauf le premier option vide
     while (sel.options.length > 1) sel.remove(1);
     releves.forEach(r => {
-      const opt = document.createElement('option');
-      opt.value = r.id;
-      const label = r.libelle || `Relevé #${r.id}`;
+      const opt   = document.createElement('option');
+      opt.value   = r.id;
       const debut = (r.date_debut||'').replace(/-/g,'/');
       const fin   = (r.date_fin  ||'').replace(/-/g,'/');
-      opt.textContent = `${label} (${debut}→${fin})`;
-      if (r.clos === 0) opt.style.fontWeight = '600';  // relevé en cours en gras
+      opt.textContent = `${r.libelle || 'Relevé #'+r.id} (${debut}→${fin})`;
+      if (r.clos === 0) opt.style.fontWeight = '600';
       sel.appendChild(opt);
     });
-    // Pré-sélectionner le relevé actif s'il existe
     const actif = await (await fetch('/api/releves/actif')).json();
     if (actif && actif.id) {
-      sel.value = actif.id;
+      sel.value     = actif.id;
       activeReleveId = actif.id;
       showReleveBanner(actif);
     }
@@ -368,12 +642,7 @@ async function loadTopbarReleves() {
 
 function onReleveChange(val) {
   activeReleveId = val ? parseInt(val) : null;
-  if (!activeReleveId) {
-    hideReleveBanner();
-    loadData();
-    return;
-  }
-  // Charger les infos du relevé et afficher bannière
+  if (!activeReleveId) { hideReleveBanner(); loadData(); return; }
   fetch(`/api/releves`).then(r=>r.json()).then(releves => {
     const r = releves.find(x => x.id === activeReleveId);
     if (r) showReleveBanner(r);
@@ -388,12 +657,15 @@ function showReleveBanner(r) {
   const debut = (r.date_debut||'').replace(/-/g,'/');
   const fin   = (r.date_fin  ||'').replace(/-/g,'/');
   text.textContent = `${r.libelle || 'Relevé #'+r.id}  ${debut} → ${fin}`;
-  banner.style.display = 'flex';
+  banner.classList.remove('hidden');
+  banner.classList.add('flex');
 }
 
 function hideReleveBanner() {
   const banner = document.getElementById('releveBanner');
-  if (banner) banner.style.display = 'none';
+  if (!banner) return;
+  banner.classList.add('hidden');
+  banner.classList.remove('flex');
 }
 
 function clearReleve() {
@@ -403,21 +675,27 @@ function clearReleve() {
   loadData();
 }
 
+// ── Classes tab active/inactif (source unique de vérité) ─────────────────
+const TAB_ACTIVE   = 'active bg-gradient-to-br from-[#00897B] to-teal text-white font-semibold shadow-[0_2px_12px_rgba(0,191,165,0.3)] border-none font-sans text-[13px] px-[18px] py-2 rounded-[10px] cursor-pointer transition-all duration-200 whitespace-nowrap';
+const TAB_INACTIVE = 'border-none font-sans text-[13px] font-medium px-[18px] py-2 rounded-[10px] cursor-pointer transition-all duration-200 whitespace-nowrap text-[#5A6A82] bg-transparent hover:text-[#1A1F2E] hover:bg-black/[0.05]';
+
 function switchTab(tab) {
   currentTab = tab;
   const tabs = ['jour','semaine','s_mois','mois'];
-  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', tabs[i]===tab));
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    const active = tabs[i] === tab;
+    b.className = 'tab-btn ' + (active ? TAB_ACTIVE : TAB_INACTIVE);
+    b.setAttribute('aria-selected', active);
+  });
 
-  // Sélecteur de relevé : visible seulement sur S-Mois et Mois
   const wrap = document.getElementById('releveSelectorWrap');
   if (wrap) {
     const showReleve = (tab === 's_mois' || tab === 'mois');
     wrap.style.display = showReleve ? 'flex' : 'none';
-    // Si on quitte S-Mois/Mois, on désactive le relevé actif
     if (!showReleve && activeReleveId) {
       activeReleveId = null;
       hideReleveBanner();
-      if (wrap) document.getElementById('releveSelector').value = '';
+      document.getElementById('releveSelector').value = '';
     }
   }
   loadData();
@@ -426,7 +704,7 @@ function switchTab(tab) {
 async function loadData() {
   document.getElementById('tableBody').innerHTML = '<div class="loading-state"><div class="spinner"></div><span>Chargement...</span></div>';
   try {
-    if (currentTab === 'jour')    await loadJour();
+    if      (currentTab === 'jour')    await loadJour();
     else if (currentTab === 'semaine') await loadPeriode();
     else if (currentTab === 's_mois')  await loadSMois();
     else if (currentTab === 'mois')    await loadPeriode();
@@ -435,20 +713,13 @@ async function loadData() {
   }
 }
 
-function onDateChange(iso) {
-  currentDate = iso;
-  history.replaceState(null,'',`?date=${iso}`);
-  setDateDisplay(iso);
-  loadData(); loadStats();
-}
-
 async function loadStats() {
   try {
     const d = await (await fetch(`/api/stats?date=${currentDate}`)).json();
-    document.getElementById('statTotal').textContent      = d.total ?? '—';
-    document.getElementById('statComplets').textContent   = d.complets ?? '—';
+    document.getElementById('statTotal').textContent      = d.total      ?? '—';
+    document.getElementById('statComplets').textContent   = d.complets   ?? '—';
     document.getElementById('statIncomplets').textContent = d.incomplets ?? '—';
-    document.getElementById('statAbsents').textContent    = d.absents ?? '—';
+    document.getElementById('statAbsents').textContent    = d.absents    ?? '—';
   } catch(e) {}
 }
 
@@ -457,7 +728,7 @@ async function loadJour() {
   const data = await (await fetch(`/api/jour_horaires?date=${currentDate}`)).json();
   allRowsData = data;
   const dt = new Date(currentDate+'T12:00:00');
-  document.getElementById('tableTitle').textContent = 'Présences du jour';
+  document.getElementById('tableTitle').textContent    = 'Présences du jour';
   document.getElementById('tableSubtitle').textContent = dt.toLocaleDateString('fr-FR',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
   const banner = document.getElementById('ferierBanner');
   banner.innerHTML = (data.length > 0 && data[0].ferie)
@@ -468,16 +739,16 @@ async function loadJour() {
 function renderJourTable(data) {
   const body = document.getElementById('tableBody');
   if (!data.length) { body.innerHTML = '<div class="loading-state">📭 Aucune donnée</div>'; return; }
-  const dur = m => (m > 0) ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty">—</span>';
-  const bc  = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu'}[s]||'');
-  const t   = v => v ? `<span class="td-time">${v.slice(0,5)}</span>` : '<span class="td-empty">—</span>';
+  const dur  = m => (m > 0) ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty">—</span>';
+  const bc   = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu'}[s]||'');
+  const t    = v => v ? `<span class="td-time">${v.slice(0,5)}</span>` : '<span class="td-empty">—</span>';
   const vide = '<span class="td-empty">—</span>';
 
   let html = `<div style="overflow-x:auto"><table class="data-table"><thead><tr>
     <th>PRNO</th><th>Nom Prénom</th>
     <th>Arr. Mat</th><th>Dép. Mat</th>
     <th>Arr. APM</th><th>Dép. APM</th>
-    <th>Durée</th><th style="color:var(--teal)">Contrat</th><th>Écart</th><th>Statut</th>
+    <th>Durée</th><th style="color:#00BFA5">Contrat</th><th>Écart</th><th>Statut</th>
   </tr></thead><tbody>`;
 
   data.forEach(r => {
@@ -485,13 +756,12 @@ function renderJourTable(data) {
     const ex = r.statut === 'Exclu';
     const duree   = nh ? vide : (r.reel_label && r.reel_label !== '—' ? r.reel_label : dur(r.minutes_reels||0));
     const contrat = nh ? '<span class="td-empty">N/A</span>' : (r.theorique_label||'—');
-    const ecartC  = nh ? 'var(--text-muted)' : (r.ecart_type==='manquant'?'var(--red)':r.ecart_type==='ok'?'var(--green)':'var(--text-muted)');
+    const ecartC  = nh ? '#9AAABB' : (r.ecart_type==='manquant'?'#EF5350':r.ecart_type==='ok'?'#4CAF50':'#9AAABB');
     const ecart   = nh || ex ? vide : (r.ecart_label||'—');
     const rowSt   = nh ? 'opacity:0.45;background:repeating-linear-gradient(135deg,transparent,transparent 4px,rgba(0,0,0,0.03) 4px,rgba(0,0,0,0.03) 8px);' : ex ? 'opacity:0.35;' : r.ferie ? 'opacity:0.6;' : '';
     const statut  = nh
-      ? '<span class="badge" style="background:rgba(0,0,0,0.06);color:var(--text-muted);border:1px solid var(--border)">Sans horaire</span>'
+      ? '<span class="badge" style="background:rgba(0,0,0,0.06);color:#9AAABB;border:1px solid rgba(0,0,0,0.07)">Sans horaire</span>'
       : `<span class="badge ${bc(r.statut)}">${r.statut}</span>`;
-
     const show = !ex;
     html += `<tr style="${rowSt}">
       <td class="td-prno">${r.prno}</td>
@@ -501,7 +771,7 @@ function renderJourTable(data) {
       <td>${show ? t(r.arr_apm) : vide}</td>
       <td>${show ? t(r.dep_apm) : vide}</td>
       <td class="td-dur">${ex ? vide : duree}</td>
-      <td class="td-dur" style="color:var(--teal)">${ex ? vide : contrat}</td>
+      <td class="td-dur" style="color:#00BFA5">${ex ? vide : contrat}</td>
       <td class="td-dur" style="color:${ecartC};font-weight:600">${ecart}</td>
       <td>${statut}</td>
     </tr>`;
@@ -518,19 +788,18 @@ async function loadSMois() {
   const dt = new Date(currentDate+'T12:00:00');
   const moisNom = dt.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
   const titre = activeReleveId ? `Vue S-Mois — Relevé #${activeReleveId}` : `Vue S-Mois — ${moisNom}`;
-  document.getElementById('tableTitle').textContent = titre;
+  document.getElementById('tableTitle').textContent    = titre;
   document.getElementById('tableSubtitle').textContent = `${data.date_debut.replace(/-/g,'/')} → ${data.date_fin.replace(/-/g,'/')} · cliquer sur une ligne pour voir le détail par jour`;
-  document.getElementById('ferierBanner').innerHTML = '';
+  document.getElementById('ferierBanner').innerHTML    = '';
   renderSMoisTable(data);
 }
 
 function renderSMoisTable(data) {
-  const body = document.getElementById('tableBody');
+  const body     = document.getElementById('tableBody');
   const employes = data.employes || [];
   if (!employes.length) { body.innerHTML='<div class="loading-state">📭 Aucune donnée</div>'; return; }
-  const dates = [...new Set(employes.flatMap(e => Object.keys(e.dates||{})))].sort();
+  const dates    = [...new Set(employes.flatMap(e => Object.keys(e.dates||{})))].sort();
 
-  // Grouper par semaine lundi→dimanche
   const semaines = [];
   let sem = [];
   dates.forEach(d => {
@@ -547,17 +816,17 @@ function renderSMoisTable(data) {
     const d0 = formatDateCourt(s[0]); const d1 = formatDateCourt(s[s.length-1]);
     html += `<th title="${s[0]} → ${s[s.length-1]}">S${i+1}<br><span style="font-size:9px;font-weight:400;opacity:0.65">${d0}→${d1}</span></th>`;
   });
-  html += `<th style="background:var(--main-bg2);color:var(--teal);min-width:75px;border-left:2px solid var(--border-mid)">Contrat</th>`;
-  html += `<th style="background:var(--main-bg2);color:var(--text-dim);min-width:75px">Durée</th>`;
-  html += `<th style="background:var(--main-bg2);min-width:70px">Écart</th>`;
-  html += `<th style="background:var(--main-bg2);color:var(--green);min-width:36px" title="Complets">✓</th>`;
-  html += `<th style="background:var(--main-bg2);color:var(--amber);min-width:36px" title="Incomplets">◑</th>`;
-  html += `<th style="background:var(--main-bg2);color:var(--red);min-width:36px" title="Absents">✕</th>`;
+  html += `<th style="background:#E8EBF4;color:#00BFA5;min-width:75px;border-left:2px solid rgba(0,191,165,0.2)">Contrat</th>`;
+  html += `<th style="background:#E8EBF4;color:#5A6A82;min-width:75px">Durée</th>`;
+  html += `<th style="background:#E8EBF4;min-width:70px">Écart</th>`;
+  html += `<th style="background:#E8EBF4;color:#4CAF50;min-width:36px" title="Complets">✓</th>`;
+  html += `<th style="background:#E8EBF4;color:#FFB300;min-width:36px" title="Incomplets">◑</th>`;
+  html += `<th style="background:#E8EBF4;color:#EF5350;min-width:36px" title="Absents">✕</th>`;
   html += '</tr></thead><tbody>';
 
   employes.forEach(emp => {
     const rid = 'sm_' + emp.prno.replace(/\W/g,'_');
-    const ec  = emp.ecart_type==='manquant'?'var(--red)':emp.ecart_type==='ok'?'var(--green)':'var(--text-muted)';
+    const ec  = emp.ecart_type==='manquant'?'#EF5350':emp.ecart_type==='ok'?'#4CAF50':'#9AAABB';
 
     html += `<tr>`;
     html += `<td class="td-prno-col">${emp.prno}</td>`;
@@ -579,18 +848,17 @@ function renderSMoisTable(data) {
         title="Cliquer pour voir le détail de cette semaine">${lbl}</td>`;
     });
 
-    html += `<td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--teal);background:var(--main-bg2);border-left:2px solid var(--border-mid);font-weight:600">${emp.theorique_label||'—'}</td>`;
-    html += `<td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-dim);background:var(--main-bg2)">${emp.reel_label||'—'}</td>`;
-    html += `<td style="font-family:'DM Mono',monospace;font-size:11px;color:${ec};background:var(--main-bg2);font-weight:600">${emp.ecart_label||'—'}</td>`;
-    html += `<td style="color:var(--green);font-weight:700;text-align:center;background:var(--main-bg2)">${emp.nb_complet||0}</td>`;
-    html += `<td style="color:var(--amber);font-weight:700;text-align:center;background:var(--main-bg2)">${emp.nb_incomplet||0}</td>`;
-    html += `<td style="color:var(--red);font-weight:700;text-align:center;background:var(--main-bg2)">${emp.nb_absent||0}</td>`;
+    html += `<td style="font-family:'DM Mono',monospace;font-size:11px;color:#00BFA5;background:#E8EBF4;border-left:2px solid rgba(0,191,165,0.2);font-weight:600">${emp.theorique_label||'—'}</td>`;
+    html += `<td style="font-family:'DM Mono',monospace;font-size:11px;color:#5A6A82;background:#E8EBF4">${emp.reel_label||'—'}</td>`;
+    html += `<td style="font-family:'DM Mono',monospace;font-size:11px;color:${ec};background:#E8EBF4;font-weight:600">${emp.ecart_label||'—'}</td>`;
+    html += `<td style="color:#4CAF50;font-weight:700;text-align:center;background:#E8EBF4">${emp.nb_complet||0}</td>`;
+    html += `<td style="color:#FFB300;font-weight:700;text-align:center;background:#E8EBF4">${emp.nb_incomplet||0}</td>`;
+    html += `<td style="color:#EF5350;font-weight:700;text-align:center;background:#E8EBF4">${emp.nb_absent||0}</td>`;
     html += '</tr>';
 
-    // Ligne détail cachée — s'ouvre sous la ligne avec les jours de la semaine cliquée
     const ncol = 2 + semaines.length + 6;
     html += `<tr class="smois-detail-row" id="${rid}">
-      <td colspan="${ncol}" style="padding:0;background:rgba(0,191,165,0.03);border-bottom:2px solid var(--border-mid)">
+      <td colspan="${ncol}" style="padding:0;background:rgba(0,191,165,0.03);border-bottom:2px solid rgba(0,191,165,0.2)">
         <div id="${rid}_content"></div>
       </td>
     </tr>`;
@@ -600,16 +868,14 @@ function renderSMoisTable(data) {
   body.innerHTML = html;
 }
 
-// Cache données journalières
 const _dayCache = {};
 
 async function openSemaine(rid, prno, semIdx, datesStr) {
-  const dates = datesStr.split(',');
+  const dates     = datesStr.split(',');
   const detailRow = document.getElementById(rid);
   const content   = document.getElementById(rid+'_content');
   if (!detailRow || !content) return;
 
-  // Même semaine déjà ouverte → fermer
   if (detailRow.classList.contains('open') && detailRow.dataset.semIdx === String(semIdx)) {
     detailRow.classList.remove('open');
     content.innerHTML = '';
@@ -621,14 +887,13 @@ async function openSemaine(rid, prno, semIdx, datesStr) {
 
   const d0 = formatDateCourt(dates[0]); const d1 = formatDateCourt(dates[dates.length-1]);
   content.innerHTML = `
-    <div style="padding:7px 16px;background:var(--navy-mid);color:white;font-size:11px;font-weight:600;display:flex;align-items:center;gap:12px">
+    <div style="padding:7px 16px;background:#2A3347;color:white;font-size:11px;font-weight:600;display:flex;align-items:center;gap:12px">
       <span>📅 ${d0} → ${d1}</span>
       <button onclick="document.getElementById('${rid}').classList.remove('open');document.getElementById('${rid}_content').innerHTML=''"
         style="margin-left:auto;background:transparent;border:1px solid rgba(255,255,255,0.3);border-radius:5px;color:white;font-size:10px;padding:2px 7px;cursor:pointer">✕</button>
     </div>
     <div id="${rid}_tbody_wrap"><div class="loading-state" style="padding:16px"><div class="spinner"></div></div></div>`;
 
-  // Charger en parallèle chaque jour de la semaine
   const dayResults = await Promise.all(
     dates.map(ds => {
       if (_dayCache[ds]) return Promise.resolve(_dayCache[ds]);
@@ -639,39 +904,39 @@ async function openSemaine(rid, prno, semIdx, datesStr) {
     })
   );
 
-  const dur = m => (m > 0) ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty">—</span>';
-  const bc  = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu'}[s]||'');
-  const t   = v => v ? `<span style="font-family:'DM Mono',monospace">${v.slice(0,5)}</span>` : '<span class="td-empty">—</span>';
+  const dur  = m => (m > 0) ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty">—</span>';
+  const bc   = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu'}[s]||'');
+  const t    = v => v ? `<span style="font-family:'DM Mono',monospace">${v.slice(0,5)}</span>` : '<span class="td-empty">—</span>';
   const vide = '<span class="td-empty">—</span>';
 
   let html = `<table class="data-table" style="width:100%;font-size:11px"><thead><tr>
     <th style="padding:7px 12px">Date</th>
     <th>Arr. Mat</th><th>Dép. Mat</th>
     <th>Arr. APM</th><th>Dép. APM</th>
-    <th>Durée</th><th style="color:var(--teal)">Contrat</th>
+    <th>Durée</th><th style="color:#00BFA5">Contrat</th>
     <th>Écart</th><th>Statut</th>
   </tr></thead><tbody>`;
 
   dates.forEach((ds, i) => {
     const dayData = dayResults[i];
-    const emp = dayData ? (dayData.employes||[]).find(e => e.prno === prno) : null;
-    const statut = emp ? emp.statut : 'Exclu';
-    const nh = !emp || !emp.code_horaire;
-    const ex = statut === 'Exclu';
-    const ferie = emp && emp.ferie;
-    const rowSt = ex ? 'opacity:0.4;' : ferie ? 'opacity:0.7;' : '';
+    const emp     = dayData ? (dayData.employes||[]).find(e => e.prno === prno) : null;
+    const statut  = emp ? emp.statut : 'Exclu';
+    const nh      = !emp || !emp.code_horaire;
+    const ex      = statut === 'Exclu';
+    const ferie   = emp && emp.ferie;
+    const rowSt   = ex ? 'opacity:0.4;' : ferie ? 'opacity:0.7;' : '';
     const duree   = nh ? vide : (emp.reel_label && emp.reel_label !== '—' ? emp.reel_label : dur(emp.minutes_reels||0));
     const contrat = nh ? vide : (emp.theorique_label||'—');
-    const ecartC  = !emp ? 'var(--text-muted)' : emp.ecart_type==='manquant'?'var(--red)':emp.ecart_type==='ok'?'var(--green)':'var(--text-muted)';
+    const ecartC  = !emp ? '#9AAABB' : emp.ecart_type==='manquant'?'#EF5350':emp.ecart_type==='ok'?'#4CAF50':'#9AAABB';
     const ecart   = ex ? vide : (emp.ecart_label||'—');
     html += `<tr style="${rowSt}" onclick="openModal('${ds}')" title="Voir détail complet">
-      <td style="padding:7px 12px;font-family:'DM Mono',monospace;color:var(--teal);font-weight:600;cursor:pointer">${formatDateCourt(ds)}</td>
+      <td style="padding:7px 12px;font-family:'DM Mono',monospace;color:#00BFA5;font-weight:600;cursor:pointer">${formatDateCourt(ds)}</td>
       <td>${ex?vide:t(emp.arr_mat)}</td>
       <td>${ex?vide:t(emp.dep_mat)}</td>
       <td>${ex?vide:t(emp.arr_apm)}</td>
       <td>${ex?vide:t(emp.dep_apm)}</td>
       <td class="td-dur">${ex?vide:duree}</td>
-      <td class="td-dur" style="color:var(--teal)">${ex?vide:contrat}</td>
+      <td class="td-dur" style="color:#00BFA5">${ex?vide:contrat}</td>
       <td class="td-dur" style="color:${ecartC};font-weight:600">${ecart}</td>
       <td><span class="badge ${bc(statut)}">${ferie?'★ Férié':statut}</span></td>
     </tr>`;
@@ -681,28 +946,27 @@ async function openSemaine(rid, prno, semIdx, datesStr) {
   document.getElementById(rid+'_tbody_wrap').innerHTML = html;
 }
 
-
-
 // ── VUE PÉRIODE (semaine, mois) ────────────────────────────────────────────
 async function loadPeriode() {
   const releveParam = (activeReleveId && currentTab === 'mois') ? `&releve_id=${activeReleveId}` : '';
   const data = await (await fetch(`/api/periode?periode=${currentTab}&date=${currentDate}${releveParam}`)).json();
   allRowsData = data.employes || [];
-  const labels = {semaine:'Semaine', mois:'Mois'};
-  const titre = (activeReleveId && currentTab === 'mois')
+  const labels = { semaine:'Semaine', mois:'Mois' };
+  const titre  = (activeReleveId && currentTab === 'mois')
     ? `Mois — Relevé #${activeReleveId}`
     : `Vue ${labels[currentTab]}`;
-  document.getElementById('tableTitle').textContent = titre;
+  document.getElementById('tableTitle').textContent    = titre;
   document.getElementById('tableSubtitle').textContent = `${(data.date_debut||'').replace(/-/g,'/')} → ${(data.date_fin||'').replace(/-/g,'/')}`;
-  document.getElementById('ferierBanner').innerHTML = '';
+  document.getElementById('ferierBanner').innerHTML    = '';
   renderPeriodeTable(data);
 }
 
 function renderPeriodeTable(data) {
-  const body = document.getElementById('tableBody');
+  const body     = document.getElementById('tableBody');
   const employes = data.employes || [];
   if (!employes.length) { body.innerHTML='<div class="loading-state">📭 Aucune donnée</div>'; return; }
   const dates = [...new Set(employes.flatMap(e => Object.keys(e.dates||{})))].sort();
+
   let html = `<div class="periode-scroll"><table class="periode-table"><thead><tr>
     <th style="text-align:left;padding-left:14px">PRNO</th>
     <th style="text-align:left;padding-left:10px;min-width:150px">Nom Prénom</th>`;
@@ -710,14 +974,15 @@ function renderPeriodeTable(data) {
     const isFerie = employes.length > 0 && (employes[0].dates||{})[d] === 'Férié';
     html += `<th class="${isFerie?'th-ferie':''}" onclick="openModal('${d}')" title="${d}">${formatDateCourt(d)}${isFerie?' ★':''}</th>`;
   });
-  html += `<th style="background:var(--main-bg2);color:var(--teal);min-width:75px;border-left:2px solid var(--border-mid)">Contrat</th>
-    <th style="background:var(--main-bg2);color:var(--text-dim);min-width:75px">Durée</th>
-    <th style="background:var(--main-bg2);min-width:75px">Écart</th>
-    <th style="background:var(--main-bg2);color:var(--green);min-width:36px" title="Complets">✓</th>
-    <th style="background:var(--main-bg2);color:var(--amber);min-width:36px" title="Incomplets">◑</th>
-    <th style="background:var(--main-bg2);color:var(--red);min-width:36px" title="Absents">✕</th>
-    <th style="background:var(--main-bg2);min-width:36px" title="Fériés">★</th>`;
+  html += `<th style="background:#E8EBF4;color:#00BFA5;min-width:75px;border-left:2px solid rgba(0,191,165,0.2)">Contrat</th>
+    <th style="background:#E8EBF4;color:#5A6A82;min-width:75px">Durée</th>
+    <th style="background:#E8EBF4;min-width:75px">Écart</th>
+    <th style="background:#E8EBF4;color:#4CAF50;min-width:36px" title="Complets">✓</th>
+    <th style="background:#E8EBF4;color:#FFB300;min-width:36px" title="Incomplets">◑</th>
+    <th style="background:#E8EBF4;color:#EF5350;min-width:36px" title="Absents">✕</th>
+    <th style="background:#E8EBF4;min-width:36px" title="Fériés">★</th>`;
   html += '</tr></thead><tbody>';
+
   employes.forEach(emp => {
     html += `<tr><td class="td-prno-col">${emp.prno}</td><td class="td-nom-col">${emp.nom_prenom}</td>`;
     dates.forEach(d => {
@@ -727,15 +992,15 @@ function renderPeriodeTable(data) {
       const oc  = s !== 'Exclu' ? `onclick="openModal('${d}')"` : '';
       html += `<td class="${cls}" ${oc} title="${s} — ${d}">${lbl}</td>`;
     });
-    const ec = emp.ecart_type==='manquant'?'var(--red)':emp.ecart_type==='ok'?'var(--green)':'var(--text-muted)';
+    const ec = emp.ecart_type==='manquant'?'#EF5350':emp.ecart_type==='ok'?'#4CAF50':'#9AAABB';
     html += `
-      <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--teal);background:var(--main-bg2);border-left:2px solid var(--border-mid);font-weight:600">${emp.theorique_label||'—'}</td>
-      <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-dim);background:var(--main-bg2)">${emp.reel_label||'—'}</td>
-      <td style="font-family:'DM Mono',monospace;font-size:11px;color:${ec};background:var(--main-bg2);font-weight:600">${emp.ecart_label||'—'}</td>
-      <td style="color:var(--green);font-weight:700;text-align:center;background:var(--main-bg2)">${emp.nb_complet||0}</td>
-      <td style="color:var(--amber);font-weight:700;text-align:center;background:var(--main-bg2)">${emp.nb_incomplet||0}</td>
-      <td style="color:var(--red);font-weight:700;text-align:center;background:var(--main-bg2)">${emp.nb_absent||0}</td>
-      <td style="text-align:center;background:var(--main-bg2)">${emp.nb_ferie||0}</td>`;
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:#00BFA5;background:#E8EBF4;border-left:2px solid rgba(0,191,165,0.2);font-weight:600">${emp.theorique_label||'—'}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:#5A6A82;background:#E8EBF4">${emp.reel_label||'—'}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:${ec};background:#E8EBF4;font-weight:600">${emp.ecart_label||'—'}</td>
+      <td style="color:#4CAF50;font-weight:700;text-align:center;background:#E8EBF4">${emp.nb_complet||0}</td>
+      <td style="color:#FFB300;font-weight:700;text-align:center;background:#E8EBF4">${emp.nb_incomplet||0}</td>
+      <td style="color:#EF5350;font-weight:700;text-align:center;background:#E8EBF4">${emp.nb_absent||0}</td>
+      <td style="text-align:center;background:#E8EBF4">${emp.nb_ferie||0}</td>`;
     html += '</tr>';
   });
   html += '</tbody></table></div>';
@@ -751,14 +1016,12 @@ function filterTable() {
   }
   if (currentTab === 'jour') {
     renderJourTable(allRowsData.filter(r => {
-      // Cherche dans prno, nom, et toutes les heures de pointage
       const heures = [r.arr_mat, r.dep_mat, r.arr_apm, r.dep_apm]
         .filter(Boolean).map(h => h.slice(0,5)).join(' ');
       return (r.prno + ' ' + r.nom_prenom + ' ' + heures + ' ' + (r.statut||'')).toLowerCase().includes(q);
     }));
     return;
   }
-  // Vues période et S-Mois : filtrer par ligne (prno + nom)
   document.querySelectorAll('.periode-table tbody tr').forEach(row => {
     if (row.classList.contains('smois-detail-row')) return;
     row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
@@ -766,11 +1029,17 @@ function filterTable() {
 }
 
 // ── Modal ──────────────────────────────────────────────────────────────────
+let _modalPrevFocus = null;
+
 async function openModal(ds) {
-  document.getElementById('modalOverlay').classList.add('open');
-  document.getElementById('modalDate').textContent = formatDateCourt(ds);
+  const overlay = document.getElementById('modalOverlay');
+  _modalPrevFocus = document.activeElement;
+  overlay.classList.add('open');
+  // Focus sur le bouton fermer dès l'ouverture
+  setTimeout(() => { document.getElementById('modalClose')?.focus(); }, 50);
+  document.getElementById('modalDate').textContent  = formatDateCourt(ds);
   document.getElementById('modalTitle').textContent = new Date(ds+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  document.getElementById('modalBody').innerHTML = '<div class="loading-state"><div class="spinner"></div></div>';
+  document.getElementById('modalBody').innerHTML    = '<div class="loading-state"><div class="spinner"></div></div>';
   ['mStatTotal','mStatComplets','mStatIncomplets','mStatAbsents'].forEach(id => document.getElementById(id).textContent='—');
   try {
     const data = await (await fetch(`/api/detail_jour?date=${ds}`)).json();
@@ -786,15 +1055,15 @@ async function openModal(ds) {
       <th>PRNO</th><th>Nom Prénom</th>
       <th>Arr. Mat</th><th>Dép. Mat</th>
       <th>Arr. APM</th><th>Dép. APM</th>
-      <th>Durée</th><th style="color:var(--teal)">Contrat</th><th>Écart</th><th>Statut</th>
+      <th>Durée</th><th style="color:#00BFA5">Contrat</th><th>Écart</th><th>Statut</th>
     </tr></thead><tbody>`;
-    const tM = v => v ? `<span class="td-time">${v.slice(0,5)}</span>` : '<span class="td-empty">—</span>';
-    const vM = '<span class="td-empty">—</span>';
+    const tM   = v => v ? `<span class="td-time">${v.slice(0,5)}</span>` : '<span class="td-empty">—</span>';
+    const vM   = '<span class="td-empty">—</span>';
     (data.employes||[]).forEach(r => {
-      const nh = !r.code_horaire;
-      const ex = r.statut === 'Exclu';
-      const duree = nh ? vM : (r.reel_label && r.reel_label !== '—' ? r.reel_label : dur(r.minutes_reels||0));
-      const ec  = nh ? 'var(--text-muted)' : (r.ecart_type==='manquant'?'var(--red)':r.ecart_type==='ok'?'var(--green)':'var(--text-muted)');
+      const nh  = !r.code_horaire;
+      const ex  = r.statut === 'Exclu';
+      const duree  = nh ? vM : (r.reel_label && r.reel_label !== '—' ? r.reel_label : dur(r.minutes_reels||0));
+      const ec  = nh ? '#9AAABB' : (r.ecart_type==='manquant'?'#EF5350':r.ecart_type==='ok'?'#4CAF50':'#9AAABB');
       const rst = nh ? 'opacity:0.45;background:repeating-linear-gradient(135deg,transparent,transparent 4px,rgba(0,0,0,0.03) 4px,rgba(0,0,0,0.03) 8px);' : ex ? 'opacity:0.35;' : r.ferie ? 'opacity:0.6;' : '';
       const show = !ex;
       html += `<tr style="${rst}">
@@ -804,9 +1073,9 @@ async function openModal(ds) {
         <td>${show ? tM(r.arr_apm) : vM}</td>
         <td>${show ? tM(r.dep_apm) : vM}</td>
         <td class="td-dur">${ex||nh ? vM : duree}</td>
-        <td class="td-dur" style="color:var(--teal)">${ex||nh ? vM : (r.theorique_label||'—')}</td>
+        <td class="td-dur" style="color:#00BFA5">${ex||nh ? vM : (r.theorique_label||'—')}</td>
         <td class="td-dur" style="color:${ec};font-weight:600">${ex||nh ? vM : (r.ecart_label||'—')}</td>
-        <td>${nh?'<span class="badge" style="background:rgba(0,0,0,0.06);color:var(--text-muted);border:1px solid var(--border)">Sans horaire</span>':`<span class="badge ${bc(r.statut)}">${r.statut}</span>`}</td>
+        <td>${nh?'<span class="badge" style="background:rgba(0,0,0,0.06);color:#9AAABB;border:1px solid rgba(0,0,0,0.07)">Sans horaire</span>':`<span class="badge ${bc(r.statut)}">${r.statut}</span>`}</td>
       </tr>`;
     });
     html += '</tbody></table></div>';
@@ -814,17 +1083,22 @@ async function openModal(ds) {
   } catch(e) { document.getElementById('modalBody').innerHTML='<div class="loading-state">Erreur</div>'; }
 }
 
-function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); }
-function closeModalOnBg(e) { if(e.target===document.getElementById('modalOverlay')) closeModal(); }
-document.addEventListener('keydown', e => { if(e.key==='Escape') closeModal(); });
+function closeModal() {
+  const overlay = document.getElementById('modalOverlay');
+  overlay.classList.remove('open');
+  // Redonner le focus à l'élément qui a ouvert la modal
+  if (_modalPrevFocus) { _modalPrevFocus.focus(); _modalPrevFocus = null; }
+}
+
+function closeModalOnBg(e) { if (e.target === document.getElementById('modalOverlay')) closeModal(); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
 loadStats();
 loadData();
 loadTopbarReleves();
-// Cacher le sélecteur de relevé au démarrage (onglet Jour par défaut)
 const _wrap = document.getElementById('releveSelectorWrap');
 if (_wrap) _wrap.style.display = 'none';
-setInterval(() => { loadStats(); if(currentTab==='jour') loadData(); }, 120000);
+setInterval(() => { loadStats(); if (currentTab === 'jour') loadData(); }, 120000);
 </script>
 </body>
 </html>
