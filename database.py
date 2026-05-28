@@ -1,19 +1,29 @@
 """
-database.py — Toutes les opérations SQLite pour le tracker KAROKA.
+database.py — Toutes les opérations SQLite/Turso pour le tracker KAROKA.
 Tables : employes, liaisons, pointages, jours_feries, meta
 """
 
 import csv
-import sqlite3
 import logging
 from collections import defaultdict
 from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
 import os
 
+# ── Driver : Turso (cloud) ou SQLite local (fallback dev) ────────────────────
+TURSO_URL   = os.getenv("TURSO_DB_URL", "")
+TURSO_TOKEN = os.getenv("TURSO_AUTH_TOKEN", "")
+
+if TURSO_URL and TURSO_TOKEN:
+    import libsql_experimental as _driver
+    _USE_TURSO = True
+else:
+    import sqlite3 as _driver   # type: ignore
+    _USE_TURSO = False
+
 logger = logging.getLogger(__name__)
 
-DB_PATH  = os.getenv("DB_PATH",  "presences.db")
+DB_PATH  = os.getenv("DB_PATH",  "presences.db")   # utilisé uniquement en mode SQLite local
 TIMEZONE = os.getenv("TIMEZONE", "Indian/Antananarivo")
 
 JOURS_FERIES_FIXES_MG = [
@@ -35,10 +45,13 @@ def get_tz():
 
 
 def get_connection():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA foreign_keys=ON")
+    if _USE_TURSO:
+        conn = _driver.connect(TURSO_URL, auth_token=TURSO_TOKEN)
+    else:
+        conn = _driver.connect(DB_PATH, check_same_thread=False)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys=ON")
+    conn.row_factory = _driver.Row
     return conn
 
 
@@ -1336,12 +1349,15 @@ def supprimer_releve(releve_id: int) -> dict:
 
 def close_db():
     """
-    Force le checkpoint WAL : fusionne presences.db-wal dans presences.db
-    avant l'arrêt du serveur, pour éviter toute perte de données.
-    À appeler via atexit dans tracker.py.
+    En mode Turso : rien à faire (pas de WAL local).
+    En mode SQLite local : checkpoint WAL avant arrêt.
     """
+    if _USE_TURSO:
+        logger.info("Turso — pas de checkpoint WAL nécessaire.")
+        return
     try:
-        conn = sqlite3.connect(DB_PATH)
+        import sqlite3 as _sq3
+        conn = _sq3.connect(DB_PATH)
         conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         conn.close()
         logger.info("WAL checkpoint effectué — base de données correctement fermée.")

@@ -11,3 +11,5 @@ Werkzeug>=3.0.0
 flask-cors
 PyJWT
 gunicorn
+libsql_experimental
+eventlet
