@@ -15,7 +15,7 @@ TURSO_URL   = os.getenv("TURSO_DB_URL", "")
 TURSO_TOKEN = os.getenv("TURSO_AUTH_TOKEN", "")
 
 if TURSO_URL and TURSO_TOKEN:
-    import libsql_experimental as _driver
+    import libsql_client as _driver
     _USE_TURSO = True
 else:
     import sqlite3 as _driver   # type: ignore
