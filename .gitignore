@@ -5,3 +5,9 @@ presences.db
 tracker.log
 presences.xlsx
 .idea/workspace.xml
+
+venv/
+__pycache__/
+*.pyc
+presences.xlsx
+tracker.log*
