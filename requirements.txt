@@ -11,5 +11,5 @@ Werkzeug>=3.0.0
 flask-cors
 PyJWT
 gunicorn
-libsql-client
+psycopg2-binary
 eventlet
