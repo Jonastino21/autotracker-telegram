@@ -290,6 +290,12 @@
       <div class="w-1.5 h-1.5 rounded-full bg-teal animate-pulse flex-shrink-0" aria-hidden="true"></div>
       <span class="max-[900px]:hidden">Temps réel</span>
     </div>
+    <a href="/help" aria-label="Manuel d'utilisation"
+       class="flex items-center gap-2.5 px-3.5 py-2.5 rounded-[10px] text-[13px] font-medium text-[#7B8BA8] no-underline transition-all duration-200 hover:text-white hover:bg-white/[0.07]
+              max-[900px]:justify-center max-[900px]:px-3">
+      <span class="text-[15px] w-5 text-center flex-shrink-0" aria-hidden="true">?</span>
+      <span class="max-[900px]:hidden">Manuel</span>
+    </a>
     <a href="/logout" aria-label="Se déconnecter"
        class="flex items-center gap-2.5 px-3.5 py-2.5 rounded-[10px] text-[13px] font-medium text-[#7B8BA8] no-underline transition-all duration-200 hover:text-white hover:bg-white/[0.07]
               max-[900px]:justify-center max-[900px]:px-3">
@@ -344,7 +350,7 @@
         <label for="releveSelector" class="sr-only">Choisir un relevé</label>
         <select id="releveSelector" onchange="onReleveChange(this.value)"
                 class="bg-transparent border-none text-teal font-mono text-[12px] outline-none w-full sm:max-w-[200px] cursor-pointer">
-          <option value="">— Choisir un relevé —</option>
+          <option value="">Choisir un relevé</option>
         </select>
       </div>
 
@@ -355,7 +361,7 @@
            onclick="document.getElementById('nativeDatePicker').showPicker ? document.getElementById('nativeDatePicker').showPicker() : document.getElementById('nativeDatePicker').click()"
            onkeydown="if(event.key==='Enter'||event.key===' '){document.getElementById('nativeDatePicker').click()}">
         <span class="text-[11px] text-teal uppercase tracking-[1px] font-bold" aria-hidden="true">Date</span>
-        <span id="globalDate" class="flex-1 text-teal font-mono font-bold text-[13px]" aria-live="polite">—</span>
+        <span id="globalDate" class="flex-1 text-teal font-mono font-bold text-[13px]" aria-live="polite"></span>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-teal opacity-60 flex-shrink-0" aria-hidden="true">
           <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
           <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
@@ -379,22 +385,22 @@
 
     <div class="stat-card total relative bg-white border border-[rgba(0,0,0,0.07)] rounded-[18px] px-4 sm:px-[22px] py-5 overflow-hidden transition-transform duration-200 shadow-[0_2px_12px_rgba(0,0,0,0.07)] hover:-translate-y-0.5 hover:shadow-[0_6px_24px_rgba(0,0,0,0.1)]">
       <div class="text-[10px] sm:text-[11px] uppercase tracking-[0.8px] sm:tracking-[1.2px] text-[#5A6A82] mb-2 font-semibold whitespace-nowrap overflow-hidden text-ellipsis">Total</div>
-      <div class="stat-number text-[32px] sm:text-[36px] font-bold leading-none tracking-[-1px] text-teal" id="statTotal">—</div>
+      <div class="stat-number text-[32px] sm:text-[36px] font-bold leading-none tracking-[-1px] text-teal" id="statTotal"></div>
     </div>
 
     <div class="stat-card complet relative bg-white border border-[rgba(0,0,0,0.07)] rounded-[18px] px-4 sm:px-[22px] py-5 overflow-hidden transition-transform duration-200 shadow-[0_2px_12px_rgba(0,0,0,0.07)] hover:-translate-y-0.5 hover:shadow-[0_6px_24px_rgba(0,0,0,0.1)]">
       <div class="text-[10px] sm:text-[11px] uppercase tracking-[0.8px] sm:tracking-[1.2px] text-[#5A6A82] mb-2 font-semibold whitespace-nowrap overflow-hidden text-ellipsis">Complets</div>
-      <div class="stat-number text-[32px] sm:text-[36px] font-bold leading-none tracking-[-1px] text-green" id="statComplets">—</div>
+      <div class="stat-number text-[32px] sm:text-[36px] font-bold leading-none tracking-[-1px] text-green" id="statComplets"></div>
     </div>
 
     <div class="stat-card incomplet relative bg-white border border-[rgba(0,0,0,0.07)] rounded-[18px] px-4 sm:px-[22px] py-5 overflow-hidden transition-transform duration-200 shadow-[0_2px_12px_rgba(0,0,0,0.07)] hover:-translate-y-0.5 hover:shadow-[0_6px_24px_rgba(0,0,0,0.1)]">
       <div class="text-[10px] sm:text-[11px] uppercase tracking-[0.8px] sm:tracking-[1.2px] text-[#5A6A82] mb-2 font-semibold whitespace-nowrap overflow-hidden text-ellipsis">Incomplets</div>
-      <div class="stat-number text-[32px] sm:text-[36px] font-bold leading-none tracking-[-1px] text-amber" id="statIncomplets">—</div>
+      <div class="stat-number text-[32px] sm:text-[36px] font-bold leading-none tracking-[-1px] text-amber" id="statIncomplets"></div>
     </div>
 
     <div class="stat-card absent relative bg-white border border-[rgba(0,0,0,0.07)] rounded-[18px] px-4 sm:px-[22px] py-5 overflow-hidden transition-transform duration-200 shadow-[0_2px_12px_rgba(0,0,0,0.07)] hover:-translate-y-0.5 hover:shadow-[0_6px_24px_rgba(0,0,0,0.1)]">
       <div class="text-[10px] sm:text-[11px] uppercase tracking-[0.8px] sm:tracking-[1.2px] text-[#5A6A82] mb-2 font-semibold whitespace-nowrap overflow-hidden text-ellipsis">Absents</div>
-      <div class="stat-number text-[32px] sm:text-[36px] font-bold leading-none tracking-[-1px] text-red" id="statAbsents">—</div>
+      <div class="stat-number text-[32px] sm:text-[36px] font-bold leading-none tracking-[-1px] text-red" id="statAbsents"></div>
     </div>
   </div>
 
@@ -460,7 +466,7 @@
 
     <!-- Modal header -->
     <div class="px-4 sm:px-[26px] py-5 border-b border-[rgba(0,0,0,0.07)] flex items-center gap-4 flex-shrink-0">
-      <div id="modalDate" class="bg-[rgba(0,191,165,0.15)] border border-[rgba(0,191,165,0.2)] rounded-lg px-3 py-1 font-mono text-[13px] text-teal font-semibold" aria-hidden="true">—</div>
+      <div id="modalDate" class="bg-[rgba(0,191,165,0.15)] border border-[rgba(0,191,165,0.2)] rounded-lg px-3 py-1 font-mono text-[13px] text-teal font-semibold" aria-hidden="true"></div>
       <div id="modalTitle" class="text-[17px] font-bold text-[#1A1F2E]">Détail du jour</div>
       <button onclick="closeModal()" id="modalClose"
               class="ml-auto bg-[#F0F2F8] border border-[rgba(0,0,0,0.07)] rounded-lg text-[#5A6A82] w-8 h-8 cursor-pointer text-base flex items-center justify-center transition-all hover:bg-[rgba(239,83,80,0.12)] hover:text-red"
@@ -474,19 +480,19 @@
                 max-[640px]:grid-cols-2">
       <div class="modal-stat total bg-[#F0F2F8] border border-[rgba(0,0,0,0.07)] rounded-[10px] px-4 py-3 text-center">
         <div class="text-[10px] uppercase tracking-[0.8px] text-[#5A6A82] font-semibold">Total</div>
-        <div class="text-[26px] font-bold mt-1 text-teal" id="mStatTotal">—</div>
+        <div class="text-[26px] font-bold mt-1 text-teal" id="mStatTotal"></div>
       </div>
       <div class="modal-stat complet bg-[#F0F2F8] border border-[rgba(0,0,0,0.07)] rounded-[10px] px-4 py-3 text-center">
         <div class="text-[10px] uppercase tracking-[0.8px] text-[#5A6A82] font-semibold">Complets</div>
-        <div class="text-[26px] font-bold mt-1 text-green" id="mStatComplets">—</div>
+        <div class="text-[26px] font-bold mt-1 text-green" id="mStatComplets"></div>
       </div>
       <div class="modal-stat incomplet bg-[#F0F2F8] border border-[rgba(0,0,0,0.07)] rounded-[10px] px-4 py-3 text-center">
         <div class="text-[10px] uppercase tracking-[0.8px] text-[#5A6A82] font-semibold">Incomplets</div>
-        <div class="text-[26px] font-bold mt-1 text-amber" id="mStatIncomplets">—</div>
+        <div class="text-[26px] font-bold mt-1 text-amber" id="mStatIncomplets"></div>
       </div>
       <div class="modal-stat absent bg-[#F0F2F8] border border-[rgba(0,0,0,0.07)] rounded-[10px] px-4 py-3 text-center">
         <div class="text-[10px] uppercase tracking-[0.8px] text-[#5A6A82] font-semibold">Absents</div>
-        <div class="text-[26px] font-bold mt-1 text-red" id="mStatAbsents">—</div>
+        <div class="text-[26px] font-bold mt-1 text-red" id="mStatAbsents"></div>
       </div>
     </div>
 
@@ -716,10 +722,10 @@ async function loadData() {
 async function loadStats() {
   try {
     const d = await (await fetch(`/api/stats?date=${currentDate}`)).json();
-    document.getElementById('statTotal').textContent      = d.total      ?? '—';
-    document.getElementById('statComplets').textContent   = d.complets   ?? '—';
-    document.getElementById('statIncomplets').textContent = d.incomplets ?? '—';
-    document.getElementById('statAbsents').textContent    = d.absents    ?? '—';
+    document.getElementById('statTotal').textContent      = d.total      ?? '';
+    document.getElementById('statComplets').textContent   = d.complets   ?? '';
+    document.getElementById('statIncomplets').textContent = d.incomplets ?? '';
+    document.getElementById('statAbsents').textContent    = d.absents    ?? '';
   } catch(e) {}
 }
 
@@ -739,10 +745,10 @@ async function loadJour() {
 function renderJourTable(data) {
   const body = document.getElementById('tableBody');
   if (!data.length) { body.innerHTML = '<div class="loading-state">📭 Aucune donnée</div>'; return; }
-  const dur  = m => (m > 0) ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty">—</span>';
+  const dur  = m => (m > 0) ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty"></span>';
   const bc   = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu'}[s]||'');
-  const t    = v => v ? `<span class="td-time">${v.slice(0,5)}</span>` : '<span class="td-empty">—</span>';
-  const vide = '<span class="td-empty">—</span>';
+  const t    = v => v ? `<span class="td-time">${v.slice(0,5)}</span>` : '<span class="td-empty"></span>';
+  const vide = '<span class="td-empty"></span>';
 
   let html = `<div style="overflow-x:auto"><table class="data-table"><thead><tr>
     <th>PRNO</th><th>Nom Prénom</th>
@@ -755,9 +761,9 @@ function renderJourTable(data) {
     const nh = !r.code_horaire;
     const ex = r.statut === 'Exclu';
     const duree   = nh ? vide : (r.reel_label && r.reel_label !== '—' ? r.reel_label : dur(r.minutes_reels||0));
-    const contrat = nh ? '<span class="td-empty">N/A</span>' : (r.theorique_label||'—');
+    const contrat = nh ? '<span class="td-empty">N/A</span>' : (r.theorique_label|| '');
     const ecartC  = nh ? '#9AAABB' : (r.ecart_type==='manquant'?'#EF5350':r.ecart_type==='ok'?'#4CAF50':'#9AAABB');
-    const ecart   = nh || ex ? vide : (r.ecart_label||'—');
+    const ecart   = nh || ex ? vide : (r.ecart_label|| '');
     const rowSt   = nh ? 'opacity:0.45;background:repeating-linear-gradient(135deg,transparent,transparent 4px,rgba(0,0,0,0.03) 4px,rgba(0,0,0,0.03) 8px);' : ex ? 'opacity:0.35;' : r.ferie ? 'opacity:0.6;' : '';
     const statut  = nh
       ? '<span class="badge" style="background:rgba(0,0,0,0.06);color:#9AAABB;border:1px solid rgba(0,0,0,0.07)">Sans horaire</span>'
@@ -848,9 +854,9 @@ function renderSMoisTable(data) {
         title="Cliquer pour voir le détail de cette semaine">${lbl}</td>`;
     });
 
-    html += `<td style="font-family:'DM Mono',monospace;font-size:11px;color:#00BFA5;background:#E8EBF4;border-left:2px solid rgba(0,191,165,0.2);font-weight:600">${emp.theorique_label||'—'}</td>`;
-    html += `<td style="font-family:'DM Mono',monospace;font-size:11px;color:#5A6A82;background:#E8EBF4">${emp.reel_label||'—'}</td>`;
-    html += `<td style="font-family:'DM Mono',monospace;font-size:11px;color:${ec};background:#E8EBF4;font-weight:600">${emp.ecart_label||'—'}</td>`;
+    html += `<td style="font-family:'DM Mono',monospace;font-size:11px;color:#00BFA5;background:#E8EBF4;border-left:2px solid rgba(0,191,165,0.2);font-weight:600">${emp.theorique_label|| ''}</td>`;
+    html += `<td style="font-family:'DM Mono',monospace;font-size:11px;color:#5A6A82;background:#E8EBF4">${emp.reel_label|| ''}</td>`;
+    html += `<td style="font-family:'DM Mono',monospace;font-size:11px;color:${ec};background:#E8EBF4;font-weight:600">${emp.ecart_label|| ''}</td>`;
     html += `<td style="color:#4CAF50;font-weight:700;text-align:center;background:#E8EBF4">${emp.nb_complet||0}</td>`;
     html += `<td style="color:#FFB300;font-weight:700;text-align:center;background:#E8EBF4">${emp.nb_incomplet||0}</td>`;
     html += `<td style="color:#EF5350;font-weight:700;text-align:center;background:#E8EBF4">${emp.nb_absent||0}</td>`;
@@ -904,10 +910,10 @@ async function openSemaine(rid, prno, semIdx, datesStr) {
     })
   );
 
-  const dur  = m => (m > 0) ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty">—</span>';
+  const dur  = m => (m > 0) ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty"></span>';
   const bc   = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu'}[s]||'');
-  const t    = v => v ? `<span style="font-family:'DM Mono',monospace">${v.slice(0,5)}</span>` : '<span class="td-empty">—</span>';
-  const vide = '<span class="td-empty">—</span>';
+  const t    = v => v ? `<span style="font-family:'DM Mono',monospace">${v.slice(0,5)}</span>` : '<span class="td-empty"></span>';
+  const vide = '<span class="td-empty"></span>';
 
   let html = `<table class="data-table" style="width:100%;font-size:11px"><thead><tr>
     <th style="padding:7px 12px">Date</th>
@@ -926,9 +932,9 @@ async function openSemaine(rid, prno, semIdx, datesStr) {
     const ferie   = emp && emp.ferie;
     const rowSt   = ex ? 'opacity:0.4;' : ferie ? 'opacity:0.7;' : '';
     const duree   = nh ? vide : (emp.reel_label && emp.reel_label !== '—' ? emp.reel_label : dur(emp.minutes_reels||0));
-    const contrat = nh ? vide : (emp.theorique_label||'—');
+    const contrat = nh ? vide : (emp.theorique_label|| '');
     const ecartC  = !emp ? '#9AAABB' : emp.ecart_type==='manquant'?'#EF5350':emp.ecart_type==='ok'?'#4CAF50':'#9AAABB';
-    const ecart   = ex ? vide : (emp.ecart_label||'—');
+    const ecart   = ex ? vide : (emp.ecart_label|| '');
     html += `<tr style="${rowSt}" onclick="openModal('${ds}')" title="Voir détail complet">
       <td style="padding:7px 12px;font-family:'DM Mono',monospace;color:#00BFA5;font-weight:600;cursor:pointer">${formatDateCourt(ds)}</td>
       <td>${ex?vide:t(emp.arr_mat)}</td>
@@ -988,15 +994,15 @@ function renderPeriodeTable(data) {
     dates.forEach(d => {
       const s   = (emp.dates||{})[d]||'Exclu';
       const cls = {Complet:'cel-complet',Incomplet:'cel-incomplet',Absent:'cel-absent',Férié:'cel-ferie',Exclu:'cel-exclu'}[s]||'';
-      const lbl = {Complet:'✓',Incomplet:'◑',Absent:'✕',Férié:'★',Exclu:'·'}[s]||'—';
+      const lbl = {Complet:'✓',Incomplet:'◑',Absent:'✕',Férié:'★',Exclu:'·'}[s]|| '';
       const oc  = s !== 'Exclu' ? `onclick="openModal('${d}')"` : '';
       html += `<td class="${cls}" ${oc} title="${s} — ${d}">${lbl}</td>`;
     });
     const ec = emp.ecart_type==='manquant'?'#EF5350':emp.ecart_type==='ok'?'#4CAF50':'#9AAABB';
     html += `
-      <td style="font-family:'DM Mono',monospace;font-size:11px;color:#00BFA5;background:#E8EBF4;border-left:2px solid rgba(0,191,165,0.2);font-weight:600">${emp.theorique_label||'—'}</td>
-      <td style="font-family:'DM Mono',monospace;font-size:11px;color:#5A6A82;background:#E8EBF4">${emp.reel_label||'—'}</td>
-      <td style="font-family:'DM Mono',monospace;font-size:11px;color:${ec};background:#E8EBF4;font-weight:600">${emp.ecart_label||'—'}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:#00BFA5;background:#E8EBF4;border-left:2px solid rgba(0,191,165,0.2);font-weight:600">${emp.theorique_label|| ''}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:#5A6A82;background:#E8EBF4">${emp.reel_label|| ''}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:${ec};background:#E8EBF4;font-weight:600">${emp.ecart_label|| ''}</td>
       <td style="color:#4CAF50;font-weight:700;text-align:center;background:#E8EBF4">${emp.nb_complet||0}</td>
       <td style="color:#FFB300;font-weight:700;text-align:center;background:#E8EBF4">${emp.nb_incomplet||0}</td>
       <td style="color:#EF5350;font-weight:700;text-align:center;background:#E8EBF4">${emp.nb_absent||0}</td>
@@ -1040,14 +1046,14 @@ async function openModal(ds) {
   document.getElementById('modalDate').textContent  = formatDateCourt(ds);
   document.getElementById('modalTitle').textContent = new Date(ds+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   document.getElementById('modalBody').innerHTML    = '<div class="loading-state"><div class="spinner"></div></div>';
-  ['mStatTotal','mStatComplets','mStatIncomplets','mStatAbsents'].forEach(id => document.getElementById(id).textContent='—');
+  ['mStatTotal','mStatComplets','mStatIncomplets','mStatAbsents'].forEach(id => document.getElementById(id).textContent = '');
   try {
     const data = await (await fetch(`/api/detail_jour?date=${ds}`)).json();
     document.getElementById('mStatTotal').textContent      = data.stats.total;
     document.getElementById('mStatComplets').textContent   = data.stats.complets;
     document.getElementById('mStatIncomplets').textContent = data.stats.incomplets;
     document.getElementById('mStatAbsents').textContent    = data.stats.absents;
-    const dur = m => (m > 0) ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty">—</span>';
+    const dur = m => (m > 0) ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty"></span>';
     const bc  = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu'}[s]||'');
     let html = '';
     if (data.stats.ferie) html += '<div class="ferie-banner" style="margin:12px 16px 0">★ Jour férié</div>';
@@ -1057,8 +1063,8 @@ async function openModal(ds) {
       <th>Arr. APM</th><th>Dép. APM</th>
       <th>Durée</th><th style="color:#00BFA5">Contrat</th><th>Écart</th><th>Statut</th>
     </tr></thead><tbody>`;
-    const tM   = v => v ? `<span class="td-time">${v.slice(0,5)}</span>` : '<span class="td-empty">—</span>';
-    const vM   = '<span class="td-empty">—</span>';
+    const tM   = v => v ? `<span class="td-time">${v.slice(0,5)}</span>` : '<span class="td-empty"></span>';
+    const vM   = '<span class="td-empty"></span>';
     (data.employes||[]).forEach(r => {
       const nh  = !r.code_horaire;
       const ex  = r.statut === 'Exclu';
@@ -1073,8 +1079,8 @@ async function openModal(ds) {
         <td>${show ? tM(r.arr_apm) : vM}</td>
         <td>${show ? tM(r.dep_apm) : vM}</td>
         <td class="td-dur">${ex||nh ? vM : duree}</td>
-        <td class="td-dur" style="color:#00BFA5">${ex||nh ? vM : (r.theorique_label||'—')}</td>
-        <td class="td-dur" style="color:${ec};font-weight:600">${ex||nh ? vM : (r.ecart_label||'—')}</td>
+        <td class="td-dur" style="color:#00BFA5">${ex||nh ? vM : (r.theorique_label|| '')}</td>
+        <td class="td-dur" style="color:${ec};font-weight:600">${ex||nh ? vM : (r.ecart_label|| '')}</td>
         <td>${nh?'<span class="badge" style="background:rgba(0,0,0,0.06);color:#9AAABB;border:1px solid rgba(0,0,0,0.07)">Sans horaire</span>':`<span class="badge ${bc(r.statut)}">${r.statut}</span>`}</td>
       </tr>`;
     });
@@ -1100,5 +1106,6 @@ const _wrap = document.getElementById('releveSelectorWrap');
 if (_wrap) _wrap.style.display = 'none';
 setInterval(() => { loadStats(); if (currentTab === 'jour') loadData(); }, 120000);
 </script>
+
 </body>
 </html>

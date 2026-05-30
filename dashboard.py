@@ -196,6 +196,12 @@ def admin():
     return render_template("admin.html", username=session.get("username",""))
 
 
+@app.route("/help")
+@login_required
+def help_page():
+    return render_template("help.html", username=session.get("username",""))
+
+
 # ─── API Présences ────────────────────────────────────────────────────────────
 
 @app.route("/api/stats")

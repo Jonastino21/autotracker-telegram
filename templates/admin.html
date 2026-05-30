@@ -205,11 +205,13 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
   <nav class="flex flex-col gap-0.5 px-3 flex-1" aria-label="Menu">
     <div class="nav-label text-[9px] font-bold tracking-[1.8px] uppercase text-sidebar-muted px-3.5 pt-3.5 pb-1.5 opacity-70">Présence</div>
     <a href="/" class="nav-item"><i class="nav-icon" aria-hidden="true">◈</i><span>Tableau de bord</span></a>
-    <div class="nav-label text-[9px] font-bold tracking-[1.8px] uppercase text-sidebar-muted px-3.5 pt-3.5 pb-1.5 opacity-70">Liaison</div>
     <a href="/admin" class="nav-item active"><i class="nav-icon" aria-hidden="true">◎</i><span>Administration</span></a>
   </nav>
 
   <div class="px-3 pt-4 border-t border-white/[0.07] mt-auto flex flex-col gap-1.5">
+    <a href="/help" class="nav-item" aria-label="Manuel d'utilisation">
+      <i class="nav-icon" aria-hidden="true">?</i><span>Manuel</span>
+    </a>
     <a href="/logout" class="nav-item"><i class="nav-icon" aria-hidden="true">←</i><span>Déconnexion</span></a>
   </div>
 </aside>
@@ -228,7 +230,7 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
     </button>
     <div>
       <div class="text-[22px] font-bold text-text-base flex-1">Administration</div>
-      <div class="text-[13px] text-text-dim mt-0.5">Gestion des employés, horaires, jours fériés et liaisons Telegram.</div>
+      <div class="text-[13px] text-text-dim mt-0.5">Gestion des employés, horaires, jours fériés et relevés de paie.</div>
     </div>
   </div>
 
@@ -237,7 +239,6 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
     <div class="tabs-scroll"><div class="flex gap-1 bg-white border border-black/[0.07] rounded-2xl p-1.5 w-fit shadow-[0_2px_12px_rgba(0,0,0,0.07)]">
       <button class="tab-admin active" onclick="showSection('employes',this)" aria-selected="true">Employés</button>
       <button class="tab-admin" onclick="showSection('feries',this)" aria-selected="false">Jours fériés</button>
-      <!-- <button class="tab-admin" onclick="showSection('liaisons',this)">Liaisons</button> -->
       <button class="tab-admin" onclick="showSection('modeles',this)" aria-selected="false">Modèles horaires</button>
       <button class="tab-admin" onclick="showSection('releves',this)" aria-selected="false">Relevés de paie</button>
     </div></div>
@@ -445,54 +446,6 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
       </div>
     </div>
 
-    <!-- ═══════════════════════════════════
-         SECTION LIAISONS
-    ════════════════════════════════════ -->
-    <!-- <div class="section" id="sec-liaisons">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-        <div class="bg-white border border-black/[0.07] rounded-2xl p-[22px] shadow-[0_2px_12px_rgba(0,0,0,0.07)]">
-          <div class="text-[13.5px] font-bold mb-[18px] flex items-center gap-2 text-text-base">Lier manuellement un employé</div>
-          <div id="alertLiaison" class="alert" role="alert"></div>
-          <div class="mb-[15px]">
-            <label class="block text-[10.5px] uppercase tracking-[1px] text-text-dim mb-1.5 font-semibold">PRNO de l'employé</label>
-            <input type="text" id="liaisonPrno" placeholder="ex: pira" maxlength="20">
-          </div>
-          <div class="mb-[15px]">
-            <label class="block text-[10.5px] uppercase tracking-[1px] text-text-dim mb-1.5 font-semibold">Username ou ID Telegram</label>
-            <input type="text" id="liaisonTelegram" placeholder="ex: @username ou 123456789">
-          </div>
-          <button class="btn btn-primary btn-full" onclick="lierManuellement()">Lier cet employé</button>
-        </div>
-        <div class="bg-white border border-black/[0.07] rounded-2xl p-[22px] shadow-[0_2px_12px_rgba(0,0,0,0.07)]">
-          <div class="text-[13.5px] font-bold mb-[18px] flex items-center gap-2 text-text-base">Comment ça fonctionne</div>
-          <div class="text-[12px] text-text-dim leading-[1.8]">
-            <div class="mb-2">
-              <span class="text-teal font-semibold">1.</span> L'employé envoie son PRNO dans le groupe Telegram surveillé par le bot.
-            </div>
-            <div class="mb-2">
-              <span class="text-teal font-semibold">2.</span> Le bot détecte le PRNO et crée automatiquement la liaison avec son compte Telegram.
-            </div>
-            <div class="mb-2">
-              <span class="text-teal font-semibold">3.</span> Ses pointages (arrivée/départ) sont ensuite reconnus et enregistrés automatiquement.
-            </div>
-            <div class="px-3 py-2 bg-amber/[0.08] border border-amber/25 rounded-lg text-amber">
-              Si un employé n'a pas de smartphone, vous pouvez créer la liaison manuellement via le formulaire ci-contre.
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="bg-white border border-black/[0.07] rounded-2xl overflow-hidden mb-6 shadow-[0_2px_12px_rgba(0,0,0,0.07)]">
-        <div class="px-[22px] py-4 border-b border-black/[0.07] flex items-center justify-between gap-3 bg-main-bg flex-wrap">
-          <div>
-            <div class="text-[13.5px] font-bold text-text-base">Liaisons Telegram ↔ PRNO</div>
-            <div class="text-[12px] text-text-dim mt-0.5" id="liaisonsSubtitle">Chargement...</div>
-          </div>
-          <input type="text" class="bg-white border border-black/[0.07] rounded-lg py-1.5 px-3 text-text-base font-sans text-[13px] outline-none w-[210px] focus:border-teal placeholder:text-text-muted transition-colors" id="searchLiaison" placeholder="Rechercher..." oninput="filterLiaisons()">
-        </div>
-        <div id="tableLiaisons"><div class="empty-state">Chargement...</div></div>
-      </div>
-    </div> -->
 
     <!-- ═══════════════════════════════════
          SECTION MODÈLES HORAIRES
@@ -545,7 +498,7 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
               <span class="text-[13px] text-text-dim">Du</span>
               <select id="releveJourPaiement" class="bg-main-bg border border-black/[0.07] rounded-lg px-3 py-1.5 text-teal font-mono text-[14px] font-bold outline-none cursor-pointer focus:border-teal" style="width:auto"></select>
               <span class="text-[13px] text-text-dim">au</span>
-              <span id="releveJourFin" class="font-mono text-[14px] font-bold text-teal bg-teal/[0.08] border border-teal/20 rounded-lg px-3 py-1.5">—</span>
+              <span id="releveJourFin" class="font-mono text-[14px] font-bold text-teal bg-teal/[0.08] border border-teal/20 rounded-lg px-3 py-1.5"></span>
               <span class="text-[13px] text-text-dim">du mois suivant</span>
             </div>
           </div>
@@ -616,9 +569,7 @@ let modeles = JSON.parse(localStorage.getItem('karoka_modeles') || '[]');
 let _currentSection = 'employes';
 
 socket.on('admin_employes_updated', function() {
-  // Rafraîchir la section active si c'est employes ou liaisons
   if (_currentSection === 'employes') loadEmployes();
-  if (_currentSection === 'liaisons') loadLiaisons();
 });
 
 const MODELE_STANDARD = {
@@ -635,9 +586,8 @@ function showSection(name, btn) {
   if (sec) sec.style.display='block';
   document.querySelectorAll('.tab-admin').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-selected','false'); });
   if (btn) { btn.classList.add('active'); btn.setAttribute('aria-selected','true'); }
-  if (name==='feries')   loadFeries();
-  if (name==='liaisons') loadLiaisons();
-  if (name==='releves')  { loadReleves(); initReleveJourSelector(); }
+  if (name==='feries')  loadFeries();
+  if (name==='releves') { loadReleves(); initReleveJourSelector(); }
 }
 
 // ─── Modèles rapides ─────────────────────────────────────────────────────────
@@ -785,16 +735,13 @@ function renderEmpTable(data, horMap={}, dateEffetMap={}) {
   const el = document.getElementById('tableEmployes');
   if (!data.length) { el.innerHTML='<div class="empty-state">Aucun employé</div>'; return; }
   let html = `<div style="overflow-x:auto"><table><thead><tr>
-    <th>PRNO</th><th>Nom complet</th><th>Code horaire</th><th>Liaison</th><th>Empreinte</th><th>PIN</th><th>Lié le</th><th style="color:var(--teal)">Dès le</th><th>Action</th>
+    <th>PRNO</th><th>Nom complet</th><th>Code horaire</th><th>Empreinte</th><th>PIN</th><th style="color:var(--teal)">Dès le</th><th>Action</th>
   </tr></thead><tbody>`;
   data.forEach(emp => {
-    const bc = !emp.actif?'badge-inactif':emp.lie?'badge-lie':'badge-nonlie';
-    const bl = !emp.actif?'Inactif':emp.lie?'Lié':'Non lié';
     const code = horMap[emp.prno];
-    const codeCourt = code ? (code.length>40?code.slice(0,40)+'...':code) : '—';
-    const lieDate = emp.lie_le?emp.lie_le.slice(0,10).replace(/-/g,'/'):'—';
+    const codeCourt = code ? (code.length>40?code.slice(0,40)+'...':code) : '';
     const dateEffet = dateEffetMap[emp.prno];
-    const dateEffetAff = dateEffet ? dateEffet.replace(/-/g,'/') : '—';
+    const dateEffetAff = dateEffet ? dateEffet.replace(/-/g,'/') : '';
     const dateEffetCell = emp.actif && code
       ? `<td><span
            onclick="ouvrirModifHoraire('${emp.prno}','${code||''}')"
@@ -810,7 +757,6 @@ function renderEmpTable(data, horMap={}, dateEffetMap={}) {
       <td class="td-prno">${emp.prno}</td>
       <td class="td-nom">${emp.nom_complet}</td>
       <td class="td-code" title="${code||''}">${codeCourt}</td>
-      <td><span class="badge ${bc}">${bl}</span></td>
       <td style="text-align:center">
         ${emp.fingerprint_id
           ? `<span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:var(--teal);
@@ -825,7 +771,6 @@ function renderEmpTable(data, horMap={}, dateEffetMap={}) {
                           background:rgba(245,158,11,0.08)">#${emp.pin_id}</span>`
           : `<button class="btn btn-ghost btn-sm" onclick="ouvrirLierPin('${emp.prno}','${emp.nom_complet}')">+ Lier</button>`}
       </td>
-      <td style="color:var(--text-dim)">${lieDate}</td>
       ${dateEffetCell}
       <td style="display:flex;gap:6px">
         ${emp.actif
@@ -834,7 +779,6 @@ function renderEmpTable(data, horMap={}, dateEffetMap={}) {
         ${emp.actif?`<button class="btn btn-ghost btn-sm" onclick="ouvrirModifHoraire('${emp.prno}','${horMap[emp.prno]||''}')">✏ Horaire</button>`:''}
         ${emp.fingerprint_id?`<button class="btn btn-danger btn-sm" onclick="delierEmpreinte('${emp.prno}',${emp.fingerprint_id})">✕ Empreinte</button>`:''}
         ${emp.pin_id?`<button class="btn btn-danger btn-sm" onclick="delierPin('${emp.prno}')">✕ PIN</button>`:''}
-        ${emp.lie&&!emp.dans_groupe?`<button class="btn btn-amber btn-sm" onclick="renvoiLien('${emp.prno}',${emp.telegram_id})">Renvoi lien</button>`:''}
       </td>
     </tr>`;
   });
@@ -920,16 +864,10 @@ async function ajouterEmploye() {
 }
 
 async function supprimerEmploye(prno) {
-  if (!confirm(`Désactiver ${prno} et le retirer du groupe Telegram ?`)) return;
+  if (!confirm(`Désactiver l'employé ${prno} ?`)) return;
   const r = await fetch(`/api/admin/employes/${prno}`,{method:'DELETE'});
   const d = await r.json();
   if (d.ok) loadEmployes();
-}
-
-async function renvoiLien(prno, telegramId) {
-  const r = await fetch(`/api/admin/renvoi_lien/${prno}`,{method:'POST'});
-  const d = await r.json();
-  alert(d.ok ? 'Lien renvoyé !' : `${d.error}`);
 }
 
 async function importCsv(input) {
@@ -971,7 +909,7 @@ async function loadFeries() {
       return `<tr style="border-bottom:1px solid var(--border)">
         <td style="padding:8px 12px;font-family:'DM Mono',monospace;font-size:11px;color:var(--teal);font-weight:600">${dateAff}</td>
         <td style="padding:8px 12px;color:var(--text)">${f.libelle}</td>
-        <td style="padding:8px 12px;text-align:center;color:var(--text-dim)">${f.recurrent?'✓':'—'}</td>
+        <td style="padding:8px 12px;text-align:center;color:var(--text-dim)">${f.recurrent?'✓': ''}</td>
         <td style="padding:8px 12px;text-align:right">
           <button class="btn btn-danger btn-sm" onclick="supprimerFerie('${f.date_str}')">✕</button>
         </td>
@@ -1106,115 +1044,6 @@ async function supprimerFerie(date_str) {
   await fetch(`/api/jours_feries/${date_str}`,{method:'DELETE'});
   loadFeries();
 }
-
-// ─── LIAISONS ────────────────────────────────────────────────────────────────
-let allLiaisons = [];
-let allNonLies  = [];
-
-async function loadLiaisons() {
-  const [liaisons, employes] = await Promise.all([
-    fetch('/api/admin/liaisons').then(r=>r.json()),
-    fetch('/api/admin/employes').then(r=>r.json()),
-  ]);
-  allLiaisons = liaisons;
-  // Non liés = employés actifs sans liaison
-  const prnosLies = new Set(liaisons.map(l=>l.prno));
-  allNonLies = employes.filter(e => e.actif && !prnosLies.has(e.prno));
-
-  const subtitle = document.getElementById('liaisonsSubtitle');
-  if (subtitle) subtitle.textContent = `${liaisons.length} lié(s) · ${allNonLies.length} non lié(s)`;
-
-  renderLiaisonsTable(allLiaisons, allNonLies);
-}
-
-function renderLiaisonsTable(liaisons, nonLies) {
-  const el = document.getElementById('tableLiaisons');
-  let html = '';
-
-  // Section liés
-  if (liaisons.length) {
-    html += `<div style="padding:8px 14px;background:var(--teal-glow);border-bottom:1px solid var(--border);font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--teal)">Liés (${liaisons.length})</div>`;
-    html += `<div style="overflow-x:auto"><table><thead><tr>
-      <th>PRNO</th><th>Nom complet</th><th>Telegram ID</th><th>Username</th><th>Dans groupe</th><th>Lié le</th><th>Action</th>
-    </tr></thead><tbody>`;
-    liaisons.forEach(l => {
-      const lieDate = l.lie_le ? l.lie_le.slice(0,10).replace(/-/g,'/') : '—';
-      html += `<tr>
-        <td class="td-prno">${l.prno}</td>
-        <td class="td-nom">${l.nom_complet}</td>
-        <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-dim)">${l.telegram_id}</td>
-        <td style="color:var(--text-dim)">${l.username ? '@'+l.username : '—'}</td>
-        <td><span class="badge ${l.dans_groupe?'badge-lie':'badge-nonlie'}">${l.dans_groupe?'Oui':'Non'}</span></td>
-        <td style="color:var(--text-dim)">${lieDate}</td>
-        <td>
-          <button class="btn btn-danger btn-sm" onclick="delierEmploye('${l.prno}')">Délier</button>
-        </td>
-      </tr>`;
-    });
-    html += '</tbody></table></div>';
-  }
-
-  // Section non liés
-  if (nonLies.length) {
-    html += `<div style="padding:8px 14px;background:rgba(255,179,0,0.07);border-top:1px solid var(--border);border-bottom:1px solid var(--border);font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--amber)">Non liés (${nonLies.length})</div>`;
-    html += `<div style="overflow-x:auto"><table><thead><tr>
-      <th>PRNO</th><th>Nom complet</th><th colspan="4">Statut</th><th>Action</th>
-    </tr></thead><tbody>`;
-    nonLies.forEach(e => {
-      html += `<tr>
-        <td class="td-prno">${e.prno}</td>
-        <td class="td-nom">${e.nom_complet}</td>
-        <td colspan="4" style="color:var(--amber);font-size:12px">En attente de liaison Telegram</td>
-        <td>
-          <button class="btn btn-ghost btn-sm" onclick="prefillLien('${e.prno}')">Lier manuellement</button>
-        </td>
-      </tr>`;
-    });
-    html += '</tbody></table></div>';
-  }
-
-  if (!liaisons.length && !nonLies.length) html = '<div class="empty-state">Aucune donnée</div>';
-  el.innerHTML = html;
-}
-
-function filterLiaisons() {
-  const q = document.getElementById('searchLiaison').value.toLowerCase();
-  const fl = allLiaisons.filter(l => (l.prno+l.nom_complet+(l.username||'')+l.telegram_id).toLowerCase().includes(q));
-  const fn = allNonLies.filter(e => (e.prno+e.nom_complet).toLowerCase().includes(q));
-  renderLiaisonsTable(fl, fn);
-}
-
-function prefillLien(prno) {
-  document.getElementById('liaisonPrno').value = prno;
-  document.getElementById('liaisonTelegram').focus();
-}
-
-async function lierManuellement() {
-  const prno     = document.getElementById('liaisonPrno').value.trim().toLowerCase();
-  const telegram = document.getElementById('liaisonTelegram').value.trim();
-  const alertEl  = document.getElementById('alertLiaison');
-  if (!prno || !telegram) { showAlert(alertEl,'error','PRNO et identifiant Telegram obligatoires'); return; }
-  const r = await fetch('/api/admin/lier',{
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({prno, telegram_id: telegram})
-  });
-  const d = await r.json();
-  if (d.ok) {
-    showAlert(alertEl,'success',`${prno} lié à ${telegram} avec succès`);
-    document.getElementById('liaisonPrno').value = '';
-    document.getElementById('liaisonTelegram').value = '';
-    loadLiaisons();
-  } else showAlert(alertEl,'error',d.error||'Erreur inconnue');
-}
-
-async function delierEmploye(prno) {
-  if (!confirm(`Délier ${prno} de son compte Telegram ? Il devra renvoyer son PRNO pour se relancer.`)) return;
-  const r = await fetch(`/api/admin/lier/${prno}`,{method:'DELETE'});
-  const d = await r.json();
-  if (d.ok) loadLiaisons();
-  else alert('Erreur : ' + (d.error||'inconnue'));
-}
-
 
 // ─── Utilitaires ─────────────────────────────────────────────────────────────
 function showAlert(el,type,msg){
@@ -1523,7 +1352,7 @@ async function loadReleves() {
     const rowBg = clos ? 'opacity:0.6;' : '';
     html += `<tr style="${rowBg}">
       <td style="font-family:'DM Mono',monospace;color:var(--teal);font-weight:600">#${r.id}</td>
-      <td class="td-nom">${r.libelle || '—'}</td>
+      <td class="td-nom">${r.libelle || ''}</td>
       <td style="font-family:'DM Mono',monospace;font-size:12px">${r.date_debut}</td>
       <td style="font-family:'DM Mono',monospace;font-size:12px">${r.date_fin}</td>
       <td style="color:var(--text-dim)">${jours} jours</td>
@@ -1595,7 +1424,7 @@ async function loadReleves() {
     const rowBg = clos ? 'opacity:0.6;' : '';
     html += `<tr style="${rowBg}">
       <td style="font-family:'DM Mono',monospace;color:var(--teal);font-weight:600">#${r.id}</td>
-      <td class="td-nom">${r.libelle || '—'}</td>
+      <td class="td-nom">${r.libelle || ''}</td>
       <td style="font-family:'DM Mono',monospace;font-size:12px">${d0Aff}</td>
       <td style="font-family:'DM Mono',monospace;font-size:12px">${d1Aff}</td>
       <td style="color:var(--text-dim)">${jours} jours</td>
@@ -1615,7 +1444,7 @@ function initReleveJourSelector() {
     o.value = j; o.textContent = String(j).padStart(2,'0');
     sel.appendChild(o);
   }
-  sel.value = 25;
+  sel.value = 20;
   sel.addEventListener('change', updateRelevePreview);
   updateRelevePreview();
 }
@@ -1806,8 +1635,4 @@ async function delierPin(prno) {
 document.getElementById('modalPin').addEventListener('click', function(e) {
   if (e.target===this) fermerModalPin();
 });
-</script>
 
-
-</body>
-</html>

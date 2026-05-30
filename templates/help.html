@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KAROKA — Manuel d'utilisation</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        sidebar: '#1A1F2E', 'sidebar-text': '#E8EDF2', 'sidebar-muted': '#7B8BA8',
+        teal: '#00BFA5', 'teal-dark': '#00897B',
+        'main-bg': '#F0F2F8', 'text-base': '#1A1F2E', 'text-dim': '#5A6A82',
+      },
+      fontFamily: { sans: ['"DM Sans"', 'sans-serif'], mono: ['"DM Mono"', 'monospace'] },
+    }
+  }
+}
+</script>
+<style>
+:root {
+  --teal:#00BFA5;--teal-dark:#00897B;--border:rgba(0,0,0,0.07);
+  --text:#1A1F2E;--text-dim:#5A6A82;--text-muted:#9AAABB;
+  --sidebar-bg:#1A1F2E;--card-bg:#fff;
+}
+body { font-family:'DM Sans',sans-serif; background:#F0F2F8; color:#1A1F2E; }
+
+/* Nav */
+.nav-item { display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:500;color:#7B8BA8;text-decoration:none;cursor:pointer;transition:all 0.2s; }
+.nav-item:hover { color:#fff;background:rgba(255,255,255,0.07); }
+.nav-item.active { color:#fff;background:rgba(255,255,255,0.1);font-weight:600; }
+.nav-icon { font-size:14px;width:20px;text-align:center;flex-shrink:0;font-style:normal; }
+
+/* Sidebar mobile */
+#sidebar-overlay { display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(2px);z-index:40; }
+#sidebar-overlay.open { display:block; }
+#hamburger { display:none; }
+@media(max-width:767px) {
+  #sidebar { position:fixed !important;top:0 !important;left:0 !important;height:100dvh !important;width:220px !important;z-index:50;transform:translateX(-100%);transition:transform 0.25s ease; }
+  #sidebar.open { transform:translateX(0) !important; }
+  #hamburger { display:flex; }
+  .main-content { margin-left:0 !important; }
+}
+@media(min-width:768px) { #hamburger { display:none !important; } #sidebar-close { display:none !important; } }
+
+/* Cards */
+.help-card { background:#fff;border:1px solid rgba(0,0,0,0.07);border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.07);margin-bottom:20px; }
+.help-card-header { padding:16px 22px;border-bottom:1px solid rgba(0,0,0,0.07);display:flex;align-items:center;gap:12px;background:#fff; }
+.help-card-icon { width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff;flex-shrink:0; }
+.help-card-title { font-size:15px;font-weight:700;color:#1A1F2E; }
+.help-card-sub { font-size:11px;color:#9AAABB;margin-top:2px; }
+.help-card-body { padding:20px 22px; }
+
+/* Content */
+.help-section { display:grid;grid-template-columns:1fr;gap:12px; }
+@media(min-width:640px) { .help-2col { grid-template-columns:1fr 1fr; } }
+
+.info-block { background:#F0F2F8;border-radius:10px;padding:12px 14px; }
+.info-label { font-size:10px;font-weight:700;color:#00897B;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px; }
+.info-text { font-size:12.5px;color:#5A6A82;line-height:1.7; }
+
+.badge-demo { display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap; }
+
+.code-block { background:#1A1F2E;border-radius:10px;padding:13px 16px;font-family:'DM Mono',monospace;font-size:11.5px;line-height:1.9; }
+.c-teal { color:#00BFA5; }
+.c-amber { color:#FFB300; }
+.c-red { color:#EF5350; }
+.c-muted { color:#607D8B;font-size:10.5px; }
+.c-comment { color:#7B8BA8;font-size:10px; }
+
+.step { display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid rgba(0,0,0,0.06); }
+.step:last-child { border-bottom:none; }
+.step-num { width:24px;height:24px;border-radius:7px;background:linear-gradient(135deg,#00897B,#00BFA5);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px; }
+.step-text { font-size:12.5px;color:#5A6A82;line-height:1.7; }
+.step-text strong { color:#1A1F2E; }
+
+::-webkit-scrollbar { width:5px;height:5px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:rgba(0,0,0,0.15);border-radius:3px; }
+</style>
+</head>
+<body class="min-h-screen flex overflow-x-hidden">
+
+<div id="sidebar-overlay" onclick="closeSidebar()" aria-hidden="true"></div>
+
+<!-- SIDEBAR -->
+<aside id="sidebar" class="w-[220px] min-h-screen bg-[#1A1F2E] flex flex-col flex-shrink-0 sticky top-0 h-screen overflow-y-auto py-7">
+  <div class="flex items-center gap-2.5 px-6 pb-7">
+    <img src="{{ url_for('static', filename='assets/logo.png') }}" alt="Logo KAROKA" class="w-9 h-9 object-contain flex-shrink-0"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+    <span style="display:none;width:36px;height:36px;background:linear-gradient(135deg,#00897B,#00BFA5);border-radius:10px;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:white;flex-shrink:0;">K</span>
+    <button onclick="closeSidebar()" id="sidebar-close"
+        class="hidden ml-auto text-[#7B8BA8] hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10"
+        aria-label="Fermer">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div>
+      <div class="text-[17px] font-bold text-[#E8EDF2]">KAROKA</div>
+      <div class="text-[10px] text-[#7B8BA8] tracking-[1.5px] uppercase">Présences</div>
+    </div>
+  </div>
+
+  <nav class="flex flex-col gap-0.5 px-3 flex-1">
+    <div class="text-[9px] font-bold tracking-[1.8px] uppercase text-[#7B8BA8] px-3.5 pt-3.5 pb-1.5 opacity-70">Présence</div>
+    <a href="/" class="nav-item"><i class="nav-icon">◈</i><span>Tableau de bord</span></a>
+    <a href="/admin" class="nav-item"><i class="nav-icon">◎</i><span>Administration</span></a>
+  </nav>
+
+  <div class="px-3 pt-4 border-t border-white/[0.07] mt-auto flex flex-col gap-1.5">
+    <a href="/help" class="nav-item active" aria-label="Manuel d'utilisation">
+      <i class="nav-icon">?</i><span>Manuel</span>
+    </a>
+    <a href="/logout" class="nav-item"><i class="nav-icon">←</i><span>Déconnexion</span></a>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<div class="flex-1 flex flex-col min-w-0 main-content">
+
+  <!-- Topbar -->
+  <div class="flex items-center gap-3 px-4 pt-4 pb-2 sm:px-8 sm:pt-6 flex-shrink-0">
+    <button id="hamburger" onclick="openSidebar()"
+            class="flex-shrink-0 w-9 h-9 rounded-[10px] bg-[#1A1F2E] text-white flex items-center justify-center hover:bg-[#2A3347] transition-colors"
+            aria-label="Menu">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+    </button>
+    <div>
+      <div class="text-[22px] font-bold text-[#1A1F2E]">Manuel d'utilisation</div>
+      <div class="text-[13px] text-[#5A6A82] mt-0.5">KAROKA — Guide complet du système de présence</div>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="px-4 sm:px-8 pb-12 pt-4 max-w-4xl">
+
+    <!-- ══ 1. TABLEAU DE BORD ══ -->
+    <div class="help-card">
+      <div class="help-card-header">
+        <div class="help-card-icon" style="background:linear-gradient(135deg,#00897B,#00BFA5);">◉</div>
+        <div>
+          <div class="help-card-title">Tableau de bord</div>
+          <div class="help-card-sub">Lecture des présences — vue quotidienne, hebdomadaire et mensuelle</div>
+        </div>
+      </div>
+      <div class="help-card-body">
+        <div class="help-section help-2col grid gap-3 mb-5">
+          <div class="info-block">
+            <div class="info-label">Vue Jour</div>
+            <div class="info-text">Liste de toutes les présences du jour sélectionné. Colonnes : arrivée/départ matin et après-midi, durée réelle, contrat théorique, écart.</div>
+          </div>
+          <div class="info-block">
+            <div class="info-label">Vue Semaine</div>
+            <div class="info-text">Grille sur 7 jours (lun–dim). Cliquer sur l'en-tête d'une colonne de date pour ouvrir le détail complet de cette journée.</div>
+          </div>
+          <div class="info-block">
+            <div class="info-label">Vue S-Mois</div>
+            <div class="info-text">Résumé du mois regroupé par semaine. Cliquer sur une cellule pour déplier le détail jour par jour de la semaine.</div>
+          </div>
+          <div class="info-block">
+            <div class="info-label">Vue Mois</div>
+            <div class="info-text">Grille complète du mois calendaire. Filtrable par relevé de paie. Cliquer sur une cellule pour le détail du jour.</div>
+          </div>
+        </div>
+
+        <div style="font-size:13px;font-weight:600;color:#1A1F2E;margin-bottom:10px;">Contrôles de la barre supérieure</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div class="step">
+            <div class="step-num">D</div>
+            <div class="step-text"><strong>Sélecteur de date</strong> — Change la date de référence pour toutes les vues. Cliquer dessus pour ouvrir le calendrier.</div>
+          </div>
+          <div class="step">
+            <div class="step-num">R</div>
+            <div class="step-text"><strong>Sélecteur de relevé</strong> — Filtre les vues Mois et S-Mois sur la période d'un relevé de paie défini dans l'administration. Visible uniquement en modes Mois/S-Mois.</div>
+          </div>
+          <div class="step">
+            <div class="step-num">🔍</div>
+            <div class="step-text"><strong>Recherche</strong> — Filtre instantané par PRNO, nom, heure ou statut.</div>
+          </div>
+          <div class="step">
+            <div class="step-num">X</div>
+            <div class="step-text"><strong>Exporter Excel</strong> — Télécharge le fichier <code style="background:#F0F2F8;padding:1px 5px;border-radius:4px;font-family:'DM Mono',monospace;font-size:11px;">presences.xlsx</code> mis à jour avec toutes les données.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ 2. STATUTS ══ -->
+    <div class="help-card">
+      <div class="help-card-header">
+        <div class="help-card-icon" style="background:linear-gradient(135deg,#5A6A82,#9AAABB);">◆</div>
+        <div>
+          <div class="help-card-title">Statuts &amp; Badges</div>
+          <div class="help-card-sub">Signification de chaque indicateur de présence</div>
+        </div>
+      </div>
+      <div class="help-card-body">
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <div style="display:flex;align-items:flex-start;gap:12px;">
+            <span class="badge-demo" style="background:rgba(76,175,80,0.12);color:#2E7D32;border:1px solid rgba(76,175,80,0.3);min-width:90px;justify-content:center;">Complet</span>
+            <span class="info-text">Toutes les plages pointées (arrivée + départ matin et/ou après-midi) et durée réelle conforme au contrat.</span>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:12px;">
+            <span class="badge-demo" style="background:rgba(255,179,0,0.12);color:#E65100;border:1px solid rgba(255,179,0,0.3);min-width:90px;justify-content:center;">Incomplet</span>
+            <span class="info-text">Pointage partiel (arrivée sans départ, ou l'inverse) ou durée réelle inférieure au contrat (écart négatif).</span>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:12px;">
+            <span class="badge-demo" style="background:rgba(239,83,80,0.10);color:#C62828;border:1px solid rgba(239,83,80,0.3);min-width:90px;justify-content:center;">Absent</span>
+            <span class="info-text">Aucun pointage enregistré pour un jour normalement travaillé selon le code horaire de l'employé.</span>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:12px;">
+            <span class="badge-demo" style="background:rgba(156,39,176,0.10);color:#6A1B9A;border:1px solid rgba(156,39,176,0.3);min-width:90px;justify-content:center;">Férié</span>
+            <span class="info-text">Jour férié déclaré dans l'administration. Les absences ce jour ne sont pas comptabilisées.</span>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:12px;">
+            <span class="badge-demo" style="background:rgba(96,125,139,0.04);color:#607D8B;border:1px solid rgba(96,125,139,0.2);min-width:90px;justify-content:center;">Exclu</span>
+            <span class="info-text">Jour non travaillé selon le code horaire (week-end, jour off explicite). Aucun écart calculé.</span>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:12px;">
+            <span class="badge-demo" style="background:rgba(0,0,0,0.05);color:#9AAABB;border:1px solid rgba(0,0,0,0.07);min-width:90px;justify-content:center;font-size:10px;">Sans horaire</span>
+            <span class="info-text">Aucun code horaire affecté à cet employé — impossible de calculer la conformité.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ 3. CODES HORAIRES ══ -->
+    <div class="help-card">
+      <div class="help-card-header">
+        <div class="help-card-icon" style="background:linear-gradient(135deg,#2196F3,#42A5F5);">H</div>
+        <div>
+          <div class="help-card-title">Codes horaires</div>
+          <div class="help-card-sub">Syntaxe pour définir les plages de travail d'un employé</div>
+        </div>
+      </div>
+      <div class="help-card-body">
+        <div class="grid gap-3 mb-5" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));">
+          <div class="info-block">
+            <div class="info-label">Segment de travail</div>
+            <div class="info-text"><code style="font-family:'DM Mono',monospace;color:#00897B;">HHMMjourHHMM</code><br>Plage de travail d'un jour.<br>Ex: <code style="font-family:'DM Mono',monospace;color:#00897B;">0800lu1200</code></div>
+          </div>
+          <div class="info-block">
+            <div class="info-label">Pause</div>
+            <div class="info-text"><code style="font-family:'DM Mono',monospace;color:#FFB300;">(HHMMjourHHMM)</code><br>Entre parenthèses — durée déduite.<br>Ex: <code style="font-family:'DM Mono',monospace;color:#FFB300;">(1200tj1300)</code></div>
+          </div>
+          <div class="info-block">
+            <div class="info-label">Exclusion de jour</div>
+            <div class="info-text"><code style="font-family:'DM Mono',monospace;color:#EF5350;">(di)</code> — tout le dimanche<br><code style="font-family:'DM Mono',monospace;color:#EF5350;">(me:am)</code> — matin seulement<br><code style="font-family:'DM Mono',monospace;color:#EF5350;">(sa:pm)</code> — après-midi</div>
+          </div>
+          <div class="info-block">
+            <div class="info-label">Jours disponibles</div>
+            <div class="info-text"><code style="font-family:'DM Mono',monospace;">lu ma me je ve sa di</code><br><code style="font-family:'DM Mono',monospace;color:#00897B;">tj</code> = tous les jours</div>
+          </div>
+        </div>
+        <div style="font-size:13px;font-weight:600;color:#1A1F2E;margin-bottom:10px;">Exemples concrets</div>
+        <div class="code-block">
+          <div class="c-comment">// Lundi matin + après-midi seulement</div>
+          <div class="c-teal">0800lu1200;1300lu1700</div>
+          <br>
+          <div class="c-comment">// Lun–Ven 8h-17h (sam+dim exclus)</div>
+          <div class="c-teal">0800tj1200;1300tj1700;<span class="c-red">(sa);(di)</span></div>
+          <br>
+          <div class="c-comment">// Tous les jours 8h-17h avec pause déjeuner</div>
+          <div class="c-teal">0800tj1200;1300tj1700;<span class="c-amber">(1200tj1300)</span></div>
+          <br>
+          <div class="c-comment">// Gardien de nuit (chevauchement minuit)</div>
+          <div class="c-teal">2000tj0600;<span class="c-red">(di)</span></div>
+          <br>
+          <div class="c-comment">// Mercredi : matin uniquement</div>
+          <div class="c-teal">0800tj1200;1300tj1700;<span class="c-red">(me:pm)</span>;<span class="c-red">(sa);(di)</span></div>
+        </div>
+        <div style="margin-top:12px;background:rgba(0,191,165,0.06);border:1px solid rgba(0,191,165,0.2);border-radius:10px;padding:10px 14px;font-size:12px;color:#5A6A82;">
+          Les segments sont séparés par <code style="font-family:'DM Mono',monospace;color:#00897B;">;</code> — l'ordre n'importe pas. Utilisez le bouton <strong style="color:#1A1F2E;">Valider</strong> dans l'admin pour vérifier la syntaxe avant de sauvegarder.
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ 4. ADMINISTRATION ══ -->
+    <div class="help-card">
+      <div class="help-card-header">
+        <div class="help-card-icon" style="background:linear-gradient(135deg,#5C6BC0,#7986CB);">A</div>
+        <div>
+          <div class="help-card-title">Administration</div>
+          <div class="help-card-sub">Gestion des employés, horaires, relevés et jours fériés</div>
+        </div>
+      </div>
+      <div class="help-card-body">
+
+        <div style="font-size:13px;font-weight:600;color:#1A1F2E;margin-bottom:10px;">Onglet Employés</div>
+        <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:18px;">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-text"><strong>Ajouter</strong> — Renseignez le PRNO (code unique, ex: <code style="font-family:'DM Mono',monospace;font-size:11px;background:#F0F2F8;padding:1px 4px;border-radius:3px;">pira</code>) et le nom complet. Le code horaire est optionnel à cette étape.</div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-text"><strong>Affecter un horaire</strong> — Cliquez sur ✏ Horaire dans la ligne de l'employé, saisissez le code et une date d'effet. L'horaire s'applique à partir de cette date.</div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-text"><strong>Désactiver / Réactiver</strong> — Un employé désactivé ne génère plus de pointages. Il peut être réactivé ultérieurement.</div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-text"><strong>Import CSV</strong> — Format attendu : <code style="font-family:'DM Mono',monospace;font-size:11px;background:#F0F2F8;padding:1px 4px;border-radius:3px;">prno,nom_complet,code_horaire</code> (un employé par ligne).</div>
+          </div>
+        </div>
+
+        <div style="font-size:13px;font-weight:600;color:#1A1F2E;margin-bottom:10px;">Empreintes &amp; PIN (ESP32)</div>
+        <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:18px;">
+          <div class="step">
+            <div class="step-num">E</div>
+            <div class="step-text"><strong>Empreinte digitale</strong> — Chaque doigt enregistré sur le lecteur a un <code style="font-family:'DM Mono',monospace;font-size:11px;background:#F0F2F8;padding:1px 4px;border-radius:3px;">fingerprint_id</code>. Liez-le à l'employé via le bouton + Lier de la colonne Empreinte.</div>
+          </div>
+          <div class="step">
+            <div class="step-num">P</div>
+            <div class="step-text"><strong>Code PIN</strong> — Chaque code PIN enregistré a un <code style="font-family:'DM Mono',monospace;font-size:11px;background:#F0F2F8;padding:1px 4px;border-radius:3px;">pin_id</code>. Liez-le via le bouton + Lier de la colonne PIN.</div>
+          </div>
+        </div>
+
+        <div style="font-size:13px;font-weight:600;color:#1A1F2E;margin-bottom:10px;">Onglet Relevés de paie</div>
+        <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:18px;">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-text"><strong>Créer</strong> — Choisissez le jour de paiement (ex: 20 → du 20 au 20 du mois suivant), le mois de début et un libellé optionnel. Le <strong>premier relevé est créé manuellement</strong>.</div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-text"><strong>Clore</strong> — Clôturer un relevé actif génère automatiquement le suivant avec les mêmes paramètres.</div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-text"><strong>Utiliser dans le dashboard</strong> — Le sélecteur de relevé (visible en modes Mois/S-Mois) filtre les données sur la période exacte du relevé.</div>
+          </div>
+        </div>
+
+        <div style="font-size:13px;font-weight:600;color:#1A1F2E;margin-bottom:10px;">Onglet Jours fériés</div>
+        <div style="display:flex;flex-direction:column;gap:7px;">
+          <div class="step">
+            <div class="step-num">F</div>
+            <div class="step-text"><strong>Ajouter un jour férié</strong> — Saisissez la date, un libellé et choisissez si le férié est <em>fixe</em> (même date chaque année) ou <em>variable</em> (date unique). Les absences les jours fériés ne comptent pas dans les statistiques.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ 5. CONNEXION ══ -->
+    <div class="help-card">
+      <div class="help-card-header">
+        <div class="help-card-icon" style="background:linear-gradient(135deg,#FF7043,#FF8A65);">C</div>
+        <div>
+          <div class="help-card-title">Connexion &amp; Accès</div>
+          <div class="help-card-sub">Identifiants et rôles utilisateur</div>
+        </div>
+      </div>
+      <div class="help-card-body">
+        <div class="grid gap-3" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-bottom:16px;">
+          <div class="info-block">
+            <div class="info-label">URL</div>
+            <div class="info-text">Adresse IP du serveur sur le port configuré (défaut <code style="font-family:'DM Mono',monospace;color:#00897B;">5000</code>). Exemple : <code style="font-family:'DM Mono',monospace;">192.168.1.10:5000</code></div>
+          </div>
+          <div class="info-block">
+            <div class="info-label">Identifiants</div>
+            <div class="info-text">Définis dans <code style="font-family:'DM Mono',monospace;color:#00897B;">.env</code> via la variable <code style="font-family:'DM Mono',monospace;color:#00897B;">RH_CREDENTIALS</code>.<br>Format : <code style="font-family:'DM Mono',monospace;">user:pass,user2:pass2</code></div>
+          </div>
+          <div class="info-block">
+            <div class="info-label">Rôles disponibles</div>
+            <div class="info-text">
+              <strong style="color:#00897B;">rh</strong> — Accès complet (dashboard + admin)<br>
+              <strong style="color:#00897B;">pdg</strong> — Accès identique
+            </div>
+          </div>
+        </div>
+        <div style="background:rgba(255,112,67,0.07);border:1px solid rgba(255,112,67,0.2);border-radius:10px;padding:10px 14px;font-size:12px;color:#5A6A82;">
+          La session expire après <strong style="color:#1A1F2E;">12 heures</strong>. Pour changer les mots de passe, modifiez la variable <code style="font-family:'DM Mono',monospace;background:#F0F2F8;padding:1px 4px;border-radius:3px;">RH_CREDENTIALS</code> dans le fichier <code style="font-family:'DM Mono',monospace;background:#F0F2F8;padding:1px 4px;border-radius:3px;">.env</code> et redémarrez le serveur.
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /max-w -->
+</div><!-- /main -->
+
+<script>
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sidebar-overlay').classList.add('open');
+  document.getElementById('hamburger').setAttribute('aria-expanded','true');
+  const c = document.getElementById('sidebar-close');
+  if (c) c.style.display = 'flex';
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+  document.getElementById('hamburger').setAttribute('aria-expanded','false');
+  const c = document.getElementById('sidebar-close');
+  if (c) c.style.display = 'none';
+}
+document.addEventListener('keydown', e => { if (e.key==='Escape') closeSidebar(); });
+</script>
+</body>
+</html>
