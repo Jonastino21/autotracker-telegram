@@ -587,6 +587,7 @@ function showSection(name, btn) {
   document.querySelectorAll('.tab-admin').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-selected','false'); });
   if (btn) { btn.classList.add('active'); btn.setAttribute('aria-selected','true'); }
   if (name==='feries')  loadFeries();
+  if (name==='modeles') renderModeles();
   if (name==='releves') { loadReleves(); initReleveJourSelector(); }
 }
 
@@ -1058,6 +1059,7 @@ document.getElementById('inputDateEffet').value = _todayAdmin;
 initFerieAnnee();
 loadEmployes();
 renderModelesRapides();
+renderModeles();
 
 // ─── MODIFIER HORAIRE ────────────────────────────────────────────────────────
 let _modifPrno = null;
