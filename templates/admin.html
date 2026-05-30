@@ -736,7 +736,7 @@ function renderEmpTable(data, horMap={}, dateEffetMap={}) {
   const el = document.getElementById('tableEmployes');
   if (!data.length) { el.innerHTML='<div class="empty-state">Aucun employé</div>'; return; }
   let html = `<div style="overflow-x:auto"><table><thead><tr>
-    <th>PRNO</th><th>Nom complet</th><th>Code horaire</th><th>Empreinte</th><th>PIN</th><th style="color:var(--teal)">Dès le</th><th>Action</th>
+    <th>PRNO</th><th>Nom complet</th><th>Code horaire</th><th>Rotation</th><th>Empreinte</th><th>PIN</th><th style="color:var(--teal)">Dès le</th><th>Action</th>
   </tr></thead><tbody>`;
   data.forEach(emp => {
     const code = horMap[emp.prno];
@@ -759,6 +759,14 @@ function renderEmpTable(data, horMap={}, dateEffetMap={}) {
       <td class="td-nom">${emp.nom_complet}</td>
       <td class="td-code" title="${code||''}">${codeCourt}</td>
       <td style="text-align:center">
+        ${emp.rotation_cycle
+          ? `<span style="font-family:'DM Mono',monospace;font-size:11px;font-weight:700;
+                          color:#1565C0;padding:3px 8px;border-radius:6px;
+                          border:1px solid rgba(33,150,243,0.35);
+                          background:rgba(33,150,243,0.08)">⟳ ${emp.rotation_cycle}</span>`
+          : ''}
+      </td>
+      <td style="text-align:center">
         ${emp.fingerprint_id
           ? `<span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:var(--teal);
                           padding:3px 8px;border-radius:6px;border:1px solid rgba(0,191,165,0.35);
@@ -778,6 +786,7 @@ function renderEmpTable(data, horMap={}, dateEffetMap={}) {
           ? `<button class="btn btn-danger btn-sm" onclick="supprimerEmploye('${emp.prno}')">Désactiver</button>`
           : `<button class="btn btn-ghost btn-sm" onclick="reactiver('${emp.prno}')">Réactiver</button>`}
         ${emp.actif?`<button class="btn btn-ghost btn-sm" onclick="ouvrirModifHoraire('${emp.prno}','${horMap[emp.prno]||''}')">✏ Horaire</button>`:''}
+        ${emp.actif?`<button class="btn btn-ghost btn-sm" style="color:#1565C0;border-color:rgba(33,150,243,0.3);background:rgba(33,150,243,0.08)" onclick="ouvrirModalRotation('${emp.prno}','${emp.nom_complet.replace(/'/g,"\\'")}','${emp.rotation_cycle||''}','${emp.rotation_ref_date||''}','${emp.dimanche_tour_ref||''}')">⟳ Rotation</button>`:''}
         ${emp.fingerprint_id?`<button class="btn btn-danger btn-sm" onclick="delierEmpreinte('${emp.prno}',${emp.fingerprint_id})">✕ Empreinte</button>`:''}
         ${emp.pin_id?`<button class="btn btn-danger btn-sm" onclick="delierPin('${emp.prno}')">✕ PIN</button>`:''}
       </td>
@@ -1564,6 +1573,44 @@ async function supprimerReleve(id) {
   </div>
 </div>
 
+<!-- Modal Rotation -->
+<div id="modalRotation" class="modal-overlay-admin" role="dialog" aria-modal="true">
+  <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:28px;width:420px;max-width:95vw">
+    <div style="font-size:14px;font-weight:700;margin-bottom:6px;color:var(--text)">Configuration rotation</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:18px">
+      Employé : <strong id="rotNom" style="color:#1565C0"></strong>
+    </div>
+
+    <div class="form-group">
+      <label>Cycle de rotation</label>
+      <input type="text" id="rotCycle" placeholder="ex: 2/3" style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:#1565C0">
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px">2 jours travaillés sur 3 → saisir <code>2/3</code></div>
+    </div>
+
+    <div class="form-group" style="margin-top:14px">
+      <label>Date de référence rotation <span style="font-size:10px;color:var(--text-muted)">(1er jour de travail du cycle)</span></label>
+      <input type="text" id="rotRefDate" placeholder="yyyy/mm/dd"
+             oninput="formatDateEffetInput(this)"
+             style="font-family:'DM Mono',monospace">
+    </div>
+
+    <div class="form-group" style="margin-top:14px">
+      <label>Dimanche de tour de référence <span style="font-size:10px;color:var(--text-muted)">(un dimanche où c'est son tour)</span></label>
+      <input type="text" id="rotDimRef" placeholder="yyyy/mm/dd (optionnel)"
+             oninput="formatDateEffetInput(this)"
+             style="font-family:'DM Mono',monospace">
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Le système déduira les tours suivants (tous les 3 dimanches)</div>
+    </div>
+
+    <div id="alertRotation" class="alert" role="alert"></div>
+    <div style="display:flex;gap:8px;margin-top:18px">
+      <button class="btn btn-primary btn-full" onclick="sauvegarderRotation()">Enregistrer</button>
+      <button class="btn btn-danger btn-sm" onclick="supprimerRotation()">Supprimer</button>
+      <button class="btn btn-ghost" onclick="fermerModalRotation()">Annuler</button>
+    </div>
+  </div>
+</div>
+
 <script>
 let _modalEmpPrno = '';
 let _modalPinPrno = '';
@@ -1636,5 +1683,56 @@ async function delierPin(prno) {
 }
 document.getElementById('modalPin').addEventListener('click', function(e) {
   if (e.target===this) fermerModalPin();
+});
+
+// ── Rotation ──
+let _rotationPrno = '';
+function ouvrirModalRotation(prno, nom, cycle, refDate, dimRef) {
+  _rotationPrno = prno;
+  document.getElementById('rotNom').textContent = nom;
+  document.getElementById('rotCycle').value      = cycle    || '';
+  document.getElementById('rotRefDate').value    = (refDate  || '').replace(/-/g,'/');
+  document.getElementById('rotDimRef').value     = (dimRef   || '').replace(/-/g,'/');
+  document.getElementById('alertRotation').className = 'alert';
+  document.getElementById('alertRotation').textContent = '';
+  document.getElementById('modalRotation').classList.add('open');
+  setTimeout(() => document.getElementById('rotCycle').focus(), 100);
+}
+function fermerModalRotation() {
+  document.getElementById('modalRotation').classList.remove('open');
+}
+async function sauvegarderRotation() {
+  const alertEl = document.getElementById('alertRotation');
+  const cycle   = document.getElementById('rotCycle').value.trim();
+  const refRaw  = document.getElementById('rotRefDate').value.trim();
+  const dimRaw  = document.getElementById('rotDimRef').value.trim();
+
+  if (cycle && !/^\d+\/\d+$/.test(cycle)) {
+    alertEl.className='alert alert-error'; alertEl.textContent='Format cycle invalide — ex: 2/3'; return;
+  }
+  const toISO = v => v ? v.replace(/\//g,'-') : null;
+  const r = await fetch(`/api/admin/employes/${_rotationPrno}/rotation`, {
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      rotation_cycle:    cycle    || null,
+      rotation_ref_date: toISO(refRaw),
+      dimanche_tour_ref: toISO(dimRaw),
+    })
+  });
+  const d = await r.json();
+  if (d.ok) { fermerModalRotation(); loadEmployes(); }
+  else { alertEl.className='alert alert-error'; alertEl.textContent=d.error||'Erreur'; }
+}
+async function supprimerRotation() {
+  if (!confirm('Supprimer la configuration de rotation ?')) return;
+  const r = await fetch(`/api/admin/employes/${_rotationPrno}/rotation`, {
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({rotation_cycle:null, rotation_ref_date:null, dimanche_tour_ref:null})
+  });
+  const d = await r.json();
+  if (d.ok) { fermerModalRotation(); loadEmployes(); }
+}
+document.getElementById('modalRotation').addEventListener('click', function(e) {
+  if (e.target===this) fermerModalRotation();
 });
 

@@ -173,6 +173,7 @@
   .badge-absent   { background: rgba(239,83,80,0.10);  color: #C62828;  border: 1px solid rgba(239,83,80,0.3);  }
   .badge-ferie    { background: rgba(156,39,176,0.10); color: #6A1B9A;  border: 1px solid rgba(156,39,176,0.3); }
   .badge-exclu    { background: rgba(96,125,139,0.04); color: #607D8B;  border: 1px solid rgba(96,125,139,0.2); }
+  .badge-repos    { background: rgba(33,150,243,0.08); color: #1565C0;  border: 1px solid rgba(33,150,243,0.3); }
 
   /* Période table */
   .periode-scroll { overflow-x: auto; }
@@ -746,7 +747,7 @@ function renderJourTable(data) {
   const body = document.getElementById('tableBody');
   if (!data.length) { body.innerHTML = '<div class="loading-state">📭 Aucune donnée</div>'; return; }
   const dur  = m => (m > 0) ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty"></span>';
-  const bc   = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu'}[s]||'');
+  const bc   = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu',Repos:'badge-repos'}[s]||'');
   const t    = v => v ? `<span class="td-time">${v.slice(0,5)}</span>` : '<span class="td-empty"></span>';
   const vide = '<span class="td-empty"></span>';
 
@@ -911,7 +912,7 @@ async function openSemaine(rid, prno, semIdx, datesStr) {
   );
 
   const dur  = m => (m > 0) ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty"></span>';
-  const bc   = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu'}[s]||'');
+  const bc   = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu',Repos:'badge-repos'}[s]||'');
   const t    = v => v ? `<span style="font-family:'DM Mono',monospace">${v.slice(0,5)}</span>` : '<span class="td-empty"></span>';
   const vide = '<span class="td-empty"></span>';
 

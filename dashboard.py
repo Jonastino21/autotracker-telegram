@@ -441,6 +441,19 @@ def api_historique_horaire(prno):
     return jsonify(db.get_historique_horaires(prno))
 
 
+@app.route("/api/admin/employes/<prno>/rotation", methods=["PUT"])
+@login_required
+def api_set_rotation(prno):
+    data              = request.get_json()
+    rotation_cycle    = (data.get("rotation_cycle")    or "").strip() or None
+    rotation_ref_date = (data.get("rotation_ref_date") or "").strip() or None
+    dimanche_tour_ref = (data.get("dimanche_tour_ref") or "").strip() or None
+    result = db.set_rotation(prno, rotation_cycle, rotation_ref_date, dimanche_tour_ref)
+    if result["ok"]:
+        emit_admin_update("admin_employes_updated")
+    return jsonify(result), (200 if result["ok"] else 400)
+
+
 @app.route("/api/admin/employes/<prno>/reactiver", methods=["POST"])
 @login_required
 def api_reactiver_employe(prno):

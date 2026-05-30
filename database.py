@@ -152,6 +152,12 @@ def _migrate_db(conn):
         conn.commit()
     except Exception:
         pass
+    for col in ("rotation_cycle", "rotation_ref_date", "dimanche_tour_ref"):
+        try:
+            conn.execute(f"ALTER TABLE employes ADD COLUMN {col} TEXT")
+            conn.commit()
+        except Exception:
+            pass
     # Table releves
     conn.execute("""
         CREATE TABLE IF NOT EXISTS releves (
@@ -692,6 +698,73 @@ def get_stats_jour(date_str):
     }
 
 
+# ─── ROTATION ────────────────────────────────────────────────────────────────
+
+def _est_jour_repos_rotation_from_emp(emp: dict, date_str: str) -> bool:
+    """Retourne True si la date est un jour de repos dans la rotation cyclique (sans requête DB)."""
+    rotation_cycle    = emp.get("rotation_cycle")
+    rotation_ref_date = emp.get("rotation_ref_date")
+    if not rotation_cycle or not rotation_ref_date:
+        return False
+    try:
+        parts = rotation_cycle.split("/")
+        jours_travail = int(parts[0])
+        cycle_total   = int(parts[1])
+        ref   = date.fromisoformat(rotation_ref_date)
+        check = date.fromisoformat(date_str)
+        delta = (check - ref).days % cycle_total
+        return delta >= jours_travail
+    except Exception:
+        return False
+
+
+def _est_dimanche_tour_from_emp(emp: dict, date_str: str) -> bool:
+    """Retourne True si ce dimanche est le tour de garde de cet employé (sans requête DB)."""
+    dimanche_tour_ref = emp.get("dimanche_tour_ref")
+    if not dimanche_tour_ref:
+        return False
+    try:
+        check = date.fromisoformat(date_str)
+        if check.weekday() != 6:
+            return False
+        ref   = date.fromisoformat(dimanche_tour_ref)
+        return (check - ref).days % 21 == 0
+    except Exception:
+        return False
+
+
+def est_jour_repos_rotation(prno: str, date_str: str) -> bool:
+    emp = get_employe_by_prno(prno)
+    return _est_jour_repos_rotation_from_emp(emp, date_str) if emp else False
+
+
+def est_dimanche_tour(prno: str, date_str: str) -> bool:
+    emp = get_employe_by_prno(prno)
+    return _est_dimanche_tour_from_emp(emp, date_str) if emp else False
+
+
+def set_rotation(prno: str, rotation_cycle: str = None,
+                 rotation_ref_date: str = None, dimanche_tour_ref: str = None) -> dict:
+    prno = prno.strip().lower()
+    conn = get_connection()
+    try:
+        conn.execute("""
+            UPDATE employes SET
+                rotation_cycle    = ?,
+                rotation_ref_date = ?,
+                dimanche_tour_ref = ?,
+                updated_at        = datetime('now')
+            WHERE prno = ?
+        """, (rotation_cycle or None, rotation_ref_date or None,
+              dimanche_tour_ref or None, prno))
+        conn.commit()
+        return {"ok": True, "prno": prno}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        conn.close()
+
+
 # ─── HORAIRES ────────────────────────────────────────────────────────────────
 
 def init_horaires_table():
@@ -953,14 +1026,24 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
             })
             continue
 
-        if code and pts:
-            calc = calculer_temps_reel_plafonne(code, date_obj, pts)
+        # Tour dimanche : lever l'exclusion (di) pour calculer les heures réelles
+        is_sunday     = date_obj.weekday() == 6
+        is_tour_sunday = is_sunday and _est_dimanche_tour_from_emp(emp, date_str)
+        effective_code = code
+        if is_tour_sunday and code:
+            effective_code = (";".join(
+                s for s in code.split(";")
+                if s.strip().lower() not in ("(di)", "(di:am)", "(di:pm)")
+            ) or code)
+
+        if effective_code and pts:
+            calc = calculer_temps_reel_plafonne(effective_code, date_obj, pts)
             theorique      = calc["minutes_theoriques"]
             reel           = calc["minutes_reels"]
             complet        = calc["complet"]
             plages_detail  = calc["plages_detail"]
-        elif code:
-            theorique     = get_minutes_theoriques_jour(code, date_obj)
+        elif effective_code:
+            theorique     = get_minutes_theoriques_jour(effective_code, date_obj)
             reel          = 0
             complet       = False
             plages_detail = []
@@ -975,15 +1058,23 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
         jour_exclu = False
         if code:
             from parser import parse_code_horaire
-            parsed_h = parse_code_horaire(code)
+            parsed_h = parse_code_horaire(effective_code or code)
             date_obj_check = date_cls.fromisoformat(date_str)
             jour_info_check = parsed_h.get(date_obj_check.weekday(), {})
             jour_exclu = not jour_info_check.get("travaille", True)
+        if is_tour_sunday:
+            jour_exclu = False
+
+        # Repos rotation (hors dimanche, hors férié)
+        is_repos_rotation = (not is_sunday and not ferie and
+                             _est_jour_repos_rotation_from_emp(emp, date_str))
 
         if ferie:
             statut = "Férié"
         elif jour_exclu and not has_any:
             statut = "Exclu"
+        elif is_repos_rotation and not has_any:
+            statut = "Repos"
         elif not has_any:
             if theorique == 0 and code:
                 statut = "Exclu"
@@ -1166,6 +1257,7 @@ def get_resume_periode_avec_synthese(date_debut: str, date_fin: str) -> list[dic
         nb_incomplet    = 0
         nb_absent       = 0
         nb_ferie        = 0
+        nb_repos        = 0
 
         for ds in all_dates:
             # Avant la date d'effet → employé pas encore en poste
@@ -1180,36 +1272,47 @@ def get_resume_periode_avec_synthese(date_debut: str, date_fin: str) -> list[dic
             pts      = pts_index[prno][ds]
             is_ferie = ds in feries
 
+            is_sunday_day     = date_obj.weekday() == 6
+            is_tour_sunday_day = is_sunday_day and _est_dimanche_tour_from_emp(emp, ds)
+            is_repos_rot      = (not is_sunday_day and not is_ferie and
+                                 _est_jour_repos_rotation_from_emp(emp, ds))
+
             if code:
-                theo_jour = get_minutes_theoriques_jour(code, date_obj)
-                # Vérifier si ce jour est exclu dans le code horaire de l'employé
+                code_eff = code
+                if is_tour_sunday_day:
+                    code_eff = (";".join(
+                        s for s in code.split(";")
+                        if s.strip().lower() not in ("(di)", "(di:am)", "(di:pm)")
+                    ) or code)
+                theo_jour = get_minutes_theoriques_jour(code_eff, date_obj)
                 from parser import parse_code_horaire
-                parsed = parse_code_horaire(code)
-                jour_semaine = date_obj.weekday()  # 0=lundi, 6=dimanche
-                jour_info = parsed.get(jour_semaine, {})
+                parsed    = parse_code_horaire(code_eff)
+                jour_info = parsed.get(date_obj.weekday(), {})
                 jour_exclu = not jour_info.get("travaille", True)
             else:
+                code_eff   = None
                 theo_jour  = 0
                 jour_exclu = False
 
             if is_ferie:
                 statut = "Férié"
                 nb_ferie += 1
-                total_theorique += theo_jour  # Jour férié = payé
-                total_reel      += theo_jour  # Compté comme accompli
+                total_theorique += theo_jour
+                total_reel      += theo_jour
             elif jour_exclu and not pts:
-                # Jour exclu par l'horaire de l'employé → vide, pas absent
                 statut = "Exclu"
+            elif is_repos_rot and not pts:
+                statut = "Repos"
+                nb_repos += 1
             elif not pts:
                 if theo_jour == 0:
-                    # Pas de travail prévu ce jour (ex: dimanche sans horaire défini)
                     statut = "Exclu"
                 else:
                     statut = "Absent"
                     nb_absent += 1
                     total_theorique += theo_jour
-            elif code and pts:
-                calc    = calculer_temps_reel_plafonne(code, date_obj, pts)
+            elif code_eff and pts:
+                calc    = calculer_temps_reel_plafonne(code_eff, date_obj, pts)
                 reel_j  = calc["minutes_reels"]
                 complet = calc["complet"]
                 total_theorique += calc["minutes_theoriques"]
@@ -1240,6 +1343,7 @@ def get_resume_periode_avec_synthese(date_debut: str, date_fin: str) -> list[dic
             "nb_incomplet":      nb_incomplet,
             "nb_absent":         nb_absent,
             "nb_ferie":          nb_ferie,
+            "nb_repos":          nb_repos,
         })
 
     return sorted(result, key=lambda x: x["nom_prenom"])
