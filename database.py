@@ -543,6 +543,20 @@ def get_all_liaisons():
         conn.close()
 
 
+def supprimer_liaison(prno: str) -> dict:
+    """Supprime la liaison Telegram sans désactiver l'employé (permet le re-onboarding)."""
+    prno = prno.strip().lower()
+    conn = get_connection()
+    try:
+        conn.execute("DELETE FROM liaisons WHERE prno=?", (prno,))
+        conn.commit()
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        conn.close()
+
+
 def get_employes_non_lies():
     conn = get_connection()
     try:

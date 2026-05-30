@@ -792,7 +792,7 @@ function renderEmpTable(data, horMap={}, dateEffetMap={}) {
   const el = document.getElementById('tableEmployes');
   if (!data.length) { el.innerHTML='<div class="empty-state">Aucun employé</div>'; return; }
   let html = `<div style="overflow-x:auto"><table><thead><tr>
-    <th>PRNO</th><th>Nom complet</th><th>Code horaire</th><th>Rotation</th><th>Empreinte</th><th>PIN</th><th style="color:var(--teal)">Dès le</th><th>Action</th>
+    <th>PRNO</th><th>Nom complet</th><th>Code horaire</th><th>Rotation</th><th>Telegram</th><th>Empreinte</th><th>PIN</th><th style="color:var(--teal)">Dès le</th><th>Action</th>
   </tr></thead><tbody>`;
   data.forEach(emp => {
     const code = horMap[emp.prno];
@@ -823,6 +823,13 @@ function renderEmpTable(data, horMap={}, dateEffetMap={}) {
           : ''}
       </td>
       <td style="text-align:center">
+        ${emp.lie
+          ? `<span style="font-size:12px;color:#2E7D32;font-weight:600" title="${emp.telegram_id||''}">
+               ✓ ${emp.username ? '@'+emp.username : 'Lié'}
+             </span>`
+          : `<span style="font-size:11px;color:var(--text-muted)">Non lié</span>`}
+      </td>
+      <td style="text-align:center">
         ${emp.fingerprint_id
           ? `<span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:var(--teal);
                           padding:3px 8px;border-radius:6px;border:1px solid rgba(0,191,165,0.35);
@@ -843,6 +850,8 @@ function renderEmpTable(data, horMap={}, dateEffetMap={}) {
           : `<button class="btn btn-ghost btn-sm" onclick="reactiver('${emp.prno}')">Réactiver</button>`}
         ${emp.actif?`<button class="btn btn-ghost btn-sm" onclick="ouvrirModifHoraire('${emp.prno}','${horMap[emp.prno]||''}')">✏ Horaire</button>`:''}
         ${emp.actif?`<button class="btn btn-ghost btn-sm" style="color:#1565C0;border-color:rgba(33,150,243,0.3);background:rgba(33,150,243,0.08)" onclick="ouvrirModalRotation('${emp.prno}','${emp.nom_complet.replace(/'/g,"\\'")}','${emp.rotation_cycle||''}','${emp.rotation_ref_date||''}','${emp.dimanche_tour_ref||''}')">⟳ Rotation</button>`:''}
+        ${emp.actif && emp.lie ? `<button class="btn btn-ghost btn-sm" style="color:#2E7D32;border-color:rgba(76,175,80,0.3);background:rgba(76,175,80,0.08)" onclick="renvoiLien('${emp.prno}','${emp.nom_complet.replace(/'/g,"\\'")}')">↗ Telegram</button>` : ''}
+        ${emp.actif && emp.lie ? `<button class="btn btn-danger btn-sm" onclick="delierTelegram('${emp.prno}')">✕ Telegram</button>` : ''}
         ${emp.fingerprint_id?`<button class="btn btn-danger btn-sm" onclick="delierEmpreinte('${emp.prno}',${emp.fingerprint_id})">✕ Empreinte</button>`:''}
         ${emp.pin_id?`<button class="btn btn-danger btn-sm" onclick="delierPin('${emp.prno}')">✕ PIN</button>`:''}
       </td>
@@ -1744,6 +1753,21 @@ async function delierPin(prno) {
 document.getElementById('modalPin').addEventListener('click', function(e) {
   if (e.target===this) fermerModalPin();
 });
+
+// ── Telegram ──
+async function renvoiLien(prno, nom) {
+  if (!confirm(`Renvoyer le lien groupe Telegram à ${nom} ?`)) return;
+  const r = await fetch(`/api/admin/renvoi_lien/${prno}`, {method:'POST'});
+  const d = await r.json();
+  alert(d.ok ? `Lien renvoyé à ${nom}.` : (d.message || d.error || 'Erreur'));
+}
+async function delierTelegram(prno) {
+  if (!confirm(`Délier le compte Telegram de ${prno} ? L'employé devra se réenregistrer.`)) return;
+  const r = await fetch(`/api/admin/liaisons/${prno}`, {method:'DELETE'});
+  const d = await r.json();
+  if (d.ok) loadEmployes();
+  else alert(d.error || 'Erreur');
+}
 
 // ── Rotation ──
 let _rotationPrno = '';
