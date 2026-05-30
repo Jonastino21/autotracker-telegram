@@ -1245,7 +1245,7 @@ function ouvrirModifHoraire(prno, codeActuel) {
         </div>
         <div class="form-group">
           <label>Date d'effet <span style="font-size:11px;color:var(--text-muted)">(le nouvel horaire s'applique à partir de cette date)</span></label>
-          <input type="date" id="mhDate">
+          <input type="text" id="mhDate" maxlength="10" oninput="formatDateEffetInput(this)" placeholder="yyyy/mm/dd">
         </div>
         <div id="mhPreview" style="font-size:12px;margin-bottom:16px;padding:10px;background:var(--main-bg);border-radius:8px;min-height:40px"></div>
         <div class="form-group">
@@ -1265,7 +1265,7 @@ function ouvrirModifHoraire(prno, codeActuel) {
         </div>
         <div class="form-group">
           <label>Date de l'exception</label>
-          <input type="date" id="mhExDate">
+          <input type="text" id="mhExDate" maxlength="10" oninput="formatDateEffetInput(this)" placeholder="yyyy/mm/dd">
         </div>
         <div class="form-group">
           <label>Code horaire pour cette date</label>
@@ -1295,8 +1295,8 @@ function ouvrirModifHoraire(prno, codeActuel) {
 
   document.getElementById('mhPrno').textContent = prno;
   document.getElementById('mhCode').value = codeActuel || '';
-  document.getElementById('mhDate').value = new Date().toLocaleDateString('en-CA');
-  document.getElementById('mhExDate').value = new Date().toLocaleDateString('en-CA');
+  const _todaySlash = new Date().toLocaleDateString('en-CA').replace(/-/g,'/'); document.getElementById('mhDate').value = _todaySlash;
+  document.getElementById('mhExDate').value = _todaySlash;
 
   const mhMod = document.getElementById('mhModeles');
   const mhExMod = document.getElementById('mhExModeles');
@@ -1366,7 +1366,7 @@ async function chargerExceptions(prno) {
 }
 
 async function ajouterException() {
-  const date_str     = document.getElementById('mhExDate')?.value;
+  const date_str     = (document.getElementById('mhExDate')?.value || '').replace(/\//g, '-');
   const code_horaire = document.getElementById('mhExCode')?.value?.trim();
   const motif        = document.getElementById('mhExMotif')?.value?.trim() || null;
   if (!date_str || !code_horaire) { showToast('error','Date et code horaire obligatoires'); return; }
@@ -1421,7 +1421,7 @@ async function validerMH() {
 
 async function sauvegarderModifHoraire() {
   const code        = document.getElementById('mhCode')?.value?.trim();
-  const date_effet  = document.getElementById('mhDate')?.value;
+  const date_effet  = (document.getElementById('mhDate')?.value || '').replace(/\//g, '-');
   const commentaire = document.getElementById('mhCommentaire')?.value?.trim() || null;
   if (!code) { showToast('error','Code horaire obligatoire'); return; }
   const r = await fetch(`/api/admin/horaires/${_modifPrno}`, {
