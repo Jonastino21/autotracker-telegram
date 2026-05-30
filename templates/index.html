@@ -175,6 +175,23 @@
   .badge-exclu    { background: rgba(96,125,139,0.04); color: #607D8B;  border: 1px solid rgba(96,125,139,0.2); }
   .badge-repos    { background: rgba(33,150,243,0.08); color: #1565C0;  border: 1px solid rgba(33,150,243,0.3); }
 
+  /* Toast notifications */
+  #toastContainer { position:fixed; top:20px; right:20px; z-index:99999; display:flex; flex-direction:column; align-items:flex-end; gap:8px; pointer-events:none; }
+  .toast-card { background:#fff; border-radius:10px; padding:12px 18px; box-shadow:0 4px 24px rgba(0,0,0,0.13); font-size:13px; color:#1A1F2E; max-width:340px; min-width:220px; border-left:3px solid #ccc; pointer-events:all; opacity:1; transition:opacity 0.3s, transform 0.3s; transform:translateX(0); }
+  .toast-card.hide { opacity:0; transform:translateX(20px); }
+  .toast-success { border-left-color:#4CAF50; }
+  .toast-error   { border-left-color:#EF5350; }
+  .toast-info    { border-left-color:#00BFA5; }
+  .toast-warning { border-left-color:#FFB300; }
+
+  /* Tables responsives */
+  .table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; border-radius:inherit; }
+  @media (max-width:640px) {
+    table th, table td { padding:8px 10px !important; font-size:11px !important; }
+    .btn-sm { padding:4px 8px !important; font-size:10px !important; }
+    td[style*="display:flex"] { flex-wrap:wrap; }
+  }
+
   /* Période table */
   .periode-scroll { overflow-x: auto; }
   .periode-table  { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 600px; }
@@ -231,6 +248,7 @@
 </style>
 </head>
 <body class="font-sans bg-[#F0F2F8] text-[#1A1F2E] min-h-screen flex overflow-x-hidden">
+<div id="toastContainer"></div>
 
 <!-- FIX 3 : Overlay mobile pour fermer la sidebar -->
 <div id="sidebar-overlay" onclick="closeSidebar()" aria-hidden="true"></div>
@@ -511,6 +529,17 @@
 
 
 <script>
+// ── Toast notifications ────────────────────────────────────────────────────
+function showToast(type, message) {
+  const c = document.getElementById('toastContainer');
+  if (!c) return;
+  const t = document.createElement('div');
+  t.className = `toast-card toast-${type}`;
+  t.textContent = message;
+  c.appendChild(t);
+  setTimeout(() => { t.classList.add('hide'); setTimeout(() => t.remove(), 320); }, 4500);
+}
+
 // ── Sidebar mobile ────────────────────────────────────────────────────────
 function openSidebar() {
   const sidebar  = document.getElementById('sidebar');
@@ -916,7 +945,7 @@ async function openSemaine(rid, prno, semIdx, datesStr) {
   const t    = v => v ? `<span style="font-family:'DM Mono',monospace">${v.slice(0,5)}</span>` : '<span class="td-empty"></span>';
   const vide = '<span class="td-empty"></span>';
 
-  let html = `<table class="data-table" style="width:100%;font-size:11px"><thead><tr>
+  let html = `<div style="overflow-x:auto"><table class="data-table" style="width:100%;font-size:11px"><thead><tr>
     <th style="padding:7px 12px">Date</th>
     <th>Arr. Mat</th><th>Dép. Mat</th>
     <th>Arr. APM</th><th>Dép. APM</th>
@@ -949,7 +978,7 @@ async function openSemaine(rid, prno, semIdx, datesStr) {
     </tr>`;
   });
 
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   document.getElementById(rid+'_tbody_wrap').innerHTML = html;
 }
 

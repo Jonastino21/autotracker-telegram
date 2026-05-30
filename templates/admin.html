@@ -54,11 +54,14 @@ tailwind.config = {
 /* Classes utilisées dynamiquement par JS */
 body { font-family: 'DM Sans', sans-serif; }
 
-/* Alert (toggle show/hide via JS) */
-.alert { padding:11px 16px; border-radius:10px; font-size:13px; margin-bottom:16px; display:none; }
-.alert.show { display:block; }
-.alert-success { background:rgba(76,175,80,0.12); border:1px solid rgba(76,175,80,0.3); color:#2E7D32; }
-.alert-error   { background:rgba(239,83,80,0.12);  border:1px solid rgba(239,83,80,0.3);  color:#C62828; }
+/* Toast notifications */
+#toastContainer { position:fixed; top:20px; right:20px; z-index:99999; display:flex; flex-direction:column; align-items:flex-end; gap:8px; pointer-events:none; }
+.toast-card { background:#fff; border-radius:10px; padding:12px 18px; box-shadow:0 4px 24px rgba(0,0,0,0.13); font-size:13px; color:#1A1F2E; max-width:340px; min-width:220px; border-left:3px solid #ccc; pointer-events:all; opacity:1; transition:opacity 0.3s, transform 0.3s; transform:translateX(0); }
+.toast-card.hide { opacity:0; transform:translateX(20px); }
+.toast-success { border-left-color:#4CAF50; }
+.toast-error   { border-left-color:#EF5350; }
+.toast-info    { border-left-color:#00BFA5; }
+.toast-warning { border-left-color:#FFB300; }
 
 /* Section tabs (toggle via JS) */
 .section { display:none; }
@@ -179,9 +182,18 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
   /* FIX : Modals via classe */
   .modal-overlay-admin { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9999; align-items:center; justify-content:center; padding:16px; }
   .modal-overlay-admin.open { display:flex; }
+
+/* Tables responsives */
+.table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; border-radius:inherit; }
+@media (max-width:640px) {
+  table th, table td { padding:8px 10px !important; font-size:11px !important; }
+  .btn-sm { padding:4px 8px !important; font-size:10px !important; }
+  td[style*="display:flex"] { flex-wrap:wrap; }
+}
 </style>
 </head>
 <body class="bg-main-bg text-text-base min-h-screen flex overflow-x-hidden">
+<div id="toastContainer"></div>
 
 <!-- FIX : overlay sidebar mobile -->
 <div id="sidebar-overlay" onclick="closeSidebar()" aria-hidden="true"></div>
@@ -255,7 +267,6 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
         <!-- Formulaire ajout -->
         <div class="bg-white border border-black/[0.07] rounded-2xl p-[22px] shadow-[0_2px_12px_rgba(0,0,0,0.07)]">
           <div class="text-[13.5px] font-bold mb-[18px] flex items-center gap-2 text-text-base">Ajouter un employé</div>
-          <div id="alertAjout" class="alert" role="alert"></div>
 
           <div class="mb-[15px]">
             <label class="block text-[10.5px] uppercase tracking-[1px] text-text-dim mb-1.5 font-semibold">PRNO (code RH unique)</label>
@@ -305,7 +316,6 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
         <!-- Import CSV -->
         <div class="bg-white border border-black/[0.07] rounded-2xl p-[22px] shadow-[0_2px_12px_rgba(0,0,0,0.07)]">
           <div class="text-[13.5px] font-bold mb-[18px] flex items-center gap-2 text-text-base">Import CSV</div>
-          <div id="alertCsv" class="alert" role="alert"></div>
           <p class="text-[12px] text-text-dim mb-3">
             Format requis :<br>
             <code class="text-teal">prno,nom_complet,code_horaire</code><br>
@@ -337,7 +347,6 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
       <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
         <div class="bg-white border border-black/[0.07] rounded-2xl p-[22px] shadow-[0_2px_12px_rgba(0,0,0,0.07)]">
           <div class="text-[13.5px] font-bold mb-[18px] flex items-center gap-2 text-text-base">Ajouter un jour férié</div>
-          <div id="alertFerie" class="alert" role="alert"></div>
           <div class="mb-[15px]">
             <label class="block text-[10.5px] uppercase tracking-[1px] text-text-dim mb-1.5 font-semibold">Date <span class="text-[11px] text-text-muted font-normal">(yyyy/mm/dd)</span></label>
             <input type="text" id="ferieDate" placeholder="2026/04/20" maxlength="10" oninput="formatFerieDateInput(this)">
@@ -510,7 +519,6 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
       <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div class="bg-white border border-black/[0.07] rounded-2xl p-[22px] shadow-[0_2px_12px_rgba(0,0,0,0.07)]">
           <div class="text-[13.5px] font-bold mb-[18px] flex items-center gap-2 text-text-base">Nouveau modèle</div>
-          <div id="alertModele" class="alert" role="alert"></div>
           <div class="mb-[15px]">
             <label class="block text-[10.5px] uppercase tracking-[1px] text-text-dim mb-1.5 font-semibold">Nom du modèle</label>
             <input type="text" id="modeleNom" placeholder="ex: Gardien de nuit KAROKA">
@@ -540,7 +548,6 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
       <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div class="bg-white border border-black/[0.07] rounded-2xl p-[22px] shadow-[0_2px_12px_rgba(0,0,0,0.07)]">
           <div class="text-[13.5px] font-bold mb-[18px] flex items-center gap-2 text-text-base">Créer un relevé</div>
-          <div id="alertReleve" class="alert" role="alert"></div>
           <div class="text-[12px] text-text-dim mb-3.5 leading-[1.6] bg-teal/[0.06] border border-teal/20 rounded-lg px-3 py-2.5">
             Le premier relevé doit être créé manuellement. Les suivants seront générés automatiquement à la clôture du précédent.
           </div>
@@ -665,13 +672,13 @@ function renderModelesRapides() {
 
 function sauvegarderModele() {
   const code = document.getElementById('inputHoraire').value.trim();
-  if (!code) { alert('Saisissez un code horaire d\'abord.'); return; }
+  if (!code) { showToast('error', 'Saisissez un code horaire d\'abord.'); return; }
   const nom = prompt('Nom de ce modèle :');
   if (!nom) return;
   modeles.push({ nom, code });
   localStorage.setItem('karoka_modeles', JSON.stringify(modeles));
   renderModelesRapides();
-  alert(`Modèle "${nom}" sauvegardé.`);
+  showToast('success', `Modèle "${nom}" sauvegardé.`);
 }
 
 function renderModeles() {
@@ -710,11 +717,10 @@ function supprimerModele(idx) {
 function creerModele() {
   const nom  = document.getElementById('modeleNom').value.trim();
   const code = document.getElementById('modeleCode').value.trim();
-  const alertEl = document.getElementById('alertModele');
-  if (!nom || !code) { showAlert(alertEl,'error','Nom et code obligatoires.'); return; }
+  if (!nom || !code) { showToast('error','Nom et code obligatoires.'); return; }
   modeles.push({ nom, code });
   localStorage.setItem('karoka_modeles', JSON.stringify(modeles));
-  showAlert(alertEl,'success',`Modèle "${nom}" sauvegardé.`);
+  showToast('success',`Modèle "${nom}" sauvegardé.`);
   document.getElementById('modeleNom').value = '';
   document.getElementById('modeleCode').value = '';
   document.getElementById('modelePreview').style.display = 'none';
@@ -791,7 +797,7 @@ async function loadEmployes() {
 function renderEmpTable(data, horMap={}, dateEffetMap={}) {
   const el = document.getElementById('tableEmployes');
   if (!data.length) { el.innerHTML='<div class="empty-state">Aucun employé</div>'; return; }
-  let html = `<div style="overflow-x:auto"><table><thead><tr>
+  let html = `<div style="overflow-x:auto"><table style="min-width:1000px"><thead><tr>
     <th>PRNO</th><th>Nom complet</th><th>Code horaire</th><th>Rotation</th><th>Telegram</th><th>Empreinte</th><th>PIN</th><th style="color:var(--teal)">Dès le</th><th>Action</th>
   </tr></thead><tbody>`;
   data.forEach(emp => {
@@ -889,13 +895,12 @@ async function ajouterEmploye() {
   const code       = document.getElementById('inputHoraire').value.trim();
   const dateEffetRaw = document.getElementById('inputDateEffet').value.trim();
   const dateEffet  = parseDateEffet(dateEffetRaw) || new Date().toISOString().slice(0,10);
-  const alertEl    = document.getElementById('alertAjout');
 
-  if (!prno || !nom) { showAlert(alertEl,'error','PRNO et nom complet obligatoires.'); return; }
+  if (!prno || !nom) { showToast('error','PRNO et nom complet obligatoires.'); return; }
 
   // Valider date si saisie
   if (dateEffetRaw && !/^\d{4}\/\d{2}\/\d{2}$/.test(dateEffetRaw)) {
-    showAlert(alertEl,'error','Format de date invalide — attendu yyyy/mm/dd'); return;
+    showToast('error','Format de date invalide — attendu yyyy/mm/dd'); return;
   }
 
   if (code) {
@@ -903,7 +908,7 @@ async function ajouterEmploye() {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({code_horaire:code})
     }).then(r=>r.json());
-    if (!val.ok) { showAlert(alertEl,'error',`Code horaire invalide : ${val.error}`); return; }
+    if (!val.ok) { showToast('error',`Code horaire invalide : ${val.error}`); return; }
   }
 
   const fingerprintId = document.getElementById('inputFingerprint')?.value?.trim();
@@ -918,7 +923,7 @@ async function ajouterEmploye() {
     })
   });
   const d1 = await r1.json();
-  if (!d1.ok) { showAlert(alertEl,'error',`${d1.error}`); return; }
+  if (!d1.ok) { showToast('error',`${d1.error}`); return; }
 
   if (code) {
     const r2 = await fetch(`/api/admin/horaires/${prno}`,{
@@ -926,10 +931,10 @@ async function ajouterEmploye() {
       body: JSON.stringify({code_horaire:code, date_effet:dateEffet})
     });
     const d2 = await r2.json();
-    if (!d2.ok) { showAlert(alertEl,'error',`Employé créé mais horaire non appliqué : ${d2.error}`); loadEmployes(); return; }
+    if (!d2.ok) { showToast('error',`Employé créé mais horaire non appliqué : ${d2.error}`); loadEmployes(); return; }
   }
 
-  showAlert(alertEl,'success',`Employé ${prno} ajouté${code?` avec horaire (dès ${dateEffet})`:'.'}`);
+  showToast('success',`Employé ${prno} ajouté${code?` avec horaire (dès ${dateEffet})`:'.'}`);
   document.getElementById('inputPrno').value = '';
   document.getElementById('inputNom').value  = '';
   document.getElementById('inputHoraire').value = '';
@@ -952,17 +957,16 @@ async function supprimerDefinitif(prno, nom) {
   const r = await fetch(`/api/admin/employes/${prno}/permanent`, {method:'DELETE'});
   const d = await r.json();
   if (d.ok) loadEmployes();
-  else alert(d.error || 'Erreur lors de la suppression');
+  else showToast('error', d.error || 'Erreur lors de la suppression');
 }
 
 async function importCsv(input) {
-  const alertEl = document.getElementById('alertCsv');
   const file = input.files[0]; if (!file) return;
   const form = new FormData(); form.append('file',file);
-  showAlert(alertEl,'success','Import en cours...');
+  showToast('info','Import en cours...');
   const r = await fetch('/api/admin/import_csv',{method:'POST',body:form});
   const d = await r.json();
-  showAlert(alertEl, d.ok?'success':'error', `${d.imported||0} employés importés${d.errors?.length?' — '+d.errors.length+' erreur(s)':''}`);
+  showToast(d.ok?'success':'error', `${d.imported||0} employés importés${d.errors?.length?' — '+d.errors.length+' erreur(s)':''}`);
   loadEmployes(); input.value='';
 }
 
@@ -1003,7 +1007,7 @@ async function loadFeries() {
   };
 
   el.innerHTML = `
-    <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead>
         <tr>
           <th colspan="4" style="padding:8px 14px;background:rgba(0,191,165,0.07);border-bottom:1px solid var(--border);text-align:left">
@@ -1034,7 +1038,7 @@ async function loadFeries() {
         </tr>
       </thead>
       <tbody>${renderRows(variables)}</tbody>
-    </table>`;
+    </table></div>`;
 }
 
 function formatFerieDateInput(el) {
@@ -1074,21 +1078,20 @@ async function ajouterFerie() {
   const libelle   = document.getElementById('ferieLibelle').value.trim();
   const recurrent = document.getElementById('ferieRecurrent').checked;
   const type_ferie = document.getElementById('ferieTypeHidden').value || 'fixe';
-  const alertEl   = document.getElementById('alertFerie');
-  if (!dateRaw || !libelle) { showAlert(alertEl,'error','Date et libellé obligatoires.'); return; }
-  if (!/^\d{4}\/\d{2}\/\d{2}$/.test(dateRaw)) { showAlert(alertEl,'error','Format de date invalide — attendu yyyy/mm/dd'); return; }
+  if (!dateRaw || !libelle) { showToast('error','Date et libellé obligatoires.'); return; }
+  if (!/^\d{4}\/\d{2}\/\d{2}$/.test(dateRaw)) { showToast('error','Format de date invalide — attendu yyyy/mm/dd'); return; }
   const date_str = dateRaw.replace(/\//g,'-');
   const d = await fetch('/api/jours_feries',{
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({date_str, libelle, recurrent, type_ferie})
   }).then(r=>r.json());
   if (d.ok) {
-    showAlert(alertEl,'success',`${libelle} (${dateRaw}) ajouté.`);
+    showToast('success',`${libelle} (${dateRaw}) ajouté.`);
     document.getElementById('ferieDate').value = '';
     document.getElementById('ferieLibelle').value = '';
     setFerieType('fixe');
     loadFeries();
-  } else showAlert(alertEl,'error',`${d.error}`);
+  } else showToast('error',`${d.error}`);
 }
 
 function toggleInsertFerieVariable(id) {
@@ -1135,9 +1138,14 @@ async function supprimerFerie(date_str) {
 }
 
 // ─── Utilitaires ─────────────────────────────────────────────────────────────
-function showAlert(el,type,msg){
-  el.className=`alert alert-${type} show`;el.textContent=msg;
-  setTimeout(()=>el.classList.remove('show'),5000);
+function showToast(type, message) {
+  const c = document.getElementById('toastContainer');
+  if (!c) return;
+  const t = document.createElement('div');
+  t.className = `toast-card toast-${type}`;
+  t.textContent = message;
+  c.appendChild(t);
+  setTimeout(() => { t.classList.add('hide'); setTimeout(() => t.remove(), 320); }, 4500);
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
@@ -1183,7 +1191,6 @@ function ouvrirModifHoraire(prno, codeActuel) {
 
       <!-- ONGLET PERMANENT -->
       <div id="mhPanelPermanent">
-        <div id="mhAlert" class="alert" style="margin-bottom:14px"></div>
         <div style="background:rgba(255,193,7,0.1);border:1px solid rgba(255,193,7,0.4);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text);margin-bottom:14px">
           ⚠️ Un changement permanent conserve toutes les données passées — l'ancien horaire reste actif pour les dates antérieures.
         </div>
@@ -1209,7 +1216,6 @@ function ouvrirModifHoraire(prno, codeActuel) {
 
       <!-- ONGLET EXCEPTIONS -->
       <div id="mhPanelException" style="display:none">
-        <div id="mhExAlert" class="alert" style="margin-bottom:14px"></div>
         <div style="background:rgba(0,191,165,0.08);border:1px solid rgba(0,191,165,0.3);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text);margin-bottom:14px">
           💡 Une exception remplace l'horaire uniquement pour la date choisie. L'horaire permanent n'est pas touché.
         </div>
@@ -1319,21 +1325,20 @@ async function ajouterException() {
   const date_str     = document.getElementById('mhExDate')?.value;
   const code_horaire = document.getElementById('mhExCode')?.value?.trim();
   const motif        = document.getElementById('mhExMotif')?.value?.trim() || null;
-  const alertEl      = document.getElementById('mhExAlert');
-  if (!date_str || !code_horaire) { showAlert(alertEl,'error','Date et code horaire obligatoires'); return; }
+  if (!date_str || !code_horaire) { showToast('error','Date et code horaire obligatoires'); return; }
   const r = await fetch(`/api/admin/horaires/${_modifPrno}/exceptions`, {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({date_str, code_horaire, motif})
   });
   const d = await r.json();
   if (d.ok) {
-    showAlert(alertEl,'success','Exception ajoutée !');
+    showToast('success','Exception ajoutée !');
     document.getElementById('mhExCode').value = '';
     document.getElementById('mhExMotif').value = '';
     document.getElementById('mhExPreview').innerHTML = '';
     chargerExceptions(_modifPrno);
   } else {
-    showAlert(alertEl,'error', d.error);
+    showToast('error', d.error);
   }
 }
 
@@ -1342,7 +1347,7 @@ async function supprimerException(prno, date_str) {
   const r = await fetch(`/api/admin/horaires/${prno}/exceptions/${date_str}`, {method:'DELETE'});
   const d = await r.json();
   if (d.ok) chargerExceptions(prno);
-  else alert('Erreur : ' + d.error);
+  else showToast('error', d.error || 'Erreur');
 }
 
 async function validerMH() {
@@ -1374,8 +1379,7 @@ async function sauvegarderModifHoraire() {
   const code        = document.getElementById('mhCode')?.value?.trim();
   const date_effet  = document.getElementById('mhDate')?.value;
   const commentaire = document.getElementById('mhCommentaire')?.value?.trim() || null;
-  const alertEl     = document.getElementById('mhAlert');
-  if (!code) { showAlert(alertEl,'error','Code horaire obligatoire'); return; }
+  if (!code) { showToast('error','Code horaire obligatoire'); return; }
   const r = await fetch(`/api/admin/horaires/${_modifPrno}`, {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
@@ -1383,10 +1387,10 @@ async function sauvegarderModifHoraire() {
   });
   const d = await r.json();
   if (d.ok) {
-    showAlert(alertEl,'success',`Horaire mis à jour — ${d.heures_semaine}/semaine`);
+    showToast('success',`Horaire mis à jour — ${d.heures_semaine}/semaine`);
     setTimeout(() => { fermerModalHoraire(); loadEmployes(); }, 1500);
   } else {
-    showAlert(alertEl,'error',d.error);
+    showToast('error',d.error);
   }
 }
 
@@ -1395,7 +1399,7 @@ async function reactiver(prno) {
   const r = await fetch(`/api/admin/employes/${prno}/reactiver`, {method:'POST'});
   const d = await r.json();
   if (d.ok) loadEmployes();
-  else alert('Erreur : ' + d.error);
+  else showToast('error', d.error || 'Erreur');
 }
 
 // ─── RELEVÉS DE PAIE ─────────────────────────────────────────────────────────
@@ -1565,11 +1569,10 @@ function updateRelevePreview() {
 
 async function creerReleve() {
   const libelle  = document.getElementById('releveLibelle').value.trim() || null;
-  const alertEl  = document.getElementById('alertReleve');
   const jour     = parseInt(document.getElementById('releveJourPaiement').value);
   const moisRaw  = (document.getElementById('releveMoisDebut').value||'').trim();
   if (!moisRaw || !/^\d{4}\/\d{2}$/.test(moisRaw)) {
-    showAlert(alertEl,'error','Mois de début obligatoire — format aaaa/mm'); return;
+    showToast('error','Mois de début obligatoire — format aaaa/mm'); return;
   }
   const [annee, mois] = moisRaw.split('/').map(Number);
   const date_debut = `${annee}-${String(mois).padStart(2,'0')}-${String(jour).padStart(2,'0')}`;
@@ -1581,12 +1584,12 @@ async function creerReleve() {
     body: JSON.stringify({date_debut, date_fin, libelle})
   }).then(r=>r.json());
   if (d.ok) {
-    showAlert(alertEl,'success',`Relevé créé du ${date_debut.replace(/-/g,'/')} au ${date_fin.replace(/-/g,'/')}`);
+    showToast('success',`Relevé créé du ${date_debut.replace(/-/g,'/')} au ${date_fin.replace(/-/g,'/')}`);
     document.getElementById('releveMoisDebut').value = '';
     document.getElementById('releveLibelle').value = '';
     document.getElementById('relevePreview').style.display = 'none';
     loadReleves();
-  } else showAlert(alertEl,'error',d.error);
+  } else showToast('error',d.error);
 }
 
 async function cloreReleve(id) {
@@ -1599,16 +1602,16 @@ async function cloreReleve(id) {
   if (d.ok) {
     const d0Aff = (d.prochain_debut||'').replace(/-/g,'/');
     const d1Aff = (d.prochain_fin||'').replace(/-/g,'/');
-    alert(`Relevé clos ✓\nNouveau relevé créé du ${d0Aff} au ${d1Aff}${prochainLibelle ? '\nLibellé : '+prochainLibelle : ''}`);
+    showToast('success', `Relevé clos. Nouveau relevé du ${d0Aff} au ${d1Aff}${prochainLibelle ? ' — '+prochainLibelle : ''}.`);
     loadReleves();
-  } else alert('Erreur : ' + d.error);
+  } else showToast('error', d.error || 'Erreur');
 }
 
 async function supprimerReleve(id) {
   if (!confirm('Supprimer ce relevé définitivement ?')) return;
   const d = await fetch(`/api/releves/${id}`,{method:'DELETE'}).then(r=>r.json());
   if (d.ok) loadReleves();
-  else alert('Erreur : ' + d.error);
+  else showToast('error', d.error || 'Erreur');
 }
 </script>
 
@@ -1624,7 +1627,6 @@ async function supprimerReleve(id) {
       <input type="number" id="modalFingerprintId" placeholder="" min="1"
              style="font-family:'DM Mono',monospace;font-size:18px;text-align:center;font-weight:700;color:var(--teal)">
     </div>
-    <div id="alertModalEmpreinte" class="alert" role="alert"></div>
     <div style="display:flex;gap:8px;margin-top:16px">
       <button class="btn btn-primary btn-full" onclick="confirmerLierEmpreinte()">Lier</button>
       <button class="btn btn-ghost" onclick="fermerModalEmpreinte()">Annuler</button>
@@ -1644,7 +1646,6 @@ async function supprimerReleve(id) {
       <input type="number" id="modalPinId" placeholder="" min="1"
              style="font-family:'DM Mono',monospace;font-size:18px;text-align:center;font-weight:700;color:#f59e0b">
     </div>
-    <div id="alertModalPin" class="alert" role="alert"></div>
     <div style="display:flex;gap:8px;margin-top:16px">
       <button class="btn btn-primary btn-full" onclick="confirmerLierPin()">Lier</button>
       <button class="btn btn-ghost" onclick="fermerModalPin()">Annuler</button>
@@ -1681,7 +1682,6 @@ async function supprimerReleve(id) {
       <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Le système déduira les tours suivants (tous les 3 dimanches)</div>
     </div>
 
-    <div id="alertRotation" class="alert" role="alert"></div>
     <div style="display:flex;gap:8px;margin-top:18px">
       <button class="btn btn-primary btn-full" onclick="sauvegarderRotation()">Enregistrer</button>
       <button class="btn btn-danger btn-sm" onclick="supprimerRotation()">Supprimer</button>
@@ -1699,8 +1699,6 @@ function ouvrirLierEmpreinte(prno, nom) {
   _modalEmpPrno = prno;
   document.getElementById('modalEmpNom').textContent = nom;
   document.getElementById('modalFingerprintId').value = '';
-  document.getElementById('alertModalEmpreinte').className = 'alert';
-  document.getElementById('alertModalEmpreinte').textContent = '';
   document.getElementById('modalEmpreinte').classList.add('open');
   setTimeout(() => document.getElementById('modalFingerprintId').focus(), 100);
 }
@@ -1709,15 +1707,14 @@ function fermerModalEmpreinte() {
 }
 async function confirmerLierEmpreinte() {
   const fingerprintId = document.getElementById('modalFingerprintId').value.trim();
-  const alertEl = document.getElementById('alertModalEmpreinte');
-  if (!fingerprintId) { alertEl.className='alert alert-error'; alertEl.textContent='ID obligatoire'; return; }
+  if (!fingerprintId) { showToast('error','ID obligatoire'); return; }
   const r = await fetch(`/api/admin/employes/${_modalEmpPrno}/empreinte`, {
     method:'PUT', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({fingerprint_id: parseInt(fingerprintId)})
   });
   const d = await r.json();
   if (d.ok) { fermerModalEmpreinte(); loadEmployes(); }
-  else { alertEl.className='alert alert-error'; alertEl.textContent=d.error||'Erreur'; }
+  else { showToast('error', d.error||'Erreur'); }
 }
 async function delierEmpreinte(prno, fingerprintId) {
   if (!confirm(`Supprimer l'empreinte #${fingerprintId} de ${prno} ?`)) return;
@@ -1734,8 +1731,6 @@ function ouvrirLierPin(prno, nom) {
   _modalPinPrno = prno;
   document.getElementById('modalPinNom').textContent = nom;
   document.getElementById('modalPinId').value = '';
-  document.getElementById('alertModalPin').className = 'alert';
-  document.getElementById('alertModalPin').textContent = '';
   document.getElementById('modalPin').classList.add('open');
   setTimeout(() => document.getElementById('modalPinId').focus(), 100);
 }
@@ -1744,15 +1739,14 @@ function fermerModalPin() {
 }
 async function confirmerLierPin() {
   const pinId = document.getElementById('modalPinId').value.trim();
-  const alertEl = document.getElementById('alertModalPin');
-  if (!pinId) { alertEl.className='alert alert-error'; alertEl.textContent='ID PIN obligatoire'; return; }
+  if (!pinId) { showToast('error','ID PIN obligatoire'); return; }
   const r = await fetch(`/api/admin/employes/${_modalPinPrno}/pin`, {
     method:'PUT', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({pin_id: parseInt(pinId)})
   });
   const d = await r.json();
   if (d.ok) { fermerModalPin(); loadEmployes(); }
-  else { alertEl.className='alert alert-error'; alertEl.textContent=d.error||'Erreur'; }
+  else { showToast('error', d.error||'Erreur'); }
 }
 async function delierPin(prno) {
   if (!confirm(`Supprimer le PIN de ${prno} ?`)) return;
@@ -1769,14 +1763,15 @@ async function renvoiLien(prno, nom) {
   if (!confirm(`Renvoyer le lien groupe Telegram à ${nom} ?`)) return;
   const r = await fetch(`/api/admin/renvoi_lien/${prno}`, {method:'POST'});
   const d = await r.json();
-  alert(d.ok ? `Lien renvoyé à ${nom}.` : (d.message || d.error || 'Erreur'));
+  if (d.ok) { showToast('success', `Lien renvoyé à ${nom}.`); }
+  else { showToast('error', d.message || d.error || 'Erreur'); }
 }
 async function delierTelegram(prno) {
   if (!confirm(`Délier le compte Telegram de ${prno} ? L'employé devra se réenregistrer.`)) return;
   const r = await fetch(`/api/admin/liaisons/${prno}`, {method:'DELETE'});
   const d = await r.json();
   if (d.ok) loadEmployes();
-  else alert(d.error || 'Erreur');
+  else showToast('error', d.error || 'Erreur');
 }
 
 // ── Rotation ──
@@ -1787,8 +1782,6 @@ function ouvrirModalRotation(prno, nom, cycle, refDate, dimRef) {
   document.getElementById('rotCycle').value      = cycle    || '';
   document.getElementById('rotRefDate').value    = (refDate  || '').replace(/-/g,'/');
   document.getElementById('rotDimRef').value     = (dimRef   || '').replace(/-/g,'/');
-  document.getElementById('alertRotation').className = 'alert';
-  document.getElementById('alertRotation').textContent = '';
   document.getElementById('modalRotation').classList.add('open');
   setTimeout(() => document.getElementById('rotCycle').focus(), 100);
 }
@@ -1796,13 +1789,12 @@ function fermerModalRotation() {
   document.getElementById('modalRotation').classList.remove('open');
 }
 async function sauvegarderRotation() {
-  const alertEl = document.getElementById('alertRotation');
   const cycle   = document.getElementById('rotCycle').value.trim();
   const refRaw  = document.getElementById('rotRefDate').value.trim();
   const dimRaw  = document.getElementById('rotDimRef').value.trim();
 
   if (cycle && !/^\d+\/\d+$/.test(cycle)) {
-    alertEl.className='alert alert-error'; alertEl.textContent='Format cycle invalide — ex: 2/3'; return;
+    showToast('error','Format cycle invalide — ex: 2/3'); return;
   }
   const toISO = v => v ? v.replace(/\//g,'-') : null;
   const r = await fetch(`/api/admin/employes/${_rotationPrno}/rotation`, {
@@ -1815,7 +1807,7 @@ async function sauvegarderRotation() {
   });
   const d = await r.json();
   if (d.ok) { fermerModalRotation(); loadEmployes(); }
-  else { alertEl.className='alert alert-error'; alertEl.textContent=d.error||'Erreur'; }
+  else { showToast('error', d.error||'Erreur'); }
 }
 async function supprimerRotation() {
   if (!confirm('Supprimer la configuration de rotation ?')) return;
