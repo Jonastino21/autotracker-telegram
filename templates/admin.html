@@ -261,7 +261,7 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
 
   <!-- TABS -->
   <div class="px-7 pt-5 max-sm:px-4">
-    <div class="tabs-scroll"><div class="flex gap-1 bg-white border border-black/[0.07] rounded-2xl p-1.5 w-fit shadow-[0_2px_12px_rgba(0,0,0,0.07)]">
+    <div class="tabs-scroll"><div class="flex flex-wrap gap-1 bg-white border border-black/[0.07] rounded-2xl p-1.5 w-fit shadow-[0_2px_12px_rgba(0,0,0,0.07)]">
       <button class="tab-admin active" onclick="showSection('employes',this)" aria-selected="true">Employés</button>
       <button class="tab-admin" onclick="showSection('feries',this)" aria-selected="false">Jours fériés</button>
       <button class="tab-admin" onclick="showSection('modeles',this)" aria-selected="false">Modèles horaires</button>
@@ -1782,11 +1782,15 @@ function toggleRowMenu(btn) {
   if (!emp) return;
   _menuPrno = prno;
   menu.innerHTML = _buildMenuHTML(emp);
-  const r = btn.getBoundingClientRect();
-  menu.style.top   = (r.bottom + 4) + 'px';
-  menu.style.right = (window.innerWidth - r.right) + 'px';
-  menu.style.left  = 'auto';
   menu.classList.add('open');
+  const r   = btn.getBoundingClientRect();
+  const mw  = menu.offsetWidth || 190;
+  let left  = r.left;
+  if (left + mw > window.innerWidth - 8) left = window.innerWidth - mw - 8;
+  if (left < 8) left = 8;
+  menu.style.top   = (r.bottom + 4) + 'px';
+  menu.style.left  = left + 'px';
+  menu.style.right = 'auto';
 }
 
 function _buildMenuHTML(emp) {
