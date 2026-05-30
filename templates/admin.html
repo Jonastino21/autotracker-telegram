@@ -200,8 +200,9 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
   /* FIX : Searchbox responsive */
   @media (max-width:640px) { .topbar-flex { flex-direction:column; align-items:flex-start !important; } .topbar-flex input { width:100% !important; } }
   /* FIX : Modals via classe */
-  .modal-overlay-admin { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9999; align-items:center; justify-content:center; padding:16px; }
+  .modal-overlay-admin { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9999; align-items:flex-start; justify-content:center; padding:16px; overflow-y:auto; }
   .modal-overlay-admin.open { display:flex; }
+  .modal-overlay-admin > div { margin:auto; max-height:calc(100vh - 32px); overflow-y:auto; overscroll-behavior:contain; }
 
 /* Tables responsives */
 .table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; border-radius:inherit; }
@@ -1215,9 +1216,9 @@ function ouvrirModifHoraire(prno, codeActuel) {
   document.getElementById('modalHoraire')?.remove();
   const modal = document.createElement('div');
   modal.id = 'modalHoraire';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto';
   modal.innerHTML = `
-    <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:28px;width:100%;max-width:560px;box-shadow:0 24px 60px rgba(0,0,0,0.2)">
+    <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:28px;width:100%;max-width:560px;max-height:calc(100vh - 40px);overflow-y:auto;overscroll-behavior:contain;margin:auto;box-shadow:0 24px 60px rgba(0,0,0,0.2)">
       <div id="mhTitre" style="font-size:15px;font-weight:700;margin-bottom:16px;color:var(--text)">Horaire — <span id="mhPrno"></span></div>
 
       <!-- Onglets -->
