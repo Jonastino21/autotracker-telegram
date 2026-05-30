@@ -784,6 +784,8 @@ async function _validerEtAfficher(code, previewEl) {
 }
 
 // ─── EMPLOYÉS ────────────────────────────────────────────────────────────────
+let _lastHorMap = {};
+
 async function loadEmployes() {
   const r = await fetch('/api/admin/employes');
   allEmployes = await r.json();
@@ -803,6 +805,7 @@ async function loadEmployes() {
     horMap[h.prno] = h.code_horaire;
     dateEffetMap[h.prno] = h.date_effet;
   });
+  _lastHorMap = horMap;
   renderEmpTable(allEmployes, horMap, dateEffetMap);
 }
 
@@ -863,26 +866,25 @@ function renderEmpTable(data, horMap={}, dateEffetMap={}) {
       </td>
       ${dateEffetCell}
       <td>
-        <div class="row-menu-wrap">
+        <div class="row-menu-wrap" data-prno="${emp.prno}">
           <button class="row-menu-btn" onclick="toggleRowMenu(this)">⋮</button>
           <div class="row-menu">
             ${emp.actif ? `
-              <button class="row-menu-item" onclick="ouvrirModifHoraire('${emp.prno}','${(horMap[emp.prno]||'').replace(/'/g,"\\'")}');closeRowMenus()">Modifier horaire</button>
-              <button class="row-menu-item" onclick="ouvrirModalRotation('${emp.prno}','${emp.nom_complet.replace(/'/g,"\\'")}','${emp.rotation_cycle||''}','${emp.rotation_ref_date||''}','${emp.dimanche_tour_ref||''}');closeRowMenus()">Configurer rotation</button>
-              ${emp.lie ? `
-              <button class="row-menu-item" onclick="renvoiLien('${emp.prno}','${emp.nom_complet.replace(/'/g,"\\'")}');closeRowMenus()">Renvoyer lien Telegram</button>` : ''}
-              ${!emp.fingerprint_id ? `<button class="row-menu-item" onclick="ouvrirLierEmpreinte('${emp.prno}','${emp.nom_complet.replace(/'/g,"\\'")}');closeRowMenus()">Lier empreinte</button>` : ''}
-              ${!emp.pin_id ? `<button class="row-menu-item" onclick="ouvrirLierPin('${emp.prno}','${emp.nom_complet.replace(/'/g,"\\'")}');closeRowMenus()">Lier PIN</button>` : ''}
+              <button class="row-menu-item" data-action="horaire">Modifier horaire</button>
+              <button class="row-menu-item" data-action="rotation">Configurer rotation</button>
+              ${emp.lie ? `<button class="row-menu-item" data-action="tg_renvoi">Renvoyer lien Telegram</button>` : ''}
+              ${!emp.fingerprint_id ? `<button class="row-menu-item" data-action="lier_fp">Lier empreinte</button>` : ''}
+              ${!emp.pin_id ? `<button class="row-menu-item" data-action="lier_pin">Lier PIN</button>` : ''}
               <div class="row-menu-sep"></div>
-              ${emp.fingerprint_id ? `<button class="row-menu-item danger" onclick="delierEmpreinte('${emp.prno}',${emp.fingerprint_id});closeRowMenus()">Retirer empreinte</button>` : ''}
-              ${emp.pin_id ? `<button class="row-menu-item danger" onclick="delierPin('${emp.prno}');closeRowMenus()">Retirer PIN</button>` : ''}
-              ${emp.lie ? `<button class="row-menu-item danger" onclick="delierTelegram('${emp.prno}');closeRowMenus()">Délier Telegram</button>` : ''}
+              ${emp.fingerprint_id ? `<button class="row-menu-item danger" data-action="delier_fp">Retirer empreinte</button>` : ''}
+              ${emp.pin_id ? `<button class="row-menu-item danger" data-action="delier_pin">Retirer PIN</button>` : ''}
+              ${emp.lie ? `<button class="row-menu-item danger" data-action="delier_tg">Délier Telegram</button>` : ''}
               <div class="row-menu-sep"></div>
-              <button class="row-menu-item danger" onclick="supprimerEmploye('${emp.prno}');closeRowMenus()">Désactiver</button>
+              <button class="row-menu-item danger" data-action="desactiver">Désactiver</button>
             ` : `
-              <button class="row-menu-item" onclick="reactiver('${emp.prno}');closeRowMenus()">Réactiver</button>
+              <button class="row-menu-item" data-action="reactiver">Réactiver</button>
               <div class="row-menu-sep"></div>
-              <button class="row-menu-item danger" onclick="supprimerDefinitif('${emp.prno}','${emp.nom_complet.replace(/'/g,"\\'")}');closeRowMenus()">Supprimer définitivement</button>
+              <button class="row-menu-item danger" data-action="supprimer">Supprimer définitivement</button>
             `}
           </div>
         </div>
@@ -1800,6 +1802,29 @@ function closeRowMenus() {
   document.querySelectorAll('.row-menu.open').forEach(m => m.classList.remove('open'));
 }
 document.addEventListener('click', e => {
+  const item = e.target.closest('[data-action]');
+  if (item) {
+    const action = item.dataset.action;
+    const wrap   = item.closest('[data-prno]');
+    const prno   = wrap ? wrap.dataset.prno : null;
+    const emp    = allEmployes.find(x => x.prno === prno);
+    closeRowMenus();
+    if (!prno || !emp) return;
+    switch (action) {
+      case 'horaire':   ouvrirModifHoraire(prno, _lastHorMap[prno] || ''); break;
+      case 'rotation':  ouvrirModalRotation(prno, emp.nom_complet, emp.rotation_cycle||'', emp.rotation_ref_date||'', emp.dimanche_tour_ref||''); break;
+      case 'tg_renvoi': renvoiLien(prno, emp.nom_complet); break;
+      case 'lier_fp':   ouvrirLierEmpreinte(prno, emp.nom_complet); break;
+      case 'lier_pin':  ouvrirLierPin(prno, emp.nom_complet); break;
+      case 'delier_fp': delierEmpreinte(prno, emp.fingerprint_id); break;
+      case 'delier_pin':delierPin(prno); break;
+      case 'delier_tg': delierTelegram(prno); break;
+      case 'desactiver':supprimerEmploye(prno); break;
+      case 'reactiver': reactiver(prno); break;
+      case 'supprimer': supprimerDefinitif(prno, emp.nom_complet); break;
+    }
+    return;
+  }
   if (!e.target.closest('.row-menu-wrap')) closeRowMenus();
 });
 
