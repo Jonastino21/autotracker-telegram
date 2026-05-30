@@ -24,6 +24,33 @@ GROUP_ID      = int(os.getenv("TELEGRAM_GROUP_ID", "0"))
 TIMEZONE      = os.getenv("TIMEZONE", "Indian/Antananarivo")
 POLL_INTERVAL = int(os.getenv("POLL_INTERVAL_SEC", "120"))
 
+PID_FILE = "tracker.pid"
+
+
+def _acquire_pid_lock():
+    """Empêche deux instances du tracker de tourner simultanément."""
+    if os.path.exists(PID_FILE):
+        try:
+            with open(PID_FILE) as f:
+                pid = int(f.read().strip())
+            os.kill(pid, 0)  # Vérifie si le processus existe encore
+            print(f"ERREUR : une instance du tracker tourne déjà (PID {pid}). Arrêt.", file=sys.stderr)
+            sys.exit(1)
+        except (ProcessLookupError, ValueError):
+            pass  # Processus mort ou PID invalide → on peut démarrer
+    with open(PID_FILE, "w") as f:
+        f.write(str(os.getpid()))
+    atexit.register(_release_pid_lock)
+
+
+def _release_pid_lock():
+    try:
+        if os.path.exists(PID_FILE):
+            os.remove(PID_FILE)
+    except Exception:
+        pass
+
+
 # Garantit la sauvegarde WAL même en cas d'arrêt brutal
 atexit.register(db.close_db)
 
@@ -210,9 +237,11 @@ def traiter_scan(prno, nom_complet, type_pointage, dt_local, msg_id, raw_text, s
         return {"ok": False, "raison": "doublon_type", "prno": prno}
 
     # ── 3. Insérer ──
+    liaison = db.get_liaison_by_prno(prno)
+    tg_id   = liaison["telegram_id"] if liaison else 0
     inserted = db.insert_pointage(
         message_id    = msg_id,
-        telegram_id   = msg_id,
+        telegram_id   = tg_id,
         prno          = prno,
         date_local    = date_local,
         heure_locale  = heure_locale,
@@ -431,6 +460,8 @@ def polling_loop():
 
 
 def main():
+    _acquire_pid_lock()
+
     logger.info("═══════════════════════════════════════")
     logger.info("  KAROKA Attendance Tracker — Démarrage")
     logger.info("═══════════════════════════════════════")
@@ -470,8 +501,7 @@ def main():
         polling_loop()
     except KeyboardInterrupt:
         scheduler.shutdown()
-        db.close_db()
-        sys.exit(0)
+        sys.exit(0)  # atexit gère db.close_db()
 
 
 if __name__ == "__main__":

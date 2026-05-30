@@ -165,20 +165,24 @@ def _migrate_db(conn):
     """)
     conn.commit()
 
-    # ── Déduplication des pointages (doublons de type/session le même jour) ──
-    # Garde uniquement le premier pointage (id MIN) par combinaison unique.
-    try:
-        conn.execute("""
-            DELETE FROM pointages
-            WHERE id NOT IN (
-                SELECT MIN(id)
-                FROM pointages
-                GROUP BY prno, date_local, type_pointage, session
-            )
-        """)
-        conn.commit()
-    except Exception as e:
-        logger.warning("Deduplication pointages : %s", e)
+    # ── Déduplication des pointages — exécutée une seule fois ────────────
+    dedup_done = conn.execute(
+        "SELECT value FROM meta WHERE key='dedup_done'"
+    ).fetchone()
+    if not dedup_done:
+        try:
+            conn.execute("""
+                DELETE FROM pointages
+                WHERE id NOT IN (
+                    SELECT MIN(id)
+                    FROM pointages
+                    GROUP BY prno, date_local, type_pointage, session
+                )
+            """)
+            conn.execute("INSERT OR REPLACE INTO meta(key,value) VALUES('dedup_done','1')")
+            conn.commit()
+        except Exception as e:
+            logger.warning("Deduplication pointages : %s", e)
 
     # ── Index unique pour prévenir les futurs doublons ─────────────────────
     try:
@@ -1310,15 +1314,13 @@ def clore_releve(releve_id: int, libelle_prochain: str = None) -> dict:
         row = conn.execute("SELECT * FROM releves WHERE id=?", (releve_id,)).fetchone()
         if not row:
             return {"ok": False, "error": "Relevé introuvable"}
-        conn.execute("UPDATE releves SET clos=1 WHERE id=?", (releve_id,))
-        conn.commit()
-        # Générer automatiquement le relevé suivant
+        # Calculer le relevé suivant avant de commencer la transaction
         date_fin_actuel = date.fromisoformat(row["date_fin"])
-        new_debut = (date_fin_actuel + timedelta(days=1))
-        # Même durée que l'actuel
+        new_debut = date_fin_actuel + timedelta(days=1)
         duree = (date_fin_actuel - date.fromisoformat(row["date_debut"])).days
         new_fin = new_debut + timedelta(days=duree)
-        # Créer le suivant avec le libellé fourni si précisé
+        # Clôture + création du suivant en une seule transaction atomique
+        conn.execute("UPDATE releves SET clos=1 WHERE id=?", (releve_id,))
         cur = conn.execute(
             "INSERT INTO releves(date_debut, date_fin, libelle) VALUES(?,?,?)",
             (new_debut.isoformat(), new_fin.isoformat(), libelle_prochain or None)

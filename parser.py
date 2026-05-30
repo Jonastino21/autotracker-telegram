@@ -231,7 +231,7 @@ def get_session_depuis_horaire(code: str, date_obj: date, heure_str: str) -> str
         return "matin" if h < 780 else "apm"
 
     if len(plages) == 1:
-        return "matin"
+        return "matin" if plages[0]["debut"] < 780 else "apm"
 
     # Plusieurs plages : trier par heure de début
     plages_triees = sorted(plages, key=lambda p: p["debut"])

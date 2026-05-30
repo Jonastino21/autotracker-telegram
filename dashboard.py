@@ -562,7 +562,7 @@ def _init_liaisons_empreintes():
     try:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS liaisons_empreintes (
-                fingerprint_id  INTEGER,
+                fingerprint_id  INTEGER UNIQUE,
                 pin_id          INTEGER UNIQUE,
                 prno            TEXT NOT NULL,
                 enregistre_le   TEXT DEFAULT (datetime('now')),
@@ -574,6 +574,12 @@ def _init_liaisons_empreintes():
             conn.execute("ALTER TABLE liaisons_empreintes ADD COLUMN pin_id INTEGER UNIQUE")
         except Exception:
             pass  # colonne déjà présente
+        # Migration : ajouter index UNIQUE sur fingerprint_id pour les tables existantes
+        conn.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_lem_fingerprint
+            ON liaisons_empreintes(fingerprint_id)
+            WHERE fingerprint_id IS NOT NULL
+        """)
         conn.commit()
     finally:
         conn.close()
