@@ -67,7 +67,7 @@ body { font-family: 'DM Sans', sans-serif; }
 .row-menu-wrap { position:relative; display:inline-block; }
 .row-menu-btn  { background:none; border:1px solid var(--border); border-radius:8px; padding:4px 10px; cursor:pointer; font-size:16px; color:var(--text-dim); line-height:1; transition:background 0.15s; }
 .row-menu-btn:hover { background:var(--main-bg); color:var(--text); }
-.row-menu { position:fixed; background:#fff; border:1px solid var(--border); border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.12); z-index:9999; min-width:180px; padding:4px 0; display:none; }
+.row-menu { position:fixed; background:#fff; border:1px solid var(--border); border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.12); z-index:9999; min-width:180px; padding:4px 0; display:none; max-height:calc(100vh - 32px); overflow-y:auto; }
 .row-menu.open { display:block; }
 .row-menu-item { display:flex; align-items:center; gap:8px; padding:8px 14px; font-size:12px; cursor:pointer; color:var(--text); transition:background 0.12s; white-space:nowrap; background:none; border:none; width:100%; text-align:left; font-family:'DM Sans',sans-serif; }
 .row-menu-item:hover { background:var(--main-bg); }
@@ -1785,10 +1785,14 @@ function toggleRowMenu(btn) {
   menu.classList.add('open');
   const r   = btn.getBoundingClientRect();
   const mw  = menu.offsetWidth || 190;
+  const mh  = menu.scrollHeight || 300;
   let left  = r.left;
   if (left + mw > window.innerWidth - 8) left = window.innerWidth - mw - 8;
   if (left < 8) left = 8;
-  menu.style.top   = (r.bottom + 4) + 'px';
+  let top = r.bottom + 4;
+  if (top + mh > window.innerHeight - 8) top = r.top - mh - 4;
+  if (top < 8) top = 8;
+  menu.style.top   = top + 'px';
   menu.style.left  = left + 'px';
   menu.style.right = 'auto';
 }
