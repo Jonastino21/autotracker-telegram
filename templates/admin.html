@@ -847,7 +847,8 @@ function renderEmpTable(data, horMap={}, dateEffetMap={}) {
       <td style="display:flex;gap:6px">
         ${emp.actif
           ? `<button class="btn btn-danger btn-sm" onclick="supprimerEmploye('${emp.prno}')">Désactiver</button>`
-          : `<button class="btn btn-ghost btn-sm" onclick="reactiver('${emp.prno}')">Réactiver</button>`}
+          : `<button class="btn btn-ghost btn-sm" onclick="reactiver('${emp.prno}')">Réactiver</button>
+             <button class="btn btn-danger btn-sm" onclick="supprimerDefinitif('${emp.prno}','${emp.nom_complet.replace(/'/g,"\\'")}')">🗑 Supprimer</button>`}
         ${emp.actif?`<button class="btn btn-ghost btn-sm" onclick="ouvrirModifHoraire('${emp.prno}','${horMap[emp.prno]||''}')">✏ Horaire</button>`:''}
         ${emp.actif?`<button class="btn btn-ghost btn-sm" style="color:#1565C0;border-color:rgba(33,150,243,0.3);background:rgba(33,150,243,0.08)" onclick="ouvrirModalRotation('${emp.prno}','${emp.nom_complet.replace(/'/g,"\\'")}','${emp.rotation_cycle||''}','${emp.rotation_ref_date||''}','${emp.dimanche_tour_ref||''}')">⟳ Rotation</button>`:''}
         ${emp.actif && emp.lie ? `<button class="btn btn-ghost btn-sm" style="color:#2E7D32;border-color:rgba(76,175,80,0.3);background:rgba(76,175,80,0.08)" onclick="renvoiLien('${emp.prno}','${emp.nom_complet.replace(/'/g,"\\'")}')">↗ Telegram</button>` : ''}
@@ -943,6 +944,15 @@ async function supprimerEmploye(prno) {
   const r = await fetch(`/api/admin/employes/${prno}`,{method:'DELETE'});
   const d = await r.json();
   if (d.ok) loadEmployes();
+}
+
+async function supprimerDefinitif(prno, nom) {
+  const msg = `⚠ SUPPRESSION DÉFINITIVE\n\nEmployé : ${nom} (${prno})\n\nTous les pointages, horaires et liaisons seront effacés.\nCette action est irréversible.\n\nConfirmer ?`;
+  if (!confirm(msg)) return;
+  const r = await fetch(`/api/admin/employes/${prno}/permanent`, {method:'DELETE'});
+  const d = await r.json();
+  if (d.ok) loadEmployes();
+  else alert(d.error || 'Erreur lors de la suppression');
 }
 
 async function importCsv(input) {

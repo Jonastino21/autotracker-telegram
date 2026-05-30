@@ -441,6 +441,15 @@ def api_historique_horaire(prno):
     return jsonify(db.get_historique_horaires(prno))
 
 
+@app.route("/api/admin/employes/<prno>/permanent", methods=["DELETE"])
+@login_required
+def api_supprimer_employe_permanent(prno):
+    result = db.supprimer_employe_permanent(prno)
+    if result["ok"]:
+        emit_admin_update("admin_employes_updated")
+    return jsonify(result), (200 if result["ok"] else 400)
+
+
 @app.route("/api/admin/liaisons/<prno>", methods=["DELETE"])
 @login_required
 def api_supprimer_liaison(prno):
