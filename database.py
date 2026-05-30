@@ -135,6 +135,7 @@ def init_db():
         conn.commit()
         _migrate_db(conn)
         _seed_jours_feries(conn)
+        _seed_recurring_custom(conn)
         logger.info("Base de données initialisée : %s", DB_PATH)
     finally:
         conn.close()
@@ -211,6 +212,24 @@ def _seed_jours_feries(conn):
                 INSERT OR IGNORE INTO jours_feries(date_str, libelle, recurrent, type_ferie)
                 VALUES(?, ?, 1, 'fixe')
             """, (date_str, libelle))
+    conn.commit()
+
+
+def _seed_recurring_custom(conn):
+    """Auto-crée pour l'année courante et suivante les fériés fixes récurrents ajoutés manuellement."""
+    annee_courante = date.today().year
+    rows = conn.execute("""
+        SELECT DISTINCT substr(date_str, 6) AS mois_jour, libelle
+        FROM jours_feries
+        WHERE recurrent=1 AND type_ferie='fixe'
+    """).fetchall()
+    for row in rows:
+        for annee in [annee_courante, annee_courante + 1]:
+            new_date = f"{annee}-{row['mois_jour']}"
+            conn.execute("""
+                INSERT OR IGNORE INTO jours_feries(date_str, libelle, recurrent, type_ferie)
+                VALUES(?, ?, 1, 'fixe')
+            """, (new_date, row['libelle']))
     conn.commit()
 
 

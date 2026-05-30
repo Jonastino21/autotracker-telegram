@@ -366,11 +366,12 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
             </div>
             <input type="hidden" id="ferieTypeHidden" value="fixe">
           </div>
-          <div class="mb-[15px]">
+          <div id="ferieRecurrentRow" class="mb-[15px]">
             <div class="flex items-center gap-2 text-[13px]">
-              <input type="checkbox" id="ferieRecurrent" aria-label="Enregistrer pour toutes les années futures">
-              <label for="ferieRecurrent" class="text-[13px] text-text-dim cursor-pointer">Enregistrer pour toutes les années futures</label>
+              <input type="checkbox" id="ferieRecurrent" aria-label="Répéter automatiquement chaque année">
+              <label for="ferieRecurrent" class="text-[13px] text-text-dim cursor-pointer">Répéter automatiquement chaque année</label>
             </div>
+            <div class="text-[11px] text-text-muted mt-1">Le système créera cette entrée pour l'année suivante à chaque démarrage.</div>
           </div>
           <button class="btn btn-primary btn-full" onclick="ajouterFerie()">Ajouter</button>
         </div>
@@ -406,7 +407,7 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
                   </div>
                   <div id="aidFitr" style="display:none" class="px-2.5 py-2 bg-white">
                     <div class="flex gap-1.5 items-center">
-                      <input type="text" id="aidFitrDate" placeholder="aaaa/mm/jj" maxlength="10"
+                      <input type="text" id="aidFitrDate" placeholder="yyyy/mm/dd" maxlength="10"
                              oninput="formatFerieDateInput(this)"
                              style="flex:1;padding:5px 8px;border:1px solid rgba(0,0,0,0.07);border-radius:6px;background:#F0F2F8;color:#1A1F2E;font-family:'DM Mono',monospace;font-size:12px;outline:none">
                       <button class="btn btn-primary btn-sm" onclick="insererFerieVariable('aidFitrDate','Aïd el-Fitr')" style="padding:5px 10px;font-size:11px;white-space:nowrap">✓ Valider</button>
@@ -423,12 +424,67 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
                   </div>
                   <div id="aidAdha" style="display:none" class="px-2.5 py-2 bg-white">
                     <div class="flex gap-1.5 items-center">
-                      <input type="text" id="aidAdhaDate" placeholder="aaaa/mm/jj" maxlength="10"
+                      <input type="text" id="aidAdhaDate" placeholder="yyyy/mm/dd" maxlength="10"
                              oninput="formatFerieDateInput(this)"
                              style="flex:1;padding:5px 8px;border:1px solid rgba(0,0,0,0.07);border-radius:6px;background:#F0F2F8;color:#1A1F2E;font-family:'DM Mono',monospace;font-size:12px;outline:none">
                       <button class="btn btn-primary btn-sm" onclick="insererFerieVariable('aidAdhaDate','Aïd el-Adha')" style="padding:5px 10px;font-size:11px;white-space:nowrap">✓ Valider</button>
                     </div>
                     <div id="aidAdhaMsg" class="text-[11px] mt-1 min-h-4"></div>
+                  </div>
+                </div>
+
+                <div class="border-t border-orange-100 pt-2 mt-1">
+                  <div class="text-[10px] font-bold uppercase tracking-[0.8px] text-text-muted mb-1.5 px-0.5">Fériés chrétiens variables</div>
+                </div>
+
+                <!-- Lundi de Pâques -->
+                <div class="border border-orange-200 rounded-lg overflow-hidden">
+                  <div class="px-2.5 py-1.5 bg-orange-50 font-semibold text-orange-700 flex items-center justify-between">
+                    <span>Lundi de Pâques</span>
+                    <button class="btn btn-amber btn-sm" onclick="toggleInsertFerieVariable('lPaques')" style="padding:2px 8px;font-size:11px">+ Insérer</button>
+                  </div>
+                  <div id="lPaques" style="display:none" class="px-2.5 py-2 bg-white">
+                    <div class="flex gap-1.5 items-center">
+                      <input type="text" id="lPaquesDate" placeholder="yyyy/mm/dd" maxlength="10"
+                             oninput="formatFerieDateInput(this)"
+                             style="flex:1;padding:5px 8px;border:1px solid rgba(0,0,0,0.07);border-radius:6px;background:#F0F2F8;color:#1A1F2E;font-family:'DM Mono',monospace;font-size:12px;outline:none">
+                      <button class="btn btn-primary btn-sm" onclick="insererFerieVariable('lPaquesDate','Lundi de Pâques')" style="padding:5px 10px;font-size:11px;white-space:nowrap">✓ Valider</button>
+                    </div>
+                    <div id="lPaquesDateMsg" class="text-[11px] mt-1 min-h-4"></div>
+                  </div>
+                </div>
+
+                <!-- Ascension -->
+                <div class="border border-orange-200 rounded-lg overflow-hidden">
+                  <div class="px-2.5 py-1.5 bg-orange-50 font-semibold text-orange-700 flex items-center justify-between">
+                    <span>Ascension</span>
+                    <button class="btn btn-amber btn-sm" onclick="toggleInsertFerieVariable('ascension')" style="padding:2px 8px;font-size:11px">+ Insérer</button>
+                  </div>
+                  <div id="ascension" style="display:none" class="px-2.5 py-2 bg-white">
+                    <div class="flex gap-1.5 items-center">
+                      <input type="text" id="ascensionDate" placeholder="yyyy/mm/dd" maxlength="10"
+                             oninput="formatFerieDateInput(this)"
+                             style="flex:1;padding:5px 8px;border:1px solid rgba(0,0,0,0.07);border-radius:6px;background:#F0F2F8;color:#1A1F2E;font-family:'DM Mono',monospace;font-size:12px;outline:none">
+                      <button class="btn btn-primary btn-sm" onclick="insererFerieVariable('ascensionDate','Ascension')" style="padding:5px 10px;font-size:11px;white-space:nowrap">✓ Valider</button>
+                    </div>
+                    <div id="ascensionDateMsg" class="text-[11px] mt-1 min-h-4"></div>
+                  </div>
+                </div>
+
+                <!-- Lundi de Pentecôte -->
+                <div class="border border-orange-200 rounded-lg overflow-hidden">
+                  <div class="px-2.5 py-1.5 bg-orange-50 font-semibold text-orange-700 flex items-center justify-between">
+                    <span>Lundi de Pentecôte</span>
+                    <button class="btn btn-amber btn-sm" onclick="toggleInsertFerieVariable('lPentecote')" style="padding:2px 8px;font-size:11px">+ Insérer</button>
+                  </div>
+                  <div id="lPentecote" style="display:none" class="px-2.5 py-2 bg-white">
+                    <div class="flex gap-1.5 items-center">
+                      <input type="text" id="lPentecoteDate" placeholder="yyyy/mm/dd" maxlength="10"
+                             oninput="formatFerieDateInput(this)"
+                             style="flex:1;padding:5px 8px;border:1px solid rgba(0,0,0,0.07);border-radius:6px;background:#F0F2F8;color:#1A1F2E;font-family:'DM Mono',monospace;font-size:12px;outline:none">
+                      <button class="btn btn-primary btn-sm" onclick="insererFerieVariable('lPentecoteDate','Lundi de Pentecôte')" style="padding:5px 10px;font-size:11px;white-space:nowrap">✓ Valider</button>
+                    </div>
+                    <div id="lPentecoteDateMsg" class="text-[11px] mt-1 min-h-4"></div>
                   </div>
                 </div>
               </div>
@@ -973,6 +1029,7 @@ function setFerieType(type) {
   document.getElementById('ferieTypeHidden').value = type;
   const fixeEl = document.getElementById('ferieToggleFixe');
   const varEl  = document.getElementById('ferieToggleVariable');
+  const recRow = document.getElementById('ferieRecurrentRow');
   if (type === 'fixe') {
     fixeEl.style.border = '2px solid var(--teal)';
     fixeEl.style.background = 'rgba(0,191,165,0.1)';
@@ -980,6 +1037,7 @@ function setFerieType(type) {
     varEl.style.border = '2px solid var(--border)';
     varEl.style.background = 'transparent';
     varEl.querySelector('div > div').style.color = 'var(--text-dim)';
+    recRow.style.display = '';
   } else {
     varEl.style.border = '2px solid #E65100';
     varEl.style.background = 'rgba(255,152,0,0.1)';
@@ -987,6 +1045,8 @@ function setFerieType(type) {
     fixeEl.style.border = '2px solid var(--border)';
     fixeEl.style.background = 'transparent';
     fixeEl.querySelector('div > div').style.color = 'var(--text-dim)';
+    recRow.style.display = 'none';
+    document.getElementById('ferieRecurrent').checked = false;
   }
 }
 
