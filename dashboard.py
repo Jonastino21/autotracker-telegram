@@ -441,6 +441,36 @@ def api_historique_horaire(prno):
     return jsonify(db.get_historique_horaires(prno))
 
 
+@app.route("/api/admin/horaires/<prno>/exceptions", methods=["GET"])
+@login_required
+def api_get_exceptions(prno):
+    return jsonify(db.get_exceptions_horaires(prno))
+
+
+@app.route("/api/admin/horaires/<prno>/exceptions", methods=["POST"])
+@login_required
+def api_set_exception(prno):
+    data         = request.get_json()
+    date_str     = (data.get("date_str")     or "").strip()
+    code_horaire = (data.get("code_horaire") or "").strip()
+    motif        = (data.get("motif")        or "").strip() or None
+    if not date_str or not code_horaire:
+        return jsonify({"ok": False, "error": "date_str et code_horaire obligatoires"}), 400
+    from parser import valider_code_horaire
+    validation = valider_code_horaire(code_horaire)
+    if not validation["ok"]:
+        return jsonify({"ok": False, "error": " | ".join(validation["erreurs"])}), 400
+    result = db.set_exception_horaire(prno, date_str, code_horaire, motif)
+    return jsonify(result), (200 if result["ok"] else 400)
+
+
+@app.route("/api/admin/horaires/<prno>/exceptions/<date_str>", methods=["DELETE"])
+@login_required
+def api_supprimer_exception(prno, date_str):
+    result = db.supprimer_exception_horaire(prno, date_str)
+    return jsonify(result), (200 if result["ok"] else 400)
+
+
 @app.route("/api/admin/employes/<prno>/permanent", methods=["DELETE"])
 @login_required
 def api_supprimer_employe_permanent(prno):

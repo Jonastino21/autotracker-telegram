@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>KAROKA — Dashboard Présences</title>
+<link rel="icon" type="image/png" href="{{ url_for('static', filename='assets/logo.png') }}">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
 <!-- TODO PROD : remplacer par un build Tailwind purgé (npm run build) -->
@@ -304,11 +305,6 @@
 
   <!-- Footer sidebar -->
   <div class="px-3 pt-4 border-t border-white/[0.07] mt-auto flex flex-col gap-1.5">
-    <div class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[11px] text-teal bg-[rgba(0,191,165,0.15)]"
-         role="status" aria-label="Connexion temps réel active">
-      <div class="w-1.5 h-1.5 rounded-full bg-teal animate-pulse flex-shrink-0" aria-hidden="true"></div>
-      <span class="max-[900px]:hidden">Temps réel</span>
-    </div>
     <a href="/help" aria-label="Manuel d'utilisation"
        class="flex items-center gap-2.5 px-3.5 py-2.5 rounded-[10px] text-[13px] font-medium text-[#7B8BA8] no-underline transition-all duration-200 hover:text-white hover:bg-white/[0.07]
               max-[900px]:justify-center max-[900px]:px-3">
