@@ -63,6 +63,18 @@ body { font-family: 'DM Sans', sans-serif; }
 .toast-info    { border-left-color:#00BFA5; }
 .toast-warning { border-left-color:#FFB300; }
 
+/* Menu déroulant actions employé */
+.row-menu-wrap { position:relative; display:inline-block; }
+.row-menu-btn  { background:none; border:1px solid var(--border); border-radius:8px; padding:4px 10px; cursor:pointer; font-size:16px; color:var(--text-dim); line-height:1; transition:background 0.15s; }
+.row-menu-btn:hover { background:var(--main-bg); color:var(--text); }
+.row-menu { position:absolute; right:0; top:calc(100% + 4px); background:#fff; border:1px solid var(--border); border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.12); z-index:999; min-width:170px; padding:4px 0; display:none; }
+.row-menu.open { display:block; }
+.row-menu-item { display:flex; align-items:center; gap:8px; padding:8px 14px; font-size:12px; cursor:pointer; color:var(--text); transition:background 0.12s; white-space:nowrap; background:none; border:none; width:100%; text-align:left; font-family:'DM Sans',sans-serif; }
+.row-menu-item:hover { background:var(--main-bg); }
+.row-menu-item.danger { color:var(--red); }
+.row-menu-item.danger:hover { background:rgba(239,83,80,0.07); }
+.row-menu-sep { height:1px; background:var(--border); margin:3px 0; }
+
 /* Section tabs (toggle via JS) */
 .section { display:none; }
 .section.active { display:block; }
@@ -840,27 +852,40 @@ function renderEmpTable(data, horMap={}, dateEffetMap={}) {
           ? `<span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:var(--teal);
                           padding:3px 8px;border-radius:6px;border:1px solid rgba(0,191,165,0.35);
                           background:rgba(0,191,165,0.08)">#${emp.fingerprint_id}</span>`
-          : `<button class="btn btn-ghost btn-sm" onclick="ouvrirLierEmpreinte('${emp.prno}','${emp.nom_complet}')">+ Lier</button>`}
+          : `<span style="font-size:11px;color:var(--text-muted)">—</span>`}
       </td>
       <td style="text-align:center">
         ${emp.pin_id
           ? `<span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:var(--amber,#f59e0b);
                           padding:3px 8px;border-radius:6px;border:1px solid rgba(245,158,11,0.35);
                           background:rgba(245,158,11,0.08)">#${emp.pin_id}</span>`
-          : `<button class="btn btn-ghost btn-sm" onclick="ouvrirLierPin('${emp.prno}','${emp.nom_complet}')">+ Lier</button>`}
+          : `<span style="font-size:11px;color:var(--text-muted)">—</span>`}
       </td>
       ${dateEffetCell}
-      <td style="display:flex;gap:6px">
-        ${emp.actif
-          ? `<button class="btn btn-danger btn-sm" onclick="supprimerEmploye('${emp.prno}')">Désactiver</button>`
-          : `<button class="btn btn-ghost btn-sm" onclick="reactiver('${emp.prno}')">Réactiver</button>
-             <button class="btn btn-danger btn-sm" onclick="supprimerDefinitif('${emp.prno}','${emp.nom_complet.replace(/'/g,"\\'")}')">🗑 Supprimer</button>`}
-        ${emp.actif?`<button class="btn btn-ghost btn-sm" onclick="ouvrirModifHoraire('${emp.prno}','${horMap[emp.prno]||''}')">✏ Horaire</button>`:''}
-        ${emp.actif?`<button class="btn btn-ghost btn-sm" style="color:#1565C0;border-color:rgba(33,150,243,0.3);background:rgba(33,150,243,0.08)" onclick="ouvrirModalRotation('${emp.prno}','${emp.nom_complet.replace(/'/g,"\\'")}','${emp.rotation_cycle||''}','${emp.rotation_ref_date||''}','${emp.dimanche_tour_ref||''}')">⟳ Rotation</button>`:''}
-        ${emp.actif && emp.lie ? `<button class="btn btn-ghost btn-sm" style="color:#2E7D32;border-color:rgba(76,175,80,0.3);background:rgba(76,175,80,0.08)" onclick="renvoiLien('${emp.prno}','${emp.nom_complet.replace(/'/g,"\\'")}')">↗ Telegram</button>` : ''}
-        ${emp.actif && emp.lie ? `<button class="btn btn-danger btn-sm" onclick="delierTelegram('${emp.prno}')">✕ Telegram</button>` : ''}
-        ${emp.fingerprint_id?`<button class="btn btn-danger btn-sm" onclick="delierEmpreinte('${emp.prno}',${emp.fingerprint_id})">✕ Empreinte</button>`:''}
-        ${emp.pin_id?`<button class="btn btn-danger btn-sm" onclick="delierPin('${emp.prno}')">✕ PIN</button>`:''}
+      <td>
+        <div class="row-menu-wrap">
+          <button class="row-menu-btn" onclick="toggleRowMenu(this)">⋮</button>
+          <div class="row-menu">
+            ${emp.actif ? `
+              <button class="row-menu-item" onclick="ouvrirModifHoraire('${emp.prno}','${(horMap[emp.prno]||'').replace(/'/g,"\\'")}');closeRowMenus()">Modifier horaire</button>
+              <button class="row-menu-item" onclick="ouvrirModalRotation('${emp.prno}','${emp.nom_complet.replace(/'/g,"\\'")}','${emp.rotation_cycle||''}','${emp.rotation_ref_date||''}','${emp.dimanche_tour_ref||''}');closeRowMenus()">Configurer rotation</button>
+              ${emp.lie ? `
+              <button class="row-menu-item" onclick="renvoiLien('${emp.prno}','${emp.nom_complet.replace(/'/g,"\\'")}');closeRowMenus()">Renvoyer lien Telegram</button>` : ''}
+              ${!emp.fingerprint_id ? `<button class="row-menu-item" onclick="ouvrirLierEmpreinte('${emp.prno}','${emp.nom_complet.replace(/'/g,"\\'")}');closeRowMenus()">Lier empreinte</button>` : ''}
+              ${!emp.pin_id ? `<button class="row-menu-item" onclick="ouvrirLierPin('${emp.prno}','${emp.nom_complet.replace(/'/g,"\\'")}');closeRowMenus()">Lier PIN</button>` : ''}
+              <div class="row-menu-sep"></div>
+              ${emp.fingerprint_id ? `<button class="row-menu-item danger" onclick="delierEmpreinte('${emp.prno}',${emp.fingerprint_id});closeRowMenus()">Retirer empreinte</button>` : ''}
+              ${emp.pin_id ? `<button class="row-menu-item danger" onclick="delierPin('${emp.prno}');closeRowMenus()">Retirer PIN</button>` : ''}
+              ${emp.lie ? `<button class="row-menu-item danger" onclick="delierTelegram('${emp.prno}');closeRowMenus()">Délier Telegram</button>` : ''}
+              <div class="row-menu-sep"></div>
+              <button class="row-menu-item danger" onclick="supprimerEmploye('${emp.prno}');closeRowMenus()">Désactiver</button>
+            ` : `
+              <button class="row-menu-item" onclick="reactiver('${emp.prno}');closeRowMenus()">Réactiver</button>
+              <div class="row-menu-sep"></div>
+              <button class="row-menu-item danger" onclick="supprimerDefinitif('${emp.prno}','${emp.nom_complet.replace(/'/g,"\\'")}');closeRowMenus()">Supprimer définitivement</button>
+            `}
+          </div>
+        </div>
       </td>
     </tr>`;
   });
@@ -1756,6 +1781,20 @@ async function delierPin(prno) {
 }
 document.getElementById('modalPin').addEventListener('click', function(e) {
   if (e.target===this) fermerModalPin();
+});
+
+// ── Menu actions ligne ──
+function toggleRowMenu(btn) {
+  const menu = btn.nextElementSibling;
+  const wasOpen = menu.classList.contains('open');
+  closeRowMenus();
+  if (!wasOpen) menu.classList.add('open');
+}
+function closeRowMenus() {
+  document.querySelectorAll('.row-menu.open').forEach(m => m.classList.remove('open'));
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.row-menu-wrap')) closeRowMenus();
 });
 
 // ── Telegram ──
