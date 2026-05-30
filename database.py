@@ -35,10 +35,11 @@ def get_tz():
 
 
 def get_connection():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA busy_timeout=30000")  # 30 secondes en ms
     return conn
 
 
@@ -546,6 +547,16 @@ def insert_pointage(message_id, telegram_id, prno, date_local, heure_locale,
                     type_pointage, session, raw_text):
     conn = get_connection()
     try:
+        # Vérifier doublon de type dans la même transaction
+        row = conn.execute("""
+            SELECT type_pointage FROM pointages
+            WHERE prno=? AND date_local=?
+            ORDER BY heure_locale DESC LIMIT 1
+        """, (prno, date_local)).fetchone()
+        
+        if row and row["type_pointage"] == type_pointage:
+            return False  # doublon de type, on ignore
+        
         cur = conn.execute("""
             INSERT OR IGNORE INTO pointages
                 (message_id, telegram_id, prno, date_local, heure_locale,
