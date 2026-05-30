@@ -636,6 +636,32 @@ document.addEventListener('keydown', e => {
   }
 });
 
+// ─── Confirmation modal ──────────────────────────────────────────────────────
+function showConfirm(message, okLabel = 'Confirmer') {
+  return new Promise(resolve => {
+    document.getElementById('confirmMsg').textContent = message;
+    document.getElementById('confirmOk').textContent  = okLabel;
+    const modal  = document.getElementById('modalConfirm');
+    const btnOk  = document.getElementById('confirmOk');
+    const btnCan = document.getElementById('confirmCancel');
+    modal.classList.add('open');
+    const done = (val) => {
+      modal.classList.remove('open');
+      btnOk.removeEventListener('click', onOk);
+      btnCan.removeEventListener('click', onCan);
+      modal.removeEventListener('click', onBg);
+      resolve(val);
+    };
+    const onOk  = () => done(true);
+    const onCan = () => done(false);
+    const onBg  = (e) => { if (e.target === modal) done(false); };
+    btnOk.addEventListener('click',  onOk);
+    btnCan.addEventListener('click', onCan);
+    modal.addEventListener('click',  onBg);
+    setTimeout(() => btnOk.focus(), 50);
+  });
+}
+
 // ─── État ────────────────────────────────────────────────────────────────────
 const socket = io();
 let allEmployes = [];
@@ -720,8 +746,8 @@ function appliquerModeleDepuisListe(code) {
   validerHoraireFormulaire();
 }
 
-function supprimerModele(idx) {
-  if (!confirm('Supprimer ce modèle ?')) return;
+async function supprimerModele(idx) {
+  if (!await showConfirm('Supprimer ce modèle ?', 'Supprimer')) return;
   modeles.splice(idx, 1);
   localStorage.setItem('karoka_modeles', JSON.stringify(modeles));
   renderModeles(); renderModelesRapides();
@@ -954,7 +980,7 @@ async function ajouterEmploye() {
 }
 
 async function supprimerEmploye(prno) {
-  if (!confirm(`Désactiver l'employé ${prno} ?`)) return;
+  if (!await showConfirm(`Désactiver l'employé ${prno} ?`, 'Désactiver')) return;
   const r = await fetch(`/api/admin/employes/${prno}`,{method:'DELETE'});
   const d = await r.json();
   if (d.ok) loadEmployes();
@@ -962,7 +988,7 @@ async function supprimerEmploye(prno) {
 
 async function supprimerDefinitif(prno, nom) {
   const msg = `⚠ SUPPRESSION DÉFINITIVE\n\nEmployé : ${nom} (${prno})\n\nTous les pointages, horaires et liaisons seront effacés.\nCette action est irréversible.\n\nConfirmer ?`;
-  if (!confirm(msg)) return;
+  if (!await showConfirm(msg, 'Supprimer définitivement')) return;
   const r = await fetch(`/api/admin/employes/${prno}/permanent`, {method:'DELETE'});
   const d = await r.json();
   if (d.ok) loadEmployes();
@@ -1141,7 +1167,7 @@ async function insererFerieVariable(inputId, libelle) {
 }
 
 async function supprimerFerie(date_str) {
-  if(!confirm(`Supprimer le jour férié du ${date_str} ?`))return;
+  if(!await showConfirm(`Supprimer le jour férié du ${date_str} ?`, 'Supprimer'))return;
   await fetch(`/api/jours_feries/${date_str}`,{method:'DELETE'});
   loadFeries();
 }
@@ -1352,7 +1378,7 @@ async function ajouterException() {
 }
 
 async function supprimerException(prno, date_str) {
-  if (!confirm(`Supprimer l'exception du ${date_str} ?`)) return;
+  if (!await showConfirm(`Supprimer l'exception du ${date_str} ?`, 'Supprimer')) return;
   const r = await fetch(`/api/admin/horaires/${prno}/exceptions/${date_str}`, {method:'DELETE'});
   const d = await r.json();
   if (d.ok) chargerExceptions(prno);
@@ -1404,7 +1430,7 @@ async function sauvegarderModifHoraire() {
 }
 
 async function reactiver(prno) {
-  if (!confirm(`Réactiver ${prno} ? Il devra renvoyer son PRNO au bot pour se lier.`)) return;
+  if (!await showConfirm(`Réactiver ${prno} ? Il devra renvoyer son PRNO au bot pour se lier.`, 'Réactiver')) return;
   const r = await fetch(`/api/admin/employes/${prno}/reactiver`, {method:'POST'});
   const d = await r.json();
   if (d.ok) loadEmployes();
@@ -1603,7 +1629,7 @@ async function creerReleve() {
 
 async function cloreReleve(id) {
   const prochainLibelle = document.getElementById('prochainLibelle')?.value?.trim() || null;
-  if (!confirm('Clore ce relevé ? Le suivant sera généré automatiquement.')) return;
+  if (!await showConfirm('Clore ce relevé ? Le suivant sera généré automatiquement.', 'Clore')) return;
   const body = prochainLibelle ? JSON.stringify({libelle_prochain: prochainLibelle}) : '{}';
   const d = await fetch(`/api/releves/${id}/clore`,{
     method:'POST', headers:{'Content-Type':'application/json'}, body
@@ -1617,12 +1643,23 @@ async function cloreReleve(id) {
 }
 
 async function supprimerReleve(id) {
-  if (!confirm('Supprimer ce relevé définitivement ?')) return;
+  if (!await showConfirm('Supprimer ce relevé définitivement ?', 'Supprimer')) return;
   const d = await fetch(`/api/releves/${id}`,{method:'DELETE'}).then(r=>r.json());
   if (d.ok) loadReleves();
   else showToast('error', d.error || 'Erreur');
 }
 </script>
+
+<!-- Modal Confirmation -->
+<div id="modalConfirm" class="modal-overlay-admin" role="dialog" aria-modal="true" aria-labelledby="confirmMsg">
+  <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:16px;padding:28px 28px 22px;width:360px;max-width:95vw;box-shadow:0 8px 40px rgba(0,0,0,0.18)">
+    <div id="confirmMsg" style="font-size:14px;color:var(--text);line-height:1.55;margin-bottom:22px"></div>
+    <div style="display:flex;justify-content:flex-end;gap:10px">
+      <button id="confirmCancel" class="btn btn-ghost">Annuler</button>
+      <button id="confirmOk" class="btn btn-danger">Confirmer</button>
+    </div>
+  </div>
+</div>
 
 <!-- Modal Lier Empreinte -->
 <div id="modalEmpreinte" class="modal-overlay-admin" role="dialog" aria-modal="true" aria-labelledby="modalEmpreinteTitle">
@@ -1726,7 +1763,7 @@ async function confirmerLierEmpreinte() {
   else { showToast('error', d.error||'Erreur'); }
 }
 async function delierEmpreinte(prno, fingerprintId) {
-  if (!confirm(`Supprimer l'empreinte #${fingerprintId} de ${prno} ?`)) return;
+  if (!await showConfirm(`Supprimer l'empreinte #${fingerprintId} de ${prno} ?`, 'Supprimer')) return;
   const r = await fetch(`/api/admin/empreintes/${fingerprintId}`, {method:'DELETE'});
   const d = await r.json();
   if (d.ok) loadEmployes();
@@ -1758,7 +1795,7 @@ async function confirmerLierPin() {
   else { showToast('error', d.error||'Erreur'); }
 }
 async function delierPin(prno) {
-  if (!confirm(`Supprimer le PIN de ${prno} ?`)) return;
+  if (!await showConfirm(`Supprimer le PIN de ${prno} ?`, 'Supprimer')) return;
   const r = await fetch(`/api/admin/employes/${prno}/pin`, {method:'DELETE'});
   const d = await r.json();
   if (d.ok) loadEmployes();
@@ -1851,14 +1888,14 @@ document.addEventListener('click', e => {
 
 // ── Telegram ──
 async function renvoiLien(prno, nom) {
-  if (!confirm(`Renvoyer le lien groupe Telegram à ${nom} ?`)) return;
+  if (!await showConfirm(`Renvoyer le lien groupe Telegram à ${nom} ?`, 'Renvoyer')) return;
   const r = await fetch(`/api/admin/renvoi_lien/${prno}`, {method:'POST'});
   const d = await r.json();
   if (d.ok) { showToast('success', `Lien renvoyé à ${nom}.`); }
   else { showToast('error', d.message || d.error || 'Erreur'); }
 }
 async function delierTelegram(prno) {
-  if (!confirm(`Délier le compte Telegram de ${prno} ? L'employé devra se réenregistrer.`)) return;
+  if (!await showConfirm(`Délier le compte Telegram de ${prno} ? L'employé devra se réenregistrer.`, 'Délier')) return;
   const r = await fetch(`/api/admin/liaisons/${prno}`, {method:'DELETE'});
   const d = await r.json();
   if (d.ok) loadEmployes();
@@ -1901,7 +1938,7 @@ async function sauvegarderRotation() {
   else { showToast('error', d.error||'Erreur'); }
 }
 async function supprimerRotation() {
-  if (!confirm('Supprimer la configuration de rotation ?')) return;
+  if (!await showConfirm('Supprimer la configuration de rotation ?', 'Supprimer')) return;
   const r = await fetch(`/api/admin/employes/${_rotationPrno}/rotation`, {
     method:'PUT', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({rotation_cycle:null, rotation_ref_date:null, dimanche_tour_ref:null})
