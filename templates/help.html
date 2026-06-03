@@ -226,6 +226,11 @@ body { font-family:'DM Sans',sans-serif; background:#F0F2F8; color:#1A1F2E; }
             <span class="info-text">Aucun code horaire affecté à cet employé — impossible de calculer la conformité.</span>
           </div>
         </div>
+
+        <div class="info-block" style="margin-top:16px;">
+          <div class="info-label">Calcul du temps réel</div>
+          <div class="info-text">Le temps est plafonné sur chaque plage : arriver en avance ou partir en retard ne donne pas de bonus. Une <strong>franchise de retard de 15 min à l'arrivée</strong> n'est pas décomptée ; au-delà, seul le dépassement compte (ex : 20 min de retard → 5 min déduites). Un départ anticipé est pénalisé dès la 1<sup>re</sup> minute. La tolérance d'admission d'un pointage hors plage est de <strong>±1 h</strong>.</div>
+        </div>
       </div>
     </div>
 
@@ -340,10 +345,26 @@ body { font-family:'DM Sans',sans-serif; background:#F0F2F8; color:#1A1F2E; }
         </div>
 
         <div style="font-size:13px;font-weight:600;color:#1A1F2E;margin-bottom:10px;">Onglet Jours fériés</div>
-        <div style="display:flex;flex-direction:column;gap:7px;">
+        <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:18px;">
           <div class="step">
             <div class="step-num">F</div>
             <div class="step-text"><strong>Ajouter un jour férié</strong> — Saisissez la date, un libellé et choisissez si le férié est <em>fixe</em> (même date chaque année) ou <em>variable</em> (date unique). Les absences les jours fériés ne comptent pas dans les statistiques.</div>
+          </div>
+        </div>
+
+        <div style="font-size:13px;font-weight:600;color:#1A1F2E;margin-bottom:10px;">Onglet Historique</div>
+        <div style="display:flex;flex-direction:column;gap:7px;">
+          <div class="step">
+            <div class="step-num">H</div>
+            <div class="step-text"><strong>Journal des pointages</strong> — Liste tous les pointages, du plus récent au plus ancien, avec la <strong>provenance</strong> (device) et le <strong>lieu</strong>.</div>
+          </div>
+          <div class="step">
+            <div class="step-num">🔍</div>
+            <div class="step-text"><strong>Filtres</strong> — Recherche par <strong>nom ou PRNO</strong>, par <strong>date</strong> (<code style="font-family:'DM Mono',monospace;font-size:11px;background:#F0F2F8;padding:1px 4px;border-radius:3px;">yyyy/mm/dd</code>) et par <strong>device</strong> (Telegram, Empreinte, Badge, PIN). Bouton <em>Réinitialiser</em> pour tout effacer.</div>
+          </div>
+          <div class="step">
+            <div class="step-num">📍</div>
+            <div class="step-text"><strong>Device &amp; lieu</strong> — Un pointage <strong>Telegram</strong> est affiché « À distance » ; un pointage par <strong>Empreinte / Badge / PIN</strong> est localisé au « Siège KAROKA » (lecteur physique). Les pointages antérieurs à cette fonctionnalité apparaissent comme Telegram.</div>
           </div>
         </div>
       </div>

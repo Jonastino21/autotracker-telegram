@@ -4,7 +4,7 @@ parser.py — Parser du code horaire KAROKA + calcul temps réel plafonné.
 
 import re
 import logging
-from datetime import date, timedelta
+from datetime import date
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +14,10 @@ JOURS = {
     "tj":[0,1,2,3,4,5,6],
 }
 JOURS_NOMS = ["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"]
+
+# Franchise de retard à l'arrivée : les N premières minutes de retard ne sont
+# pas décomptées. Au-delà, seul le dépassement (retard − franchise) est pénalisé.
+GRACE_RETARD_MIN = 15
 
 
 def _parse_heure(h: str) -> int:
@@ -195,7 +199,7 @@ def get_plages_jour(code: str, date_obj: date) -> list:
 
 
 def est_dans_plage_horaire(code: str, date_obj: date, heure_str: str,
-                            tolerance: int = 30) -> bool:
+                            tolerance: int = 60) -> bool:
     """
     Vérifie si une heure de pointage appartient à une plage de travail
     de l'employé pour ce jour, avec une tolérance en minutes.
@@ -256,21 +260,6 @@ def get_minutes_theoriques_semaine(code: str) -> int:
     return sum(j["minutes_theoriques"] for j in parse_code_horaire(code).values())
 
 
-def get_minutes_theoriques_periode(code: str, date_debut: date, date_fin: date,
-                                    jours_feries: set = None) -> int:
-    """Minutes théoriques sur une période, jours fériés comptés comme payés."""
-    if not code:
-        return 0
-    parsed = parse_code_horaire(code)
-    total  = 0
-    d      = date_debut
-    while d <= date_fin:
-        # Jour férié = heures théoriques quand même (payé)
-        total += parsed[d.weekday()]["minutes_theoriques"]
-        d += timedelta(days=1)
-    return total
-
-
 def calculer_temps_reel_plafonne(code: str, date_obj: date,
                                   pointages: list) -> dict:
     """
@@ -285,7 +274,8 @@ def calculer_temps_reel_plafonne(code: str, date_obj: date,
     Plafonnement :
     - Arrivée en avance → on compte depuis le début de la plage
     - Départ en retard  → on compte jusqu'à la fin de la plage
-    - Arrivée en retard → pénalité (on compte depuis l'arrivée réelle)
+    - Arrivée en retard → franchise de GRACE_RETARD_MIN minutes non décomptée,
+      au-delà on pénalise seulement le dépassement (retard − franchise)
     - Départ anticipé   → pénalité (on compte jusqu'au départ réel)
     """
     plages = get_plages_jour(code, date_obj)
@@ -344,8 +334,12 @@ def calculer_temps_reel_plafonne(code: str, date_obj: date,
             continue
 
         # Plafonnement
-        debut_compte = max(premiere_arrivee, pd)  # pas de bonus si arrivée en avance
-        fin_compte   = min(dernier_depart,   pf)  # pas de bonus si départ en retard
+        # Arrivée : pas de bonus si en avance ; franchise GRACE_RETARD_MIN sur le
+        # retard, seul le dépassement de la franchise est décompté.
+        retard_arrivee  = max(0, premiere_arrivee - pd)
+        retard_decompte = max(0, retard_arrivee - GRACE_RETARD_MIN)
+        debut_compte = pd + retard_decompte
+        fin_compte   = min(dernier_depart, pf)  # pas de bonus si départ en retard
 
         if fin_compte <= debut_compte:
             minutes_brut = 0
@@ -378,13 +372,6 @@ def calculer_temps_reel_plafonne(code: str, date_obj: date,
         "plages_detail":      plages_detail,
         "complet":            complet,
     }
-
-
-def _trouver_plus_proche(heures: list, reference: int):
-    """Trouve l'heure la plus proche d'une référence dans une liste."""
-    if not heures:
-        return None
-    return min(heures, key=lambda h: abs(h - reference))
 
 
 def _heure_to_min(heure_str: str) -> int:

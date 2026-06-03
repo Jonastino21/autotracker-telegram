@@ -11,3 +11,5 @@ __pycache__/
 *.pyc
 presences.xlsx
 tracker.log*
+tracker.pid
+presences.backup_*.db

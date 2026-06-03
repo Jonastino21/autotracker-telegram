@@ -153,6 +153,12 @@ def _migrate_db(conn):
         conn.commit()
     except Exception:
         pass
+    # Provenance du pointage : telegram / empreinte / badge / pin
+    try:
+        conn.execute("ALTER TABLE pointages ADD COLUMN source TEXT DEFAULT 'telegram'")
+        conn.commit()
+    except Exception:
+        pass
     for col in ("rotation_cycle", "rotation_ref_date", "dimanche_tour_ref"):
         try:
             conn.execute(f"ALTER TABLE employes ADD COLUMN {col} TEXT")
@@ -607,7 +613,7 @@ def get_dernier_pointage_type(prno: str, date_local: str) -> str | None:
 
 
 def insert_pointage(message_id, telegram_id, prno, date_local, heure_locale,
-                    type_pointage, session, raw_text):
+                    type_pointage, session, raw_text, source="telegram"):
     conn = get_connection()
     try:
         # Vérifier doublon de type dans la même transaction
@@ -616,17 +622,17 @@ def insert_pointage(message_id, telegram_id, prno, date_local, heure_locale,
             WHERE prno=? AND date_local=?
             ORDER BY heure_locale DESC LIMIT 1
         """, (prno, date_local)).fetchone()
-        
+
         if row and row["type_pointage"] == type_pointage:
             return False  # doublon de type, on ignore
-        
+
         cur = conn.execute("""
             INSERT OR IGNORE INTO pointages
                 (message_id, telegram_id, prno, date_local, heure_locale,
-                 type_pointage, session, raw_text)
-            VALUES (?,?,?,?,?,?,?,?)
+                 type_pointage, session, raw_text, source)
+            VALUES (?,?,?,?,?,?,?,?,?)
         """, (message_id, telegram_id, prno, date_local, heure_locale,
-              type_pointage, session, raw_text))
+              type_pointage, session, raw_text, source))
         conn.commit()
         inserted = cur.rowcount > 0
         if inserted:
@@ -644,6 +650,42 @@ def get_pointages_du_jour(date_str):
             LEFT JOIN employes e ON p.prno=e.prno
             WHERE p.date_local=? ORDER BY p.heure_locale
         """, (date_str,)).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_historique(limit=200, date_str=None, prno=None, source=None, recherche=None):
+    """
+    Journal des pointages le plus récent en premier, avec nom employé et
+    provenance (source). Filtres optionnels : date, employé (prno exact),
+    source, et recherche libre (nom ou PRNO, insensible à la casse).
+    """
+    conn = get_connection()
+    try:
+        clauses, params = [], []
+        if date_str:
+            clauses.append("p.date_local=?"); params.append(date_str)
+        if prno:
+            clauses.append("p.prno=?"); params.append(prno)
+        if source:
+            clauses.append("COALESCE(p.source,'telegram')=?"); params.append(source)
+        if recherche:
+            like = f"%{recherche.strip()}%"
+            clauses.append("(p.prno LIKE ? OR e.nom_complet LIKE ?)")
+            params.extend([like, like])
+        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        params.append(int(limit))
+        rows = conn.execute(f"""
+            SELECT p.id, p.prno, p.date_local, p.heure_locale, p.type_pointage,
+                   p.session, COALESCE(p.source,'telegram') AS source,
+                   e.nom_complet
+            FROM pointages p
+            LEFT JOIN employes e ON p.prno=e.prno
+            {where}
+            ORDER BY p.date_local DESC, p.heure_locale DESC
+            LIMIT ?
+        """, params).fetchall()
         return [dict(r) for r in rows]
     finally:
         conn.close()
@@ -1141,7 +1183,7 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
         ecart = format_ecart(theorique, reel)
 
         # Déterminer quelles sessions sont actives selon les plages de l'horaire
-        # Une plage est "matin" si elle se termine avant 13h30, "apm" si elle commence après 12h30
+        # Une plage est "matin" si elle commence avant 13h00, "apm" si elle finit après 13h00
         # Une plage peut couvrir les deux (ex: 0800-1700)
         has_session_mat = False
         has_session_apm = False
@@ -1163,9 +1205,10 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
                     if apm_plage_debut is None or pd_h < apm_plage_debut:
                         apm_plage_debut = pd_h
 
-        # Répartir les pointages selon les plages de l'horaire avec tolérance ±30 min
-        # Si pas d'horaire : on utilise le seuil fixe 13h
-        TOLERANCE = 30  # minutes
+        # Répartir les pointages selon les plages de l'horaire, avec la même
+        # tolérance ±1h que la fenêtre d'admission (tracker.py / parser.est_dans_plage_horaire).
+        # Si pas d'horaire : on utilise le seuil fixe 13h.
+        TOLERANCE = 60  # minutes
 
         def appartient_matin(heure_str):
             h = int(heure_str.split(":")[0]) * 60 + int(heure_str.split(":")[1])

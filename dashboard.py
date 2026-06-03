@@ -241,6 +241,18 @@ def api_periode():
     })
 
 
+@app.route("/api/historique")
+@login_required
+def api_historique():
+    return jsonify(db.get_historique(
+        limit     = int(request.args.get("limit", 200)),
+        date_str  = request.args.get("date") or None,
+        prno      = request.args.get("prno") or None,
+        source    = request.args.get("source") or None,
+        recherche = request.args.get("q") or None,
+    ))
+
+
 @app.route("/api/detail_jour")
 @login_required
 def api_detail_jour():

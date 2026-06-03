@@ -275,6 +275,7 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
       <button class="tab-admin" onclick="showSection('feries',this)" aria-selected="false">Jours fériés</button>
       <button class="tab-admin" onclick="showSection('modeles',this)" aria-selected="false">Modèles horaires</button>
       <button class="tab-admin" onclick="showSection('releves',this)" aria-selected="false">Relevés de paie</button>
+      <button class="tab-admin" onclick="showSection('historique',this)" aria-selected="false">Historique</button>
     </div></div>
   </div>
 
@@ -613,6 +614,37 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
       </div>
     </div>
 
+    <!-- ═══════════════════════════════════
+         SECTION HISTORIQUE
+    ════════════════════════════════════ -->
+    <div class="section" id="sec-historique">
+      <div class="bg-white border border-black/[0.07] rounded-2xl overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.07)]">
+        <div class="px-[22px] py-4 border-b border-black/[0.07] bg-main-bg max-sm:px-4">
+          <div class="text-[13.5px] font-bold text-text-base mb-3">Historique des pointages</div>
+          <div class="flex flex-wrap items-stretch gap-2">
+            <input type="text" id="histRecherche" placeholder="Nom ou PRNO…" onkeydown="if(event.key==='Enter')loadHistorique()"
+                   class="bg-white border border-black/[0.07] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-teal flex-1 min-w-[160px]">
+            <input type="text" id="histDate" maxlength="10" oninput="formatDateEffetInput(this)" placeholder="yyyy/mm/dd"
+                   onkeydown="if(event.key==='Enter')loadHistorique()"
+                   class="bg-white border border-black/[0.07] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-teal w-full sm:w-[130px]">
+            <select id="histSource" onchange="loadHistorique()"
+                    class="bg-white border border-black/[0.07] rounded-lg px-3 py-1.5 text-[13px] outline-none cursor-pointer focus:border-teal w-full sm:w-auto">
+              <option value="">Tous les devices</option>
+              <option value="telegram">Telegram</option>
+              <option value="empreinte">Empreinte</option>
+              <option value="badge">Badge</option>
+              <option value="pin">PIN</option>
+            </select>
+            <div class="flex gap-2 w-full sm:w-auto">
+              <button class="btn btn-primary btn-sm flex-1 sm:flex-none" onclick="loadHistorique()">Filtrer</button>
+              <button class="btn btn-ghost btn-sm flex-1 sm:flex-none" onclick="reinitHistorique()">Réinitialiser</button>
+            </div>
+          </div>
+        </div>
+        <div class="table-wrap" id="tableHistorique" aria-live="polite"><div class="empty-state">Chargement...</div></div>
+      </div>
+    </div>
+
   </div><!-- /page -->
 </div><!-- /page-body -->
 
@@ -700,6 +732,70 @@ function showSection(name, btn) {
   if (name==='feries')  loadFeries();
   if (name==='modeles') renderModeles();
   if (name==='releves') { loadReleves(); initReleveJourSelector(); }
+  if (name==='historique') loadHistorique();
+}
+
+// ─── Historique des pointages ────────────────────────────────────────────────
+const SOURCE_LABELS = {
+  telegram:  { txt: 'Telegram', lieu: 'À distance' },
+  empreinte: { txt: 'Empreinte', lieu: 'Siège KAROKA' },
+  badge:     { txt: 'Badge',    lieu: 'Siège KAROKA' },
+  pin:       { txt: 'PIN',      lieu: 'Siège KAROKA' },
+};
+
+function reinitHistorique() {
+  document.getElementById('histRecherche').value = '';
+  document.getElementById('histDate').value = '';
+  document.getElementById('histSource').value = '';
+  loadHistorique();
+}
+
+const _escHtml = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function loadHistorique() {
+  const el = document.getElementById('tableHistorique');
+  if (!el) return;
+  el.innerHTML = '<div class="empty-state">Chargement...</div>';
+  const q       = document.getElementById('histRecherche').value.trim();
+  const dateRaw = document.getElementById('histDate').value.trim();
+  const source  = document.getElementById('histSource').value;
+  const params  = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (dateRaw) {
+    if (!/^\d{4}\/\d{2}\/\d{2}$/.test(dateRaw)) { showToast('error','Date invalide — attendu yyyy/mm/dd'); el.innerHTML=''; return; }
+    params.set('date', dateRaw.replace(/\//g,'-'));
+  }
+  if (source) params.set('source', source);
+  const rows = await fetch(`/api/historique?${params.toString()}`).then(r=>r.json()).catch(()=>[]);
+  if (!rows.length) { el.innerHTML='<div class="empty-state">Aucun pointage</div>'; return; }
+  let html = `<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:720px">
+    <thead><tr>
+      <th style="text-align:left;padding:9px 12px">Date</th>
+      <th style="text-align:left;padding:9px 12px">Heure</th>
+      <th style="text-align:left;padding:9px 12px">PRNO</th>
+      <th style="text-align:left;padding:9px 12px">Employé</th>
+      <th style="text-align:left;padding:9px 12px">Type</th>
+      <th style="text-align:left;padding:9px 12px">Session</th>
+      <th style="text-align:left;padding:9px 12px">Device</th>
+      <th style="text-align:left;padding:9px 12px">Lieu</th>
+    </tr></thead><tbody>`;
+  rows.forEach(p => {
+    const s = SOURCE_LABELS[p.source] || { txt: p.source || '—', lieu: (p.source && p.source !== 'telegram') ? 'Siège KAROKA' : '—' };
+    const typeLabel = p.type_pointage === 'arrivee' ? 'Arrivée' : 'Départ';
+    const typeColor = p.type_pointage === 'arrivee' ? '#00897B' : '#C62828';
+    html += `<tr style="border-top:1px solid rgba(0,0,0,0.06)">
+      <td style="padding:9px 12px;font-family:'DM Mono',monospace;white-space:nowrap">${p.date_local.replace(/-/g,'/')}</td>
+      <td style="padding:9px 12px;font-family:'DM Mono',monospace;white-space:nowrap">${(p.heure_locale||'').slice(0,5)}</td>
+      <td style="padding:9px 12px;font-family:'DM Mono',monospace">${_escHtml(p.prno||'')}</td>
+      <td style="padding:9px 12px">${_escHtml(p.nom_complet || p.prno || '')}</td>
+      <td style="padding:9px 12px;color:${typeColor};font-weight:600;white-space:nowrap">${typeLabel}</td>
+      <td style="padding:9px 12px;white-space:nowrap">${p.session === 'matin' ? 'Matin' : 'Après-midi'}</td>
+      <td style="padding:9px 12px;white-space:nowrap">${_escHtml(s.txt)}</td>
+      <td style="padding:9px 12px;color:var(--text-dim);white-space:nowrap">${_escHtml(s.lieu)}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
 }
 
 // ─── Modèles rapides ─────────────────────────────────────────────────────────
@@ -938,7 +1034,7 @@ async function ajouterEmploye() {
   const nom        = document.getElementById('inputNom').value.trim();
   const code       = document.getElementById('inputHoraire').value.trim();
   const dateEffetRaw = document.getElementById('inputDateEffet').value.trim();
-  const dateEffet  = parseDateEffet(dateEffetRaw) || new Date().toISOString().slice(0,10);
+  const dateEffet  = parseDateEffet(dateEffetRaw) || new Date().toLocaleDateString('en-CA');
 
   if (!prno || !nom) { showToast('error','PRNO et nom complet obligatoires.'); return; }
 
@@ -1193,7 +1289,7 @@ function showToast(type, message) {
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
-const _todayAdmin = new Date().toISOString().slice(0,10).replace(/-/g,'/');
+const _todayAdmin = new Date().toLocaleDateString('en-CA').replace(/-/g,'/');
 document.getElementById('inputDateEffet').value = _todayAdmin;
 // ferieDate est un champ texte, on le laisse vide par défaut
 initFerieAnnee();
