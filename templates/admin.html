@@ -631,7 +631,7 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
                     class="bg-white border border-black/[0.07] rounded-lg px-3 py-1.5 text-[13px] outline-none cursor-pointer focus:border-teal w-full sm:w-auto">
               <option value="">Tous les devices</option>
               <option value="telegram">Telegram</option>
-              <option value="empreinte">Empreinte</option>
+              <option value="fingerprint">Empreinte</option>
               <option value="badge">Badge</option>
               <option value="pin">PIN</option>
             </select>
@@ -737,10 +737,11 @@ function showSection(name, btn) {
 
 // ─── Historique des pointages ────────────────────────────────────────────────
 const SOURCE_LABELS = {
-  telegram:  { txt: 'Telegram', lieu: 'À distance' },
-  empreinte: { txt: 'Empreinte', lieu: 'Siège KAROKA' },
-  badge:     { txt: 'Badge',    lieu: 'Siège KAROKA' },
-  pin:       { txt: 'PIN',      lieu: 'Siège KAROKA' },
+  telegram:    { txt: 'Telegram',  lieu: 'À distance' },
+  fingerprint: { txt: 'Empreinte', lieu: 'Siège KAROKA' },
+  empreinte:   { txt: 'Empreinte', lieu: 'Siège KAROKA' },  // alias
+  badge:       { txt: 'Badge',     lieu: 'Siège KAROKA' },
+  pin:         { txt: 'PIN',       lieu: 'Siège KAROKA' },
 };
 
 function reinitHistorique() {
