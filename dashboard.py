@@ -331,15 +331,29 @@ def api_ajouter_employe():
     data           = request.get_json()
     prno           = (data.get("prno")        or "").strip()
     nom            = (data.get("nom_complet") or "").strip()
+    categorie      = (data.get("categorie")   or "standard").strip()
     fingerprint_id = data.get("fingerprint_id")
     pin_id         = data.get("pin_id")
 
-    result = db.ajouter_employe(prno, nom)
+    result = db.ajouter_employe(prno, nom, categorie)
     if result["ok"]:
         if fingerprint_id:
             lier_empreinte(int(fingerprint_id), prno)
         if pin_id:
             lier_pin(int(pin_id), prno)
+        emit_admin_update("admin_employes_updated")
+    return jsonify(result), (200 if result["ok"] else 400)
+
+
+@app.route("/api/admin/employes/<prno>", methods=["PUT"])
+@login_required
+def api_modifier_employe(prno):
+    data         = request.get_json() or {}
+    nouveau_prno = data.get("prno")
+    nouveau_nom  = data.get("nom_complet")
+    categorie    = data.get("categorie")
+    result = db.modifier_employe(prno, nouveau_prno, nouveau_nom, categorie)
+    if result["ok"]:
         emit_admin_update("admin_employes_updated")
     return jsonify(result), (200 if result["ok"] else 400)
 
@@ -431,6 +445,7 @@ def api_set_horaire(prno):
     code_horaire = (data.get("code_horaire") or "").strip()
     date_effet   = (data.get("date_effet")   or get_today()).strip()
     commentaire  = (data.get("commentaire")  or "").strip() or None
+    heure_effet  = (data.get("heure_effet")  or "").strip() or None
 
     if not code_horaire:
         return jsonify({"ok": False, "error": "Code horaire obligatoire"}), 400
@@ -440,7 +455,7 @@ def api_set_horaire(prno):
     if not validation["ok"]:
         return jsonify({"ok": False, "error": " | ".join(validation["erreurs"])}), 400
 
-    result = db.set_horaire(prno, code_horaire, date_effet, commentaire)
+    result = db.set_horaire(prno, code_horaire, date_effet, commentaire, heure_effet)
     if result["ok"]:
         result["heures_semaine"] = validation["label_semaine"]
         emit_admin_update("admin_employes_updated")
@@ -508,7 +523,16 @@ def api_set_rotation(prno):
     rotation_cycle    = (data.get("rotation_cycle")    or "").strip() or None
     rotation_ref_date = (data.get("rotation_ref_date") or "").strip() or None
     dimanche_tour_ref = (data.get("dimanche_tour_ref") or "").strip() or None
-    result = db.set_rotation(prno, rotation_cycle, rotation_ref_date, dimanche_tour_ref)
+    try:
+        dimanche_tour_cycle = int(data.get("dimanche_tour_cycle")) if data.get("dimanche_tour_cycle") else None
+    except (TypeError, ValueError):
+        dimanche_tour_cycle = None
+    try:
+        ferie_tour_rang = int(data.get("ferie_tour_rang")) if data.get("ferie_tour_rang") else None
+    except (TypeError, ValueError):
+        ferie_tour_rang = None
+    result = db.set_rotation(prno, rotation_cycle, rotation_ref_date,
+                             dimanche_tour_ref, dimanche_tour_cycle, ferie_tour_rang)
     if result["ok"]:
         emit_admin_update("admin_employes_updated")
     return jsonify(result), (200 if result["ok"] else 400)
@@ -529,13 +553,14 @@ def api_modifier_horaire(prno):
     code_horaire = (data.get("code_horaire") or "").strip()
     date_effet   = (data.get("date_effet")   or get_today()).strip()
     commentaire  = (data.get("commentaire")  or "").strip() or None
+    heure_effet  = (data.get("heure_effet")  or "").strip() or None
     if not code_horaire:
         return jsonify({"ok": False, "error": "Code horaire obligatoire"}), 400
     from parser import valider_code_horaire
     validation = valider_code_horaire(code_horaire)
     if not validation["ok"]:
         return jsonify({"ok": False, "error": " | ".join(validation["erreurs"])}), 400
-    result = db.set_horaire(prno, code_horaire, date_effet, commentaire)
+    result = db.set_horaire(prno, code_horaire, date_effet, commentaire, heure_effet)
     if result["ok"]:
         result["heures_semaine"] = validation["label_semaine"]
     return jsonify(result), (200 if result["ok"] else 400)
