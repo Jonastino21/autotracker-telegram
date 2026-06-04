@@ -188,8 +188,11 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
   @media (max-width:767px) {
     #sidebar { position:fixed !important; top:0 !important; left:0 !important; height:100dvh !important; width:220px !important; z-index:50; transform:translateX(-100%); transition:transform 0.25s ease; }
     #sidebar.open { transform:translateX(0) !important; }
-    #sidebar .logo-text-wrap, #sidebar .nav-label, #sidebar .nav-item span { display:block !important; }
-    #sidebar .nav-item { justify-content:flex-start !important; padding:10px 14px !important; }
+    /* Réafficher le texte masqué par max-[900px]:hidden quand la sidebar est ouverte */
+    #sidebar .max-\[900px\]\:hidden { display:block !important; }
+    #sidebar a .max-\[900px\]\:hidden { display:inline !important; }
+    #sidebar a.max-\[900px\]\:justify-center { justify-content:flex-start !important; }
+    #sidebar a.max-\[900px\]\:px-3 { padding-left:14px !important; padding-right:14px !important; }
     #hamburger { display:flex; }
     .main-content { margin-left:0 !important; }
   }
@@ -221,32 +224,62 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
 <div id="sidebar-overlay" onclick="closeSidebar()" aria-hidden="true"></div>
 
 <!-- SIDEBAR -->
-<aside id="sidebar" aria-label="Navigation principale" class="sidebar-full w-[220px] min-h-screen bg-sidebar flex flex-col flex-shrink-0 sticky top-0 h-screen overflow-y-auto py-7">
+<aside id="sidebar"
+       class="w-[220px] min-h-screen bg-[#1A1F2E] flex flex-col flex-shrink-0 sticky top-0 h-screen overflow-y-auto py-7
+              max-[900px]:w-16"
+       aria-label="Navigation principale">
+
+  <!-- Logo + bouton fermer (mobile) -->
   <div class="flex items-center gap-2.5 px-6 pb-7">
-    <img src="{{ url_for('static', filename='assets/logo.png') }}" alt="Logo KAROKA" class="w-9 h-9 object-contain flex-shrink-0" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
-    <span style="display:none;width:36px;height:36px;background:linear-gradient(135deg,#00897B,#00BFA5);border-radius:10px;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:white;flex-shrink:0;">K</span>
-    <button onclick="closeSidebar()" id="sidebar-close"
-        class="hidden ml-auto text-[#7B8BA8] hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10"
-        aria-label="Fermer le menu">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-    </button>
-    <div class="logo-text-wrap">
-      <div class="logo-text text-[17px] font-bold text-sidebar-text">KAROKA</div>
-      <div class="text-[10px] text-sidebar-muted tracking-[1.5px] uppercase">Présences</div>
+    <img src="{{ url_for('static', filename='assets/logo.png') }}" alt="Logo KAROKA"
+         class="w-[38px] h-[38px] object-contain flex-shrink-0"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+    <span style="display:none;width:38px;height:38px;background:linear-gradient(135deg,#00897B,#00BFA5);border-radius:10px;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:white;flex-shrink:0;">K</span>
+    <div class="max-[900px]:hidden flex-1">
+      <div class="text-[17px] font-bold text-[#E8EDF2]">KAROKA</div>
+      <div class="text-[10px] text-[#7B8BA8] tracking-[1.5px] uppercase">Présences</div>
     </div>
+    <button onclick="closeSidebar()"
+            class="hidden ml-auto text-[#7B8BA8] hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10"
+            id="sidebar-close" aria-label="Fermer le menu">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
   </div>
 
+  <!-- Nav -->
   <nav class="flex flex-col gap-0.5 px-3 flex-1" aria-label="Menu">
-    <div class="nav-label text-[9px] font-bold tracking-[1.8px] uppercase text-sidebar-muted px-3.5 pt-3.5 pb-1.5 opacity-70">Présence</div>
-    <a href="/" class="nav-item"><i class="nav-icon" aria-hidden="true">◈</i><span>Tableau de bord</span></a>
-    <a href="/admin" class="nav-item active"><i class="nav-icon" aria-hidden="true">◎</i><span>Administration</span></a>
+    <div class="text-[9px] font-bold tracking-[1.8px] uppercase text-[#7B8BA8] px-3.5 pt-3.5 pb-1.5 opacity-70 max-[900px]:hidden" aria-hidden="true">Présence</div>
+    <a href="/" aria-label="Tableau de bord"
+       class="flex items-center gap-2.5 px-3.5 py-2.5 rounded-[10px] text-[13px] font-medium text-[#7B8BA8] no-underline transition-all duration-200 hover:text-white hover:bg-white/[0.07]
+              max-[900px]:justify-center max-[900px]:px-3">
+      <span class="text-[15px] w-5 text-center flex-shrink-0" aria-hidden="true">◉</span>
+      <span class="max-[900px]:hidden">Tableau de bord</span>
+    </a>
+    <div class="text-[9px] font-bold tracking-[1.8px] uppercase text-[#7B8BA8] px-3.5 pt-3.5 pb-1.5 opacity-70 max-[900px]:hidden" aria-hidden="true">Liaison</div>
+    <a href="/admin" aria-label="Administration"
+       class="flex items-center gap-2.5 px-3.5 py-2.5 rounded-[10px] text-[13px] font-semibold text-white bg-white/10 no-underline transition-all duration-200
+              max-[900px]:justify-center max-[900px]:px-3">
+      <span class="text-[15px] w-5 text-center flex-shrink-0" aria-hidden="true">◎</span>
+      <span class="max-[900px]:hidden">Administration</span>
+    </a>
   </nav>
 
+  <!-- Footer sidebar -->
   <div class="px-3 pt-4 border-t border-white/[0.07] mt-auto flex flex-col gap-1.5">
-    <a href="/help" class="nav-item" aria-label="Manuel d'utilisation">
-      <i class="nav-icon" aria-hidden="true">?</i><span>Manuel</span>
+    <a href="/help" aria-label="Manuel d'utilisation"
+       class="flex items-center gap-2.5 px-3.5 py-2.5 rounded-[10px] text-[13px] font-medium text-[#7B8BA8] no-underline transition-all duration-200 hover:text-white hover:bg-white/[0.07]
+              max-[900px]:justify-center max-[900px]:px-3">
+      <span class="text-[15px] w-5 text-center flex-shrink-0" aria-hidden="true">?</span>
+      <span class="max-[900px]:hidden">Manuel</span>
     </a>
-    <a href="/logout" class="nav-item"><i class="nav-icon" aria-hidden="true">←</i><span>Déconnexion</span></a>
+    <a href="/logout" aria-label="Se déconnecter"
+       class="flex items-center gap-2.5 px-3.5 py-2.5 rounded-[10px] text-[13px] font-medium text-[#7B8BA8] no-underline transition-all duration-200 hover:text-white hover:bg-white/[0.07]
+              max-[900px]:justify-center max-[900px]:px-3">
+      <span class="text-[15px] w-5 text-center flex-shrink-0" aria-hidden="true">←</span>
+      <span class="max-[900px]:hidden">Déconnexion</span>
+    </a>
   </div>
 </aside>
 
@@ -300,6 +333,15 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
             <input type="text" id="inputNom" placeholder="ex: Rakotonandrasana Jean Pierre">
           </div>
           <div class="mb-[15px]">
+            <label class="block text-[10.5px] uppercase tracking-[1px] text-text-dim mb-1.5 font-semibold">Catégorie</label>
+            <select id="inputCategorie">
+              <option value="standard">Standard</option>
+              <option value="gardien">Gardien</option>
+              <option value="jardinier">Jardinier</option>
+            </select>
+            <div class="text-[11px] text-text-muted mt-0.5">« Gardien » : cycle/garde (rotation + fériés). « Jardinier » : standard + tour du dimanche + récup le mercredi.</div>
+          </div>
+          <div class="mb-[15px]">
             <label class="block text-[10.5px] uppercase tracking-[1px] text-text-dim mb-1.5 font-semibold">Code horaire</label>
             <div class="modeles-grid flex flex-wrap gap-1.5 mb-2.5" id="modelesRapides">
               <div class="modele-chip" onclick="appliquerModeleRapide('0800tj1200;1400tj1700;(1000tj1010);(1600tj1610);(di)')">Standard 40h</div>
@@ -317,6 +359,11 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
             <label class="block text-[10.5px] uppercase tracking-[1px] text-text-dim mb-1.5 font-semibold">Date d'effet de l'horaire <span class="text-[11px] text-text-muted font-normal">(yyyy/mm/dd)</span></label>
             <input type="text" id="inputDateEffet" placeholder="2026/04/19" maxlength="10" oninput="formatDateEffetInput(this)">
             <div class="text-[11px] text-text-muted mt-0.5">Format : <code class="text-teal">yyyy/mm/dd</code> — laissez vide pour aujourd'hui</div>
+          </div>
+          <div class="mb-[15px]">
+            <label class="block text-[10.5px] uppercase tracking-[1px] text-text-dim mb-1.5 font-semibold">Heure d'effet <span class="text-[11px] text-text-muted font-normal">(optionnel · HH:MM)</span></label>
+            <input type="time" id="inputHeureEffet">
+            <div class="text-[11px] text-text-muted mt-0.5">Intégration en cours de journée : les heures <b>avant</b> cette heure sont créditées présentes le 1er jour. Vide = journée entière normale.</div>
           </div>
 
           <div class="flex gap-2">
@@ -357,7 +404,15 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
       <div class="bg-white border border-black/[0.07] rounded-2xl overflow-hidden mb-6 shadow-[0_2px_12px_rgba(0,0,0,0.07)]">
         <div class="px-[22px] py-4 border-b border-black/[0.07] flex items-center justify-between gap-3 bg-main-bg flex-wrap topbar-flex">
           <div class="text-[13.5px] font-bold text-text-base">Liste des employés</div>
-          <input type="text" class="bg-white border border-black/[0.07] rounded-lg py-1.5 px-3 text-text-base font-sans text-[13px] outline-none w-[210px] focus:border-teal placeholder:text-text-muted transition-colors" id="searchEmp" placeholder="Rechercher..." oninput="filterEmp()">
+          <div class="flex items-center gap-2 flex-wrap">
+            <select id="filterCat" onchange="filterEmp()" class="bg-white border border-black/[0.07] rounded-lg py-1.5 px-3 text-text-base font-sans text-[13px] outline-none focus:border-teal transition-colors">
+              <option value="">Toutes catégories</option>
+              <option value="standard">Standard</option>
+              <option value="gardien">Gardien</option>
+              <option value="jardinier">Jardinier</option>
+            </select>
+            <input type="text" class="bg-white border border-black/[0.07] rounded-lg py-1.5 px-3 text-text-base font-sans text-[13px] outline-none w-[210px] focus:border-teal placeholder:text-text-muted transition-colors" id="searchEmp" placeholder="Rechercher..." oninput="filterEmp()">
+          </div>
         </div>
         <div id="tableEmployes" aria-live="polite"><div class="empty-state">Chargement...</div></div>
       </div>
@@ -1009,10 +1064,18 @@ function renderEmpTable(data, horMap={}, dateEffetMap={}) {
   el.innerHTML = html;
 }
 
+function _catEmp(e) {
+  const c = (e.categorie || '').toLowerCase();
+  if (c) return c;
+  if (e.dimanche_tour_ref) return 'gardien';   // même repli que le backend
+  return 'standard';
+}
 function filterEmp() {
-  const q = document.getElementById('searchEmp').value.toLowerCase();
+  const q   = document.getElementById('searchEmp').value.toLowerCase();
+  const cat = document.getElementById('filterCat').value;
   renderEmpTable(allEmployes.filter(e =>
     (e.prno + e.nom_complet + (e.username||'')).toLowerCase().includes(q)
+    && (!cat || _catEmp(e) === cat)
   ));
 }
 
@@ -1054,11 +1117,12 @@ async function ajouterEmploye() {
 
   const fingerprintId = document.getElementById('inputFingerprint')?.value?.trim();
   const pinId = document.getElementById('inputPin')?.value?.trim();
+  const categorie = document.getElementById('inputCategorie')?.value || 'standard';
 
   const r1 = await fetch('/api/admin/employes',{
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({
-      prno, nom_complet:nom,
+      prno, nom_complet:nom, categorie,
       ...(fingerprintId ? {fingerprint_id: parseInt(fingerprintId)} : {}),
       ...(pinId        ? {pin_id:         parseInt(pinId)}         : {})
     })
@@ -1066,10 +1130,11 @@ async function ajouterEmploye() {
   const d1 = await r1.json();
   if (!d1.ok) { showToast('error',`${d1.error}`); return; }
 
+  const heureEffet = document.getElementById('inputHeureEffet')?.value || '';
   if (code) {
     const r2 = await fetch(`/api/admin/horaires/${prno}`,{
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({code_horaire:code, date_effet:dateEffet})
+      body: JSON.stringify({code_horaire:code, date_effet:dateEffet, heure_effet:heureEffet})
     });
     const d2 = await r2.json();
     if (!d2.ok) { showToast('error',`Employé créé mais horaire non appliqué : ${d2.error}`); loadEmployes(); return; }
@@ -1080,6 +1145,7 @@ async function ajouterEmploye() {
   document.getElementById('inputNom').value  = '';
   document.getElementById('inputHoraire').value = '';
   document.getElementById('inputDateEffet').value = '';
+  if(document.getElementById('inputHeureEffet')) document.getElementById('inputHeureEffet').value = '';
   if(document.getElementById('inputFingerprint')) document.getElementById('inputFingerprint').value = '';
   if(document.getElementById('inputPin')) document.getElementById('inputPin').value = '';
   loadEmployes();
@@ -1344,6 +1410,10 @@ function ouvrirModifHoraire(prno, codeActuel) {
           <label>Date d'effet <span style="font-size:11px;color:var(--text-muted)">(le nouvel horaire s'applique à partir de cette date)</span></label>
           <input type="text" id="mhDate" maxlength="10" oninput="formatDateEffetInput(this)" placeholder="yyyy/mm/dd">
         </div>
+        <div class="form-group">
+          <label>Heure d'effet <span style="font-size:11px;color:var(--text-muted)">(optionnel — régularise le 1er jour : heures avant cette heure créditées présentes)</span></label>
+          <input type="time" id="mhHeure">
+        </div>
         <div id="mhPreview" style="font-size:12px;margin-bottom:16px;padding:10px;background:var(--main-bg);border-radius:8px;min-height:40px"></div>
         <div class="form-group">
           <label>Commentaire <span style="color:var(--text-muted);font-weight:400;font-size:11px">(optionnel)</span></label>
@@ -1520,11 +1590,12 @@ async function sauvegarderModifHoraire() {
   const code        = document.getElementById('mhCode')?.value?.trim();
   const date_effet  = (document.getElementById('mhDate')?.value || '').replace(/\//g, '-');
   const commentaire = document.getElementById('mhCommentaire')?.value?.trim() || null;
+  const heure_effet = document.getElementById('mhHeure')?.value || '';
   if (!code) { showToast('error','Code horaire obligatoire'); return; }
   const r = await fetch(`/api/admin/horaires/${_modifPrno}`, {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({code_horaire: code, date_effet, commentaire})
+    body: JSON.stringify({code_horaire: code, date_effet, commentaire, heure_effet})
   });
   const d = await r.json();
   if (d.ok) {
@@ -1806,20 +1877,52 @@ async function supprimerReleve(id) {
 </div>
 
 <!-- Modal Rotation -->
-<div id="modalRotation" class="modal-overlay-admin" role="dialog" aria-modal="true">
+<div id="modalEditEmp" class="modal-overlay-admin" role="dialog" aria-modal="true">
   <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:28px;width:420px;max-width:95vw">
-    <div style="font-size:14px;font-weight:700;margin-bottom:6px;color:var(--text)">Configuration rotation</div>
-    <div style="font-size:12px;color:var(--text-dim);margin-bottom:18px">
-      Employé : <strong id="rotNom" style="color:#1565C0"></strong>
-    </div>
+    <div style="font-size:14px;font-weight:700;margin-bottom:18px;color:var(--text)">Éditer l'employé</div>
 
     <div class="form-group">
+      <label>PRNO</label>
+      <input type="text" id="editPrno" placeholder="ex: rakoto"
+             style="font-family:'DM Mono',monospace;font-size:15px;font-weight:700;color:#1565C0">
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Le renommage se répercute sur les pointages, horaires et liaisons.</div>
+    </div>
+
+    <div class="form-group" style="margin-top:14px">
+      <label>Nom complet</label>
+      <input type="text" id="editNom" placeholder="ex: RAKOTO Jean">
+    </div>
+
+    <div class="form-group" style="margin-top:14px">
+      <label>Catégorie</label>
+      <select id="editCategorie">
+        <option value="standard">Standard</option>
+        <option value="gardien">Gardien</option>
+        <option value="jardinier">Jardinier</option>
+      </select>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:18px">
+      <button class="btn btn-primary btn-full" onclick="sauvegarderEditEmp()">Enregistrer</button>
+      <button class="btn btn-ghost" onclick="fermerModalEditEmp()">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<div id="modalRotation" class="modal-overlay-admin" role="dialog" aria-modal="true">
+  <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:28px;width:420px;max-width:95vw">
+    <div style="font-size:14px;font-weight:700;margin-bottom:6px;color:var(--text)" id="rotTitre">Configuration rotation</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:18px">
+      Employé : <strong id="rotNom" style="color:#1565C0"></strong> <span id="rotCatBadge" style="font-size:11px;color:var(--text-muted)"></span>
+    </div>
+
+    <div class="form-group" id="rotGrpCycle">
       <label>Cycle de rotation</label>
       <input type="text" id="rotCycle" placeholder="ex: 2/3" style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:#1565C0">
       <div style="font-size:11px;color:var(--text-muted);margin-top:4px">2 jours travaillés sur 3 → saisir <code>2/3</code></div>
     </div>
 
-    <div class="form-group" style="margin-top:14px">
+    <div class="form-group" id="rotGrpRefDate" style="margin-top:14px">
       <label>Date de référence rotation <span style="font-size:10px;color:var(--text-muted)">(1er jour de travail du cycle)</span></label>
       <input type="text" id="rotRefDate" placeholder="yyyy/mm/dd"
              oninput="formatDateEffetInput(this)"
@@ -1831,7 +1934,22 @@ async function supprimerReleve(id) {
       <input type="text" id="rotDimRef" placeholder="yyyy/mm/dd (optionnel)"
              oninput="formatDateEffetInput(this)"
              style="font-family:'DM Mono',monospace">
-      <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Le système déduira les tours suivants (tous les 3 dimanches)</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px" id="rotDimRefHint">Le système déduira les tours suivants selon le nombre de personnes ci-dessous</div>
+    </div>
+
+    <div class="form-group" style="margin-top:14px">
+      <label id="rotDimCycleLabel">Personnes en rotation dominicale <span style="font-size:10px;color:var(--text-muted)">(nombre qui se relaient le dimanche)</span></label>
+      <input type="number" id="rotDimCycle" min="1" placeholder="3"
+             style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:#1565C0">
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px">3 → un dimanche sur 3. Vide = 3 par défaut.</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:8px;line-height:1.4" id="rotDimCycleNote"></div>
+    </div>
+
+    <div class="form-group" id="rotGrpFerie" style="margin-top:14px">
+      <label>Rang dans la rotation des fériés <span style="font-size:10px;color:var(--text-muted)">(1, 2, 3…)</span></label>
+      <input type="number" id="rotFerieRang" min="1" placeholder="1"
+             style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:#1565C0">
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Les fériés en semaine sont pris dans l'ordre : 1er → rang 1, 2e → rang 2… (le dimanche est ignoré pour les fériés). Le férié se comporte comme un dimanche de garde.</div>
     </div>
 
     <div style="display:flex;gap:8px;margin-top:18px">
@@ -1943,8 +2061,13 @@ function toggleRowMenu(btn) {
 function _buildMenuHTML(emp) {
   let h = '';
   if (emp.actif) {
+    h += `<button class="row-menu-item" data-action="editer">Éditer infos (PRNO, nom, catégorie)</button>`;
     h += `<button class="row-menu-item" data-action="horaire">Modifier horaire</button>`;
-    h += `<button class="row-menu-item" data-action="rotation">Configurer rotation</button>`;
+    const _cat = (emp.categorie||'').toLowerCase();
+    if (_cat === 'gardien')
+      h += `<button class="row-menu-item" data-action="rotation">Configurer rotation/garde</button>`;
+    else if (_cat === 'jardinier')
+      h += `<button class="row-menu-item" data-action="rotation">Configurer tours (dimanche + fériés)</button>`;
     if (emp.lie)             h += `<button class="row-menu-item" data-action="tg_renvoi">Renvoyer lien Telegram</button>`;
     if (!emp.fingerprint_id) h += `<button class="row-menu-item" data-action="lier_fp">Lier empreinte</button>`;
     if (!emp.pin_id)         h += `<button class="row-menu-item" data-action="lier_pin">Lier PIN</button>`;
@@ -1972,8 +2095,9 @@ document.addEventListener('click', e => {
     _menuPrno = null;
     if (!emp) return;
     switch (action) {
+      case 'editer':     ouvrirModalEditEmp(emp.prno, emp.nom_complet, emp.categorie); break;
       case 'horaire':    ouvrirModifHoraire(emp.prno, _lastHorMap[emp.prno] || ''); break;
-      case 'rotation':   ouvrirModalRotation(emp.prno, emp.nom_complet, emp.rotation_cycle||'', emp.rotation_ref_date||'', emp.dimanche_tour_ref||''); break;
+      case 'rotation':   ouvrirModalRotation(emp.prno, emp.nom_complet, emp.rotation_cycle||'', emp.rotation_ref_date||'', emp.dimanche_tour_ref||'', emp.dimanche_tour_cycle||'', emp.ferie_tour_rang||'', emp.categorie||''); break;
       case 'tg_renvoi':  renvoiLien(emp.prno, emp.nom_complet); break;
       case 'lier_fp':    ouvrirLierEmpreinte(emp.prno, emp.nom_complet); break;
       case 'lier_pin':   ouvrirLierPin(emp.prno, emp.nom_complet); break;
@@ -2009,13 +2133,71 @@ async function delierTelegram(prno) {
 }
 
 // ── Rotation ──
+// ── Édition infos employé (PRNO, nom) ──
+let _editPrno = '';
+function ouvrirModalEditEmp(prno, nom, categorie) {
+  _editPrno = prno;
+  document.getElementById('editPrno').value = prno || '';
+  document.getElementById('editNom').value  = nom  || '';
+  document.getElementById('editCategorie').value = ['gardien','jardinier'].includes((categorie||'').toLowerCase()) ? categorie.toLowerCase() : 'standard';
+  document.getElementById('modalEditEmp').classList.add('open');
+  setTimeout(() => document.getElementById('editNom').focus(), 100);
+}
+function fermerModalEditEmp() {
+  document.getElementById('modalEditEmp').classList.remove('open');
+}
+async function sauvegarderEditEmp() {
+  const prno = document.getElementById('editPrno').value.trim().toLowerCase();
+  const nom  = document.getElementById('editNom').value.trim();
+  const categorie = document.getElementById('editCategorie').value || 'standard';
+  if (!prno) { showToast('error','PRNO obligatoire'); return; }
+  if (!nom)  { showToast('error','Nom obligatoire');  return; }
+  if (!/^[a-z0-9_.-]+$/.test(prno)) {
+    showToast('error','PRNO invalide (lettres, chiffres, . _ - )'); return;
+  }
+  const r = await fetch(`/api/admin/employes/${encodeURIComponent(_editPrno)}`, {
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ prno, nom_complet: nom, categorie })
+  });
+  const d = await r.json();
+  if (d.ok) { fermerModalEditEmp(); loadEmployes(); showToast('success','Employé mis à jour'); }
+  else { showToast('error', d.error || 'Erreur'); }
+}
+document.getElementById('modalEditEmp').addEventListener('click', function(e) {
+  if (e.target === this) fermerModalEditEmp();
+});
+
 let _rotationPrno = '';
-function ouvrirModalRotation(prno, nom, cycle, refDate, dimRef) {
+function ouvrirModalRotation(prno, nom, cycle, refDate, dimRef, dimCycle, ferieRang, categorie) {
   _rotationPrno = prno;
+  const cat = (categorie || 'standard').toLowerCase();
   document.getElementById('rotNom').textContent = nom;
   document.getElementById('rotCycle').value      = cycle    || '';
   document.getElementById('rotRefDate').value    = (refDate  || '').replace(/-/g,'/');
   document.getElementById('rotDimRef').value     = (dimRef   || '').replace(/-/g,'/');
+  document.getElementById('rotDimCycle').value   = dimCycle || '';
+  document.getElementById('rotFerieRang').value  = ferieRang || '';
+
+  // Cycle 2/3 + réf cycle : gardiens uniquement. Rang férié : gardiens ET jardiniers.
+  const estGardien   = cat === 'gardien';
+  const estJardinier = cat === 'jardinier';
+  document.getElementById('rotGrpCycle').style.display   = estGardien ? '' : 'none';
+  document.getElementById('rotGrpRefDate').style.display = estGardien ? '' : 'none';
+  document.getElementById('rotGrpFerie').style.display   = (estGardien || estJardinier) ? '' : 'none';
+
+  const motGroupe = estGardien ? 'gardiens' : (estJardinier ? 'jardiniers' : 'personnes');
+  document.getElementById('rotTitre').textContent = estGardien
+    ? 'Configuration rotation (gardien)'
+    : (estJardinier ? 'Tours dimanche + fériés (jardinier)' : 'Configuration rotation');
+  document.getElementById('rotCatBadge').textContent = '— ' + cat;
+  document.getElementById('rotDimCycleLabel').innerHTML =
+    `Nombre de ${motGroupe} en rotation dominicale <span style="font-size:10px;color:var(--text-muted)">(qui se relaient le dimanche)</span>`;
+  document.getElementById('rotDimRefHint').textContent =
+    `Le système déduira les tours suivants selon le nombre de ${motGroupe} ci-dessous`;
+  document.getElementById('rotDimCycleNote').textContent = estGardien
+    ? "La garde du dimanche est calculée automatiquement (fin lundi 8h15)."
+    : (estJardinier ? "Le jardinier de tour (dimanche ou férié) travaille ses horaires standard, puis récupère le mercredi suivant (cumulable)." : "");
+
   document.getElementById('modalRotation').classList.add('open');
   setTimeout(() => document.getElementById('rotCycle').focus(), 100);
 }
@@ -2026,9 +2208,17 @@ async function sauvegarderRotation() {
   const cycle   = document.getElementById('rotCycle').value.trim();
   const refRaw  = document.getElementById('rotRefDate').value.trim();
   const dimRaw  = document.getElementById('rotDimRef').value.trim();
+  const dimCyc  = document.getElementById('rotDimCycle').value.trim();
+  const ferRang = document.getElementById('rotFerieRang').value.trim();
 
   if (cycle && !/^\d+\/\d+$/.test(cycle)) {
     showToast('error','Format cycle invalide — ex: 2/3'); return;
+  }
+  if (dimCyc && (!/^\d+$/.test(dimCyc) || parseInt(dimCyc) < 1)) {
+    showToast('error','Nombre de gardiens invalide — ex: 3'); return;
+  }
+  if (ferRang && (!/^\d+$/.test(ferRang) || parseInt(ferRang) < 1)) {
+    showToast('error','Rang férié invalide — ex: 1'); return;
   }
   const toISO = v => v ? v.replace(/\//g,'-') : null;
   const r = await fetch(`/api/admin/employes/${_rotationPrno}/rotation`, {
@@ -2037,6 +2227,8 @@ async function sauvegarderRotation() {
       rotation_cycle:    cycle    || null,
       rotation_ref_date: toISO(refRaw),
       dimanche_tour_ref: toISO(dimRaw),
+      dimanche_tour_cycle: dimCyc ? parseInt(dimCyc) : null,
+      ferie_tour_rang: ferRang ? parseInt(ferRang) : null,
     })
   });
   const d = await r.json();
@@ -2047,7 +2239,7 @@ async function supprimerRotation() {
   if (!await showConfirm('Supprimer la configuration de rotation ?', 'Supprimer')) return;
   const r = await fetch(`/api/admin/employes/${_rotationPrno}/rotation`, {
     method:'PUT', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({rotation_cycle:null, rotation_ref_date:null, dimanche_tour_ref:null})
+    body: JSON.stringify({rotation_cycle:null, rotation_ref_date:null, dimanche_tour_ref:null, dimanche_tour_cycle:null, ferie_tour_rang:null})
   });
   const d = await r.json();
   if (d.ok) { fermerModalRotation(); loadEmployes(); }

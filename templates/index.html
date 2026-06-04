@@ -175,6 +175,8 @@
   .badge-ferie    { background: rgba(156,39,176,0.10); color: #6A1B9A;  border: 1px solid rgba(156,39,176,0.3); }
   .badge-exclu    { background: rgba(96,125,139,0.04); color: #607D8B;  border: 1px solid rgba(96,125,139,0.2); }
   .badge-repos    { background: rgba(33,150,243,0.08); color: #1565C0;  border: 1px solid rgba(33,150,243,0.3); }
+  .badge-garde    { background: rgba(0,150,136,0.10);  color: #00695C;  border: 1px solid rgba(0,150,136,0.3);  }
+  .badge-recup    { background: rgba(121,134,203,0.12); color: #3949AB;  border: 1px solid rgba(121,134,203,0.3); }
 
   /* Toast notifications */
   #toastContainer { position:fixed; top:20px; right:20px; z-index:99999; display:flex; flex-direction:column; align-items:flex-end; gap:8px; pointer-events:none; }
@@ -217,6 +219,9 @@
   .cel-absent   { background: rgba(239,83,80,0.10);  color: #C62828;  font-weight: 600; }
   .cel-ferie    { background: rgba(156,39,176,0.10); color: #6A1B9A;  font-weight: 600; }
   .cel-exclu    { background: rgba(96,125,139,0.04); color: #9AAABB;  font-size: 10px;  }
+  .cel-repos    { background: rgba(33,150,243,0.08); color: #1565C0;  font-weight: 600; }
+  .cel-garde    { background: rgba(0,150,136,0.12);  color: #00695C;  font-weight: 700; }
+  .cel-recup    { background: rgba(121,134,203,0.12); color: #3949AB;  font-weight: 600; }
 
   /* Loading / spinner */
   .loading-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px; gap: 16px; color: #5A6A82; }
@@ -454,9 +459,18 @@
           <div class="text-[12px] text-[#5A6A82] mt-0.5" id="tableSubtitle">Chargement...</div>
         </div>
         <label for="searchBox" class="sr-only">Rechercher un employé</label>
-        <input type="text"
-               class="bg-[#F0F2F8] border border-[rgba(0,0,0,0.07)] rounded-lg px-3.5 py-2 text-[#1A1F2E] font-sans text-[13px] outline-none w-[200px] max-[640px]:w-full placeholder-[#9AAABB] focus:border-teal transition-colors"
-               id="searchBox" placeholder="Rechercher..." oninput="filterTable()" autocomplete="off">
+        <div class="flex items-center gap-2 max-[640px]:w-full">
+          <select id="filterCatDash" onchange="filterTable()"
+                  class="bg-[#F0F2F8] border border-[rgba(0,0,0,0.07)] rounded-lg px-3 py-2 text-[#1A1F2E] font-sans text-[13px] outline-none focus:border-teal transition-colors">
+            <option value="">Toutes catégories</option>
+            <option value="standard">Standard</option>
+            <option value="gardien">Gardien</option>
+            <option value="jardinier">Jardinier</option>
+          </select>
+          <input type="text"
+                 class="bg-[#F0F2F8] border border-[rgba(0,0,0,0.07)] rounded-lg px-3.5 py-2 text-[#1A1F2E] font-sans text-[13px] outline-none w-[200px] max-[640px]:flex-1 placeholder-[#9AAABB] focus:border-teal transition-colors"
+                 id="searchBox" placeholder="Rechercher..." oninput="filterTable()" autocomplete="off">
+        </div>
       </div>
 
       <div id="ferierBanner"></div>
@@ -766,13 +780,14 @@ async function loadJour() {
   banner.innerHTML = (data.length > 0 && data[0].ferie)
     ? '<div class="ferie-banner">★ Jour férié — les absences ne sont pas comptabilisées</div>' : '';
   renderJourTable(data);
+  _reapplyFilter();
 }
 
 function renderJourTable(data) {
   const body = document.getElementById('tableBody');
   if (!data.length) { body.innerHTML = '<div class="loading-state">📭 Aucune donnée</div>'; return; }
   const dur  = m => (m > 0) ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty"></span>';
-  const bc   = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu',Repos:'badge-repos'}[s]||'');
+  const bc   = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu',Repos:'badge-repos',Garde:'badge-garde',Récup:'badge-recup'}[s]||'');
   const t    = v => v ? `<span class="td-time">${v.slice(0,5)}</span>` : '<span class="td-empty"></span>';
   const vide = '<span class="td-empty"></span>';
 
@@ -824,6 +839,7 @@ async function loadSMois() {
   document.getElementById('tableSubtitle').textContent = `${data.date_debut.replace(/-/g,'/')} → ${data.date_fin.replace(/-/g,'/')} · cliquer sur une ligne pour voir le détail par jour`;
   document.getElementById('ferierBanner').innerHTML    = '';
   renderSMoisTable(data);
+  _reapplyFilter();
 }
 
 function renderSMoisTable(data) {
@@ -860,7 +876,7 @@ function renderSMoisTable(data) {
     const rid = 'sm_' + emp.prno.replace(/\W/g,'_');
     const ec  = emp.ecart_type==='manquant'?'#EF5350':emp.ecart_type==='ok'?'#4CAF50':'#9AAABB';
 
-    html += `<tr>`;
+    html += `<tr data-cat="${emp.categorie||'standard'}">`;
     html += `<td class="td-prno-col">${emp.prno}</td>`;
     html += `<td class="td-nom-col">${emp.nom_prenom}</td>`;
 
@@ -937,7 +953,7 @@ async function openSemaine(rid, prno, semIdx, datesStr) {
   );
 
   const dur  = m => (m > 0) ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty"></span>';
-  const bc   = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu',Repos:'badge-repos'}[s]||'');
+  const bc   = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu',Repos:'badge-repos',Garde:'badge-garde',Récup:'badge-recup'}[s]||'');
   const t    = v => v ? `<span style="font-family:'DM Mono',monospace">${v.slice(0,5)}</span>` : '<span class="td-empty"></span>';
   const vide = '<span class="td-empty"></span>';
 
@@ -991,6 +1007,7 @@ async function loadPeriode() {
   document.getElementById('tableSubtitle').textContent = `${(data.date_debut||'').replace(/-/g,'/')} → ${(data.date_fin||'').replace(/-/g,'/')}`;
   document.getElementById('ferierBanner').innerHTML    = '';
   renderPeriodeTable(data);
+  _reapplyFilter();
 }
 
 function renderPeriodeTable(data) {
@@ -1016,11 +1033,11 @@ function renderPeriodeTable(data) {
   html += '</tr></thead><tbody>';
 
   employes.forEach(emp => {
-    html += `<tr><td class="td-prno-col">${emp.prno}</td><td class="td-nom-col">${emp.nom_prenom}</td>`;
+    html += `<tr data-cat="${emp.categorie||'standard'}"><td class="td-prno-col">${emp.prno}</td><td class="td-nom-col">${emp.nom_prenom}</td>`;
     dates.forEach(d => {
       const s   = (emp.dates||{})[d]||'Exclu';
-      const cls = {Complet:'cel-complet',Incomplet:'cel-incomplet',Absent:'cel-absent',Férié:'cel-ferie',Exclu:'cel-exclu'}[s]||'';
-      const lbl = {Complet:'✓',Incomplet:'◑',Absent:'✕',Férié:'★',Exclu:'·'}[s]|| '';
+      const cls = {Complet:'cel-complet',Incomplet:'cel-incomplet',Absent:'cel-absent',Férié:'cel-ferie',Exclu:'cel-exclu',Repos:'cel-repos',Garde:'cel-garde',Récup:'cel-recup'}[s]||'';
+      const lbl = {Complet:'✓',Incomplet:'◑',Absent:'✕',Férié:'★',Exclu:'·',Repos:'R',Garde:'G',Récup:'Ru'}[s]|| '';
       const oc  = s !== 'Exclu' ? `onclick="openModal('${d}')"` : '';
       html += `<td class="${cls}" ${oc} title="${s} — ${d}">${lbl}</td>`;
     });
@@ -1039,15 +1056,18 @@ function renderPeriodeTable(data) {
   body.innerHTML = html;
 }
 
+function _reapplyFilter() {
+  const q   = document.getElementById('searchBox')?.value.trim();
+  const cat = document.getElementById('filterCatDash')?.value;
+  if (q || cat) filterTable();
+}
 function filterTable() {
-  const q = document.getElementById('searchBox').value.toLowerCase().trim();
-  if (!q) {
-    if (currentTab === 'jour') renderJourTable(allRowsData);
-    else document.querySelectorAll('.periode-table tbody tr:not(.smois-detail-row)').forEach(r => r.style.display = '');
-    return;
-  }
+  const q   = document.getElementById('searchBox').value.toLowerCase().trim();
+  const cat = (document.getElementById('filterCatDash')?.value || '');
   if (currentTab === 'jour') {
     renderJourTable(allRowsData.filter(r => {
+      if (cat && (r.categorie || 'standard') !== cat) return false;
+      if (!q) return true;
       const heures = [r.arr_mat, r.dep_mat, r.arr_apm, r.dep_apm]
         .filter(Boolean).map(h => h.slice(0,5)).join(' ');
       return (r.prno + ' ' + r.nom_prenom + ' ' + heures + ' ' + (r.statut||'')).toLowerCase().includes(q);
@@ -1056,7 +1076,9 @@ function filterTable() {
   }
   document.querySelectorAll('.periode-table tbody tr').forEach(row => {
     if (row.classList.contains('smois-detail-row')) return;
-    row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+    const okCat = !cat || (row.dataset.cat || 'standard') === cat;
+    const okTxt = !q   || row.textContent.toLowerCase().includes(q);
+    row.style.display = (okCat && okTxt) ? '' : 'none';
   });
 }
 
@@ -1080,7 +1102,7 @@ async function openModal(ds) {
     document.getElementById('mStatIncomplets').textContent = data.stats.incomplets;
     document.getElementById('mStatAbsents').textContent    = data.stats.absents;
     const dur = m => (m > 0) ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty"></span>';
-    const bc  = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu'}[s]||'');
+    const bc  = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu',Repos:'badge-repos',Garde:'badge-garde',Récup:'badge-recup'}[s]||'');
     let html = '';
     if (data.stats.ferie) html += '<div class="ferie-banner" style="margin:12px 16px 0">★ Jour férié</div>';
     html += `<div style="overflow-x:auto"><table class="data-table"><thead><tr>
