@@ -373,7 +373,7 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
             </div>
             <div class="flex-1 mb-[15px]">
               <label class="block text-[10.5px] uppercase tracking-[1px] text-text-dim mb-1.5 font-semibold">ID PIN <span class="text-[11px] text-text-muted font-normal">(optionnel)</span></label>
-              <input type="number" id="inputPin" placeholder="" min="1">
+              <input type="text" id="inputPin" placeholder="" inputmode="numeric" pattern="[0-9]*">
             </div>
           </div>
 
@@ -1124,7 +1124,7 @@ async function ajouterEmploye() {
     body: JSON.stringify({
       prno, nom_complet:nom, categorie,
       ...(fingerprintId ? {fingerprint_id: parseInt(fingerprintId)} : {}),
-      ...(pinId        ? {pin_id:         parseInt(pinId)}         : {})
+      ...(pinId        ? {pin_id:         pinId}                   : {})
     })
   });
   const d1 = await r1.json();
@@ -1866,7 +1866,7 @@ async function supprimerReleve(id) {
     </div>
     <div class="form-group">
       <label>ID PIN</label>
-      <input type="number" id="modalPinId" placeholder="" min="1"
+      <input type="text" id="modalPinId" placeholder="" inputmode="numeric" pattern="[0-9]*"
              style="font-family:'DM Mono',monospace;font-size:18px;text-align:center;font-weight:700;color:#f59e0b">
     </div>
     <div style="display:flex;gap:8px;margin-top:16px">
@@ -2010,9 +2010,10 @@ function fermerModalPin() {
 async function confirmerLierPin() {
   const pinId = document.getElementById('modalPinId').value.trim();
   if (!pinId) { showToast('error','ID PIN obligatoire'); return; }
+  if (!/^[0-9]+$/.test(pinId)) { showToast('error','PIN : chiffres uniquement'); return; }
   const r = await fetch(`/api/admin/employes/${_modalPinPrno}/pin`, {
     method:'PUT', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({pin_id: parseInt(pinId)})
+    body: JSON.stringify({pin_id: pinId})
   });
   const d = await r.json();
   if (d.ok) { fermerModalPin(); loadEmployes(); }

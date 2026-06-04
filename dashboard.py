@@ -340,7 +340,7 @@ def api_ajouter_employe():
         if fingerprint_id:
             lier_empreinte(int(fingerprint_id), prno)
         if pin_id:
-            lier_pin(int(pin_id), prno)
+            lier_pin(pin_id, prno)
         emit_admin_update("admin_employes_updated")
     return jsonify(result), (200 if result["ok"] else 400)
 
@@ -667,7 +667,7 @@ def _init_liaisons_empreintes():
         conn.execute("""
             CREATE TABLE IF NOT EXISTS liaisons_empreintes (
                 fingerprint_id  INTEGER UNIQUE,
-                pin_id          INTEGER UNIQUE,
+                pin_id          TEXT UNIQUE,
                 prno            TEXT NOT NULL,
                 enregistre_le   TEXT DEFAULT (datetime('now')),
                 FOREIGN KEY(prno) REFERENCES employes(prno)
@@ -675,9 +675,32 @@ def _init_liaisons_empreintes():
         """)
         # Migration : ajouter pin_id si table existante sans cette colonne
         try:
-            conn.execute("ALTER TABLE liaisons_empreintes ADD COLUMN pin_id INTEGER UNIQUE")
+            conn.execute("ALTER TABLE liaisons_empreintes ADD COLUMN pin_id TEXT UNIQUE")
         except Exception:
             pass  # colonne déjà présente
+        # Migration : si pin_id est encore en INTEGER (ancien schéma), reconstruire en
+        # TEXT pour préserver les zéros de tête (ex. "061019" ≠ 61019)
+        cols = {r[1]: (r[2] or "").upper() for r in
+                conn.execute("PRAGMA table_info(liaisons_empreintes)")}
+        if cols.get("pin_id") == "INTEGER":
+            conn.execute("""
+                CREATE TABLE liaisons_empreintes_new (
+                    fingerprint_id  INTEGER UNIQUE,
+                    pin_id          TEXT UNIQUE,
+                    prno            TEXT NOT NULL,
+                    enregistre_le   TEXT DEFAULT (datetime('now')),
+                    FOREIGN KEY(prno) REFERENCES employes(prno)
+                )
+            """)
+            conn.execute("""
+                INSERT INTO liaisons_empreintes_new(fingerprint_id, pin_id, prno, enregistre_le)
+                SELECT fingerprint_id,
+                       CASE WHEN pin_id IS NULL THEN NULL ELSE CAST(pin_id AS TEXT) END,
+                       prno, enregistre_le
+                FROM liaisons_empreintes
+            """)
+            conn.execute("DROP TABLE liaisons_empreintes")
+            conn.execute("ALTER TABLE liaisons_empreintes_new RENAME TO liaisons_empreintes")
         # Migration : ajouter index UNIQUE sur fingerprint_id pour les tables existantes
         conn.execute("""
             CREATE UNIQUE INDEX IF NOT EXISTS idx_lem_fingerprint
@@ -721,7 +744,8 @@ def lier_empreinte(fingerprint_id: int, prno: str):
         conn.close()
 
 
-def get_liaison_par_pin(pin_id: int):
+def get_liaison_par_pin(pin_id):
+    pin_id = str(pin_id).strip()          # PIN = chaîne (préserve les zéros de tête)
     conn = db.get_connection()
     try:
         row = conn.execute("""
@@ -735,7 +759,8 @@ def get_liaison_par_pin(pin_id: int):
         conn.close()
 
 
-def lier_pin(pin_id: int, prno: str):
+def lier_pin(pin_id, prno: str):
+    pin_id = str(pin_id).strip()          # PIN = chaîne (préserve les zéros de tête)
     conn = db.get_connection()
     try:
         # Si l'employé a déjà une ligne → UPDATE pin_id
@@ -785,7 +810,11 @@ def tuya_webhook():
     if not scan_id:
         return jsonify({"ok": False, "error": "id manquant"}), 400
 
-    scan_id  = int(scan_id)
+    # PIN = chaîne (préserve les zéros de tête) ; empreinte/badge = entier
+    if type_acces == "pin":
+        scan_id = str(scan_id).strip()
+    else:
+        scan_id = int(scan_id)
     tz       = ZoneInfo(TIMEZONE)
     dt_local = datetime.fromtimestamp(int(ts), tz=tz) if ts else datetime.now(tz)
 
@@ -796,7 +825,7 @@ def tuya_webhook():
         liaison = get_liaison_empreinte(scan_id)
 
     if not liaison:
-        logger.warning("ID #%d (type=%s) non lié à aucun employé", scan_id, type_acces)
+        logger.warning("ID #%s (type=%s) non lié à aucun employé", scan_id, type_acces)
         return jsonify({
             "ok": True,
             "results": [{"id": scan_id, "type": type_acces,
@@ -902,7 +931,7 @@ def api_lier_pin_employe(prno):
     pin_id = data.get("pin_id")
     if not pin_id:
         return jsonify({"ok": False, "error": "pin_id obligatoire"}), 400
-    result = lier_pin(int(pin_id), prno)
+    result = lier_pin(pin_id, prno)
     if result["ok"]:
         emit_admin_update("admin_employes_updated")
     return jsonify(result), (200 if result["ok"] else 400)
