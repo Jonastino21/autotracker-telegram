@@ -159,9 +159,17 @@ def _migrate_db(conn):
         conn.commit()
     except Exception:
         pass
-    for col in ("rotation_cycle", "rotation_ref_date", "dimanche_tour_ref"):
+    for col in ("rotation_cycle", "rotation_ref_date", "dimanche_tour_ref",
+                "dimanche_tour_cycle", "categorie", "ferie_tour_rang"):
         try:
             conn.execute(f"ALTER TABLE employes ADD COLUMN {col} TEXT")
+            conn.commit()
+        except Exception:
+            pass
+    # Heure d'effet (régularisation du jour d'intégration)
+    for tbl in ("horaires", "historique_horaires"):
+        try:
+            conn.execute(f"ALTER TABLE {tbl} ADD COLUMN heure_effet TEXT")
             conn.commit()
         except Exception:
             pass
@@ -352,22 +360,87 @@ def import_csv_employes(csv_path):
     return result
 
 
-def ajouter_employe(prno, nom_complet):
+def ajouter_employe(prno, nom_complet, categorie=None):
     prno = prno.strip().lower()
     nom_complet = nom_complet.strip()
+    categorie = (categorie or "standard").strip().lower() or "standard"
     if not prno or not nom_complet:
         return {"ok": False, "error": "PRNO et nom obligatoires"}
     conn = get_connection()
     try:
         conn.execute("""
-            INSERT INTO employes(prno, nom_complet, email)
-            VALUES(?,?,?)
+            INSERT INTO employes(prno, nom_complet, email, categorie)
+            VALUES(?,?,?,?)
             ON CONFLICT(prno) DO UPDATE SET
                 nom_complet=excluded.nom_complet,
+                categorie=excluded.categorie,
                 updated_at=datetime('now')
-        """, (prno, nom_complet, f"{prno}.karoka@gmail.com"))
+        """, (prno, nom_complet, f"{prno}.karoka@gmail.com", categorie))
         conn.commit()
         return {"ok": True, "prno": prno, "nom_complet": nom_complet}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        conn.close()
+
+
+def modifier_employe(prno, nouveau_prno=None, nouveau_nom=None, categorie=None):
+    """Modifie le nom, la catégorie et/ou renomme le PRNO d'un employé.
+    Le renommage du PRNO se répercute sur toutes les tables liées."""
+    prno = (prno or "").strip().lower()
+    if not prno:
+        return {"ok": False, "error": "PRNO manquant"}
+    conn = get_connection()
+    try:
+        emp = conn.execute("SELECT * FROM employes WHERE prno=?", (prno,)).fetchone()
+        if not emp:
+            return {"ok": False, "error": f"Employé '{prno}' introuvable"}
+
+        # 1. Nom
+        if nouveau_nom is not None:
+            nom = nouveau_nom.strip()
+            if not nom:
+                return {"ok": False, "error": "Le nom ne peut pas être vide"}
+            conn.execute(
+                "UPDATE employes SET nom_complet=?, updated_at=datetime('now') WHERE prno=?",
+                (nom, prno))
+
+        # 1b. Catégorie
+        if categorie is not None:
+            cat = (categorie or "").strip().lower() or "standard"
+            conn.execute(
+                "UPDATE employes SET categorie=?, updated_at=datetime('now') WHERE prno=?",
+                (cat, prno))
+
+        # 2. Renommage du PRNO (répercuté sur toutes les tables liées)
+        new = (nouveau_prno or "").strip().lower()
+        if new and new != prno:
+            if conn.execute("SELECT 1 FROM employes WHERE prno=?", (new,)).fetchone():
+                return {"ok": False, "error": f"Le PRNO '{new}' existe déjà"}
+            conn.commit()                              # clore toute transaction
+            conn.execute("PRAGMA foreign_keys=OFF")    # (hors transaction)
+            existantes = {r[0] for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'")}
+            for t in ("employes", "liaisons", "pointages", "horaires",
+                      "historique_horaires", "exceptions_horaires",
+                      "liaisons_empreintes"):
+                if t in existantes:
+                    conn.execute(f"UPDATE {t} SET prno=? WHERE prno=?", (new, prno))
+            # Aligner l'email auto-généré s'il portait l'ancien PRNO
+            conn.execute(
+                "UPDATE employes SET email=? WHERE prno=? AND email=?",
+                (f"{new}.karoka@gmail.com", new, f"{prno}.karoka@gmail.com"))
+            conn.execute(
+                "UPDATE employes SET updated_at=datetime('now') WHERE prno=?", (new,))
+            conn.commit()
+            conn.execute("PRAGMA foreign_keys=ON")
+            logger.info("PRNO renommé : %s → %s", prno, new)
+            prno = new
+
+        conn.commit()
+        row = conn.execute(
+            "SELECT prno, nom_complet FROM employes WHERE prno=?", (prno,)).fetchone()
+        return {"ok": True, "prno": row["prno"], "nom_complet": row["nom_complet"]}
     except Exception as e:
         return {"ok": False, "error": str(e)}
     finally:
@@ -814,7 +887,11 @@ def _est_jour_repos_rotation_from_emp(emp: dict, date_str: str) -> bool:
 
 
 def _est_dimanche_tour_from_emp(emp: dict, date_str: str) -> bool:
-    """Retourne True si ce dimanche est le tour de garde de cet employé (sans requête DB)."""
+    """Retourne True si ce dimanche est le tour de garde de cet employé (sans requête DB).
+
+    Le cycle est paramétrable via dimanche_tour_cycle = nombre de gardiens en
+    rotation dominicale (défaut 3 → un dimanche sur 3, soit un cycle de 21 jours).
+    """
     dimanche_tour_ref = emp.get("dimanche_tour_ref")
     if not dimanche_tour_ref:
         return False
@@ -822,10 +899,290 @@ def _est_dimanche_tour_from_emp(emp: dict, date_str: str) -> bool:
         check = date.fromisoformat(date_str)
         if check.weekday() != 6:
             return False
+        cycle_jours = _nb_gardiens_tour(emp) * 7
         ref   = date.fromisoformat(dimanche_tour_ref)
-        return (check - ref).days % 21 == 0
+        return (check - ref).days % cycle_jours == 0
     except Exception:
         return False
+
+
+# ── Génération dynamique du planning des gardiens ──────────────────────────────
+# Les gardiens ne suivent pas un code_horaire statique : leur planning se déduit
+# de leur cycle (2 nuits / 1 repos) + leur tour de garde dominical.
+#   - nuit normale : 16:45 → 08:15 (déduit du code de base)
+#   - tour du dimanche : garde finissant TOUJOURS lundi 08:15, début variable :
+#       • samedi travaillé  → bloc continu Sam 16:45 → Lun 08:15 (~39h30)
+#       • samedi repos      → Dim 08:00 → Lun 08:15 (~24h15)
+#   - le repos se décale de +1 jour à chaque tour (le dimanche ajoute un jour).
+
+GARDE_DEBUT_MIN = 8 * 60          # prise de garde le dimanche à 08:00
+_JOURS_CODE = ["lu", "ma", "me", "je", "ve", "sa", "di"]
+
+
+def _min_to_hhmm(m: int) -> str:
+    m %= 1440
+    return f"{m // 60:02d}{m % 60:02d}"
+
+
+def _est_gardien(emp: dict) -> bool:
+    """Vrai si l'employé est un gardien (catégorie). Rétro-compat : si la catégorie
+    n'est pas renseignée, on déduit de la présence d'une config de rotation."""
+    if not emp:
+        return False
+    cat = (emp.get("categorie") or "").strip().lower()
+    if cat == "gardien":
+        return True
+    if cat:                       # catégorie explicite non-gardien
+        return False
+    return bool(emp.get("rotation_cycle") and emp.get("rotation_ref_date")
+                and emp.get("dimanche_tour_ref"))
+
+
+def _est_jardinier(emp: dict) -> bool:
+    return bool(emp and (emp.get("categorie") or "").strip().lower() == "jardinier")
+
+
+def _mercredi_ref(d):
+    """Mercredi de la semaine de d (le mercredi <= d le plus proche)."""
+    return d - timedelta(days=(d.weekday() - 2) % 7)
+
+
+def _recups_semaine(emp: dict, W, feries) -> list:
+    """Jours de récup posés pour le mercredi-cible W : un par tour (dimanche/férié)
+    dont le 1er mercredi suivant tombe sur W, empilés à partir de W sur les jours
+    ouvrés (on saute dimanches et fériés)."""
+    # Tours dont le 1er mercredi suivant == W : ils tombent dans [W-7, W)
+    count = 0
+    dim = W - timedelta(days=3)                      # le dimanche de cette fenêtre
+    if _est_dimanche_tour_from_emp(emp, dim.isoformat()):
+        count += 1
+    d = W - timedelta(days=7)
+    while d < W:                                     # fériés en semaine dans la fenêtre
+        if d.weekday() != 6 and d.isoformat() in (feries or ()) \
+                and _est_ferie_tour(emp, d, feries):
+            count += 1
+        d += timedelta(days=1)
+    if count == 0:
+        return []
+    # Empiler count récup sur les jours ouvrés à partir de W (saute dim + fériés)
+    allocated, day, garde = [], W, 0
+    while len(allocated) < count and garde < 30:
+        if day.weekday() != 6 and day.isoformat() not in (feries or ()):
+            allocated.append(day)
+        day += timedelta(days=1)
+        garde += 1
+    return allocated
+
+
+def _est_recup_jardinier(emp: dict, date_obj, feries) -> bool:
+    """True si date_obj est un jour de récupération du jardinier."""
+    if date_obj.weekday() == 6 or date_obj.isoformat() in (feries or ()):
+        return False                                # ni dimanche ni férié
+    W = _mercredi_ref(date_obj)
+    for Wc in (W, W - timedelta(days=7)):           # semaine courante + débordement
+        if date_obj in _recups_semaine(emp, Wc, feries):
+            return True
+    return False
+
+
+def _planning_jardinier(emp: dict, date_obj, code: str, feries):
+    """Jardinier : horaire standard + tour chaque dimanche ET chaque férié (par
+    rang), chacun donnant 1 récup (mercredi suivant, empilable, décalable)."""
+    wd = date_obj.weekday()
+    ds = date_obj.isoformat()
+
+    # 1. Jour de récupération (chômé, échange)
+    if _est_recup_jardinier(emp, date_obj, feries):
+        return None, "Récup"
+
+    # 2. Dimanche : tour → travaille (lève (di)) ; sinon exclu
+    if wd == 6:
+        if _est_dimanche_tour_from_emp(emp, ds):
+            code_eff = (";".join(
+                s for s in code.split(";")
+                if s.strip().lower() not in ("(di)", "(di:am)", "(di:pm)")
+            ) or code)
+            return code_eff, None
+        return None, "Exclu"
+
+    # 3. Férié en semaine : tour → travaille ses heures standard ; sinon chômé payé
+    if ds in (feries or ()):
+        if _est_ferie_tour(emp, date_obj, feries):
+            return code, None
+        return None, "Férié"
+
+    # 4. Jour ouvré normal
+    return code, None
+
+
+def _nb_gardiens_tour(emp: dict) -> int:
+    try:
+        n = int(emp.get("dimanche_tour_cycle") or 3)
+    except (TypeError, ValueError):
+        n = 3
+    return n if n >= 1 else 3
+
+
+def _nb_dimanches(d_ref, d_end) -> int:
+    """Nombre de dimanches dans l'intervalle [d_ref, d_end)."""
+    if d_end <= d_ref:
+        return 0
+    premier = d_ref + timedelta(days=(6 - d_ref.weekday()) % 7)  # 1er dimanche ≥ d_ref
+    if premier >= d_end:
+        return 0
+    return (d_end - premier).days // 7 + 1
+
+
+def _jour_a_part(date_obj, feries) -> bool:
+    """Jour « à part » du cycle des gardiens : dimanche, OU férié en semaine.
+    (Un férié tombant un dimanche n'a aucun effet : c'est déjà un dimanche.)"""
+    if date_obj.weekday() == 6:
+        return True
+    return date_obj.isoformat() in (feries or ())
+
+
+def _nb_jours_a_part(d_ref, d_end, feries) -> int:
+    """Nombre de jours « à part » (dimanches + fériés en semaine) dans [d_ref, d_end)."""
+    if d_end <= d_ref:
+        return 0
+    n = _nb_dimanches(d_ref, d_end)
+    for f in (feries or ()):
+        fd = date.fromisoformat(f)
+        if d_ref <= fd < d_end and fd.weekday() != 6:
+            n += 1
+    return n
+
+
+def _est_ferie_tour(emp: dict, date_obj, feries) -> bool:
+    """Vrai si ce férié en semaine est le tour de garde de ce gardien.
+    Rotation par rang : les fériés en semaine pris dans l'ordre chronologique,
+    le k-ième revient au gardien de rang (k mod N)."""
+    ds = date_obj.isoformat()
+    semaine = sorted(f for f in (feries or ())
+                     if date.fromisoformat(f).weekday() != 6)
+    if ds not in semaine:
+        return False
+    try:
+        rang = int(emp.get("ferie_tour_rang") or 1)
+    except (TypeError, ValueError):
+        rang = 1
+    N = _nb_gardiens_tour(emp)
+    return (semaine.index(ds) % N) == ((rang - 1) % N)
+
+
+def _est_tour(emp: dict, date_obj, feries) -> bool:
+    """Tour de garde d'un jour « à part » : dimanche (rotation hebdo) ou férié (rang)."""
+    if date_obj.weekday() == 6:
+        return _est_dimanche_tour_from_emp(emp, date_obj.isoformat())
+    if date_obj.isoformat() in (feries or ()):
+        return _est_ferie_tour(emp, date_obj, feries)
+    return False
+
+
+def _position_cycle(emp: dict, date_obj, feries=None):
+    """(position, jours_travail, cycle_total) ou None.
+
+    Les jours « à part » (dimanches + fériés en semaine) ne font jamais avancer
+    le cycle : la position se calcule sur les seuls jours ouvrés écoulés depuis la réf.
+    """
+    rc = emp.get("rotation_cycle")
+    rr = emp.get("rotation_ref_date")
+    if not rc or not rr:
+        return None
+    try:
+        jt, ct = (int(x) for x in rc.split("/"))
+        ref    = date.fromisoformat(rr)
+    except Exception:
+        return None
+    if ct <= 0:
+        return None
+    jours_cycle = (date_obj - ref).days - _nb_jours_a_part(ref, date_obj, feries)
+    return jours_cycle % ct, jt, ct
+
+
+def _est_repos_gardien(emp: dict, date_obj, feries=None) -> bool:
+    pc = _position_cycle(emp, date_obj, feries)
+    if pc is None:
+        return False
+    pos, jt, _ = pc
+    return pos >= jt
+
+
+def _extraire_nuit(code: str):
+    """Heures (debut, fin) de la nuit, lues sur le lundi du code de base."""
+    from parser import parse_code_horaire
+    plages = parse_code_horaire(code).get(0, {}).get("plages_travail", [])
+    if not plages:
+        return None
+    return plages[0]["debut"], plages[0]["fin"]
+
+
+def _duree_nuit_gardien(code: str) -> int:
+    """Durée (minutes) d'une nuit de cycle — sert à créditer un férié chômé."""
+    from parser import _duree_plage
+    nuit = _extraire_nuit(code)
+    return _duree_plage(nuit[0], nuit[1]) if nuit else 0
+
+
+def _planning_gardien(emp: dict, date_obj, code: str, feries):
+    """Génère dynamiquement (code_effectif|None, force_statut|None) pour un gardien.
+    force_statut ∈ {None, 'Repos', 'Garde', 'Exclu'}.
+    Les jours « à part » (dimanche, férié en semaine) sont traités à l'identique."""
+    nuit = _extraire_nuit(code)
+    if not nuit:
+        return code, None
+    deb_n, fin_n = nuit
+    wd = date_obj.weekday()
+
+    # A. Jour « à part » (dimanche ou férié en semaine) : hors du cycle.
+    if _jour_a_part(date_obj, feries):
+        if _est_tour(emp, date_obj, feries):
+            eve = date_obj - timedelta(days=1)
+            # Garde fraîche si la veille n'est pas une nuit travaillée ;
+            # sinon le bloc continu (++) est porté par la veille → jour couvert.
+            if _jour_a_part(eve, feries) or _est_repos_gardien(emp, eve, feries):
+                return (f"{_min_to_hhmm(GARDE_DEBUT_MIN)}{_JOURS_CODE[wd]}"
+                        f"{_min_to_hhmm(fin_n)}+", "Garde")
+            return None, "Garde"
+        # Pas son tour : dimanche → Exclu ; férié en semaine → Férié (jour chômé)
+        if wd == 6:
+            return None, "Exclu"
+        return None, "Férié"
+
+    # B. Veille d'un jour-à-part de tour, et nuit travaillée → bloc continu (++)
+    lendemain = date_obj + timedelta(days=1)
+    if (_jour_a_part(lendemain, feries) and _est_tour(emp, lendemain, feries)
+            and not _est_repos_gardien(emp, date_obj, feries)):
+        return f"{_min_to_hhmm(deb_n)}{_JOURS_CODE[wd]}{_min_to_hhmm(fin_n)}++", None
+
+    # C. Jour ouvré : repos ou nuit selon le cycle.
+    if _est_repos_gardien(emp, date_obj, feries):
+        return None, "Repos"
+    return f"{_min_to_hhmm(deb_n)}{_JOURS_CODE[wd]}{_min_to_hhmm(fin_n)}", None
+
+
+def _planning_jour(emp: dict, code: str, date_obj, feries=None):
+    """(code_effectif, force_statut) pour n'importe quel employé."""
+    if not code or not emp:
+        return code, None
+    if _est_gardien(emp):
+        if feries is None:
+            feries = get_jours_feries_set()
+        return _planning_gardien(emp, date_obj, code, feries)
+    if _est_jardinier(emp):
+        if feries is None:
+            feries = get_jours_feries_set()
+        return _planning_jardinier(emp, date_obj, code, feries)
+    return code, None
+
+
+def get_code_effectif(prno: str, date_str: str) -> str | None:
+    """Code effectif d'un jour (utilisé par le tracker pour l'admission)."""
+    emp     = get_employe_by_prno(prno)
+    horaire = get_horaire(prno, date_str)
+    code    = horaire["code_horaire"] if horaire else None
+    code_eff, _ = _planning_jour(emp, code, date.fromisoformat(date_str))
+    return code_eff
 
 
 def est_jour_repos_rotation(prno: str, date_str: str) -> bool:
@@ -839,19 +1196,23 @@ def est_dimanche_tour(prno: str, date_str: str) -> bool:
 
 
 def set_rotation(prno: str, rotation_cycle: str = None,
-                 rotation_ref_date: str = None, dimanche_tour_ref: str = None) -> dict:
+                 rotation_ref_date: str = None, dimanche_tour_ref: str = None,
+                 dimanche_tour_cycle: int = None, ferie_tour_rang: int = None) -> dict:
     prno = prno.strip().lower()
     conn = get_connection()
     try:
         conn.execute("""
             UPDATE employes SET
-                rotation_cycle    = ?,
-                rotation_ref_date = ?,
-                dimanche_tour_ref = ?,
-                updated_at        = datetime('now')
+                rotation_cycle      = ?,
+                rotation_ref_date   = ?,
+                dimanche_tour_ref   = ?,
+                dimanche_tour_cycle = ?,
+                ferie_tour_rang     = ?,
+                updated_at          = datetime('now')
             WHERE prno = ?
         """, (rotation_cycle or None, rotation_ref_date or None,
-              dimanche_tour_ref or None, prno))
+              dimanche_tour_ref or None, dimanche_tour_cycle or None,
+              ferie_tour_rang or None, prno))
         conn.commit()
         return {"ok": True, "prno": prno}
     except Exception as e:
@@ -891,13 +1252,16 @@ def init_horaires_table():
         conn.close()
 
 
-def set_horaire(prno: str, code_horaire: str, date_effet: str, commentaire: str = None) -> dict:
+def set_horaire(prno: str, code_horaire: str, date_effet: str, commentaire: str = None,
+                heure_effet: str = None) -> dict:
     """
     Définit ou met à jour le code horaire d'un employé.
     Archive l'ancien dans historique_horaires avec date_fin = date_effet - 1 jour.
-    Les données passées restent toujours accessibles via l'historique.
+    heure_effet (HH:MM) : régularise le jour d'intégration (heures avant l'heure
+    d'effet créditées présentes).
     """
     prno = prno.strip().lower()
+    heure_effet = (heure_effet or "").strip() or None
     conn = get_connection()
     try:
         from datetime import date as _date, timedelta
@@ -906,7 +1270,7 @@ def set_horaire(prno: str, code_horaire: str, date_effet: str, commentaire: str 
 
         # Archiver l'ancien horaire si existant et différent
         ancien = conn.execute(
-            "SELECT code_horaire, date_effet FROM horaires WHERE prno=?", (prno,)
+            "SELECT code_horaire, date_effet, heure_effet FROM horaires WHERE prno=?", (prno,)
         ).fetchone()
         if ancien:
             # Ne pas archiver si c'est le même code à la même date (pas de changement réel)
@@ -923,20 +1287,22 @@ def set_horaire(prno: str, code_horaire: str, date_effet: str, commentaire: str 
                 """, (date_fin_ancien, prno, ancien["date_effet"]))
             else:
                 conn.execute("""
-                    INSERT INTO historique_horaires(prno, code_horaire, date_effet, date_fin)
-                    VALUES(?, ?, ?, ?)
-                """, (prno, ancien["code_horaire"], ancien["date_effet"], date_fin_ancien))
+                    INSERT INTO historique_horaires(prno, code_horaire, date_effet, date_fin, heure_effet)
+                    VALUES(?, ?, ?, ?, ?)
+                """, (prno, ancien["code_horaire"], ancien["date_effet"], date_fin_ancien,
+                      ancien["heure_effet"]))
 
         # Insérer ou mettre à jour l'horaire actuel
         conn.execute("""
-            INSERT INTO horaires(prno, code_horaire, date_effet, commentaire)
-            VALUES(?, ?, ?, ?)
+            INSERT INTO horaires(prno, code_horaire, date_effet, commentaire, heure_effet)
+            VALUES(?, ?, ?, ?, ?)
             ON CONFLICT(prno) DO UPDATE SET
                 code_horaire = excluded.code_horaire,
                 date_effet   = excluded.date_effet,
                 commentaire  = excluded.commentaire,
+                heure_effet  = excluded.heure_effet,
                 updated_at   = datetime('now')
-        """, (prno, code_horaire, date_effet, commentaire))
+        """, (prno, code_horaire, date_effet, commentaire, heure_effet))
         conn.commit()
         logger.info("Horaire défini : %s → %s (dès %s)", prno, code_horaire, date_effet)
         return {"ok": True, "prno": prno, "code_horaire": code_horaire}
@@ -967,13 +1333,13 @@ def get_horaire(prno: str, date_str: str = None) -> dict | None:
 
             # 2. Chercher dans l'historique le code actif à cette date
             row = conn.execute("""
-                SELECT code_horaire, date_effet FROM historique_horaires
+                SELECT code_horaire, date_effet, heure_effet FROM historique_horaires
                 WHERE prno=? AND date_effet <= ?
                 ORDER BY date_effet DESC LIMIT 1
             """, (prno, date_str)).fetchone()
             # 3. Comparer avec l'horaire actuel
             actuel = conn.execute(
-                "SELECT code_horaire, date_effet FROM horaires WHERE prno=?", (prno,)
+                "SELECT code_horaire, date_effet, heure_effet FROM horaires WHERE prno=?", (prno,)
             ).fetchone()
             if actuel and actuel["date_effet"] <= date_str:
                 if not row or actuel["date_effet"] >= row["date_effet"]:
@@ -1084,6 +1450,45 @@ def get_pointages_bruts_jour(date_str: str) -> dict:
     return result
 
 
+def _ajouter_departs_nuit(pts_jour: list, getter, code: str, date_obj) -> list:
+    """Pour une plage qui franchit minuit (nuit, ou garde continue à J+2), rattache
+    le départ du matin de fin (J+1 ou J+2) à la garde commencée ce jour-là.
+    `getter(date_iso) -> list[pts]` fournit les pointages d'une date."""
+    if not code:
+        return pts_jour
+    from parser import get_plages_jour, _heure_to_min
+    plages = get_plages_jour(code, date_obj)
+    nuit = [p for p in plages if p.get("fin_offset", 0) >= 1 or p["fin"] < p["debut"]]
+    if not nuit:
+        return pts_jour
+    maxoff = max(p.get("fin_offset", 0) or 1 for p in nuit)   # jour de fin
+    seuil  = max(p["fin"] for p in nuit) + 120                # fin + marge
+    d_fin  = (date_obj + timedelta(days=maxoff)).isoformat()
+    extra  = [p for p in getter(d_fin)
+              if p["type"] == "depart" and _heure_to_min(p["heure"]) <= seuil]
+    return pts_jour + extra if extra else pts_jour
+
+
+def _augmenter_jour_integration(code: str, date_obj, pts: list, heure_effet: str) -> list:
+    """Jour d'intégration : crédite comme présentes les plages (de jour) commencées
+    avant l'heure d'effet, via des pointages synthétiques (arrivée au début, départ
+    à l'heure d'effet). La fin de plage reste validée par les pointages réels."""
+    if not code or not heure_effet:
+        return pts
+    from parser import get_plages_jour, _heure_to_min, _min_to_heure
+    try:
+        he = _heure_to_min(heure_effet)
+    except Exception:
+        return pts
+    extra = []
+    for p in get_plages_jour(code, date_obj):
+        deb, fin, off = p["debut"], p["fin"], p.get("fin_offset", 0)
+        if off == 0 and fin > deb and deb < he:          # plage de jour, arrivée déjà passée
+            extra.append({"type": "arrivee", "heure": _min_to_heure(deb)})
+            extra.append({"type": "depart",  "heure": _min_to_heure(min(he, fin))})
+    return pts + extra if extra else pts
+
+
 def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
     """
     Résumé journalier enrichi avec calcul plafonné par horaire individuel.
@@ -1092,12 +1497,18 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
     """
     from parser import (calculer_temps_reel_plafonne, format_duree,
                         format_ecart, get_minutes_theoriques_jour)
-    from datetime import date as date_cls
+    from datetime import date as date_cls, timedelta
 
     employes  = get_all_employes()
     pointages = get_pointages_bruts_jour(date_str)
-    ferie     = is_jour_ferie(date_str)
+    feries    = get_jours_feries_set()
+    ferie     = date_str in feries
     date_obj  = date_cls.fromisoformat(date_str)
+    # Départs des matins suivants (J+1, J+2) pour rattraper les gardes de nuit / 24h+
+    pts_j1 = get_pointages_bruts_jour((date_obj + timedelta(days=1)).isoformat())
+    pts_j2 = get_pointages_bruts_jour((date_obj + timedelta(days=2)).isoformat())
+    _suiv = {(date_obj + timedelta(days=1)).isoformat(): pts_j1,
+             (date_obj + timedelta(days=2)).isoformat(): pts_j2}
 
     result = []
     for emp in employes:
@@ -1112,6 +1523,7 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
         if date_effet_emp and date_str < date_effet_emp:
             result.append({
                 "prno": prno, "nom_prenom": emp["nom_complet"],
+                "categorie": emp.get("categorie") or "standard",
                 "code_horaire": code, "statut": "Exclu",
                 "theorique_label": "—", "reel_label": "—",
                 "ecart_label": "—", "ecart_type": "neutre",
@@ -1121,15 +1533,18 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
             })
             continue
 
-        # Tour dimanche : lever l'exclusion (di) pour calculer les heures réelles
-        is_sunday     = date_obj.weekday() == 6
-        is_tour_sunday = is_sunday and _est_dimanche_tour_from_emp(emp, date_str)
-        effective_code = code
-        if is_tour_sunday and code:
-            effective_code = (";".join(
-                s for s in code.split(";")
-                if s.strip().lower() not in ("(di)", "(di:am)", "(di:pm)")
-            ) or code)
+        # Planning du jour (gardiens : généré dynamiquement ; sinon code de base)
+        is_sunday = date_obj.weekday() == 6
+        effective_code, force_statut = _planning_jour(emp, code, date_obj, feries)
+
+        # Garde : rattacher le départ du matin de fin (J+1 ou J+2)
+        pts = _ajouter_departs_nuit(
+            pts, lambda d: _suiv.get(d, {}).get(prno, []), effective_code, date_obj)
+
+        # Jour d'intégration : créditer les heures avant l'heure d'effet
+        heure_effet_emp = horaire.get("heure_effet") if horaire else None
+        if heure_effet_emp and date_effet_emp == date_str:
+            pts = _augmenter_jour_integration(effective_code, date_obj, pts, heure_effet_emp)
 
         if effective_code and pts:
             calc = calculer_temps_reel_plafonne(effective_code, date_obj, pts)
@@ -1154,18 +1569,27 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
         if code:
             from parser import parse_code_horaire
             parsed_h = parse_code_horaire(effective_code or code)
-            date_obj_check = date_cls.fromisoformat(date_str)
-            jour_info_check = parsed_h.get(date_obj_check.weekday(), {})
+            jour_info_check = parsed_h.get(date_obj.weekday(), {})
             jour_exclu = not jour_info_check.get("travaille", True)
-        if is_tour_sunday:
-            jour_exclu = False
 
-        # Repos rotation (hors dimanche, hors férié)
-        is_repos_rotation = (not is_sunday and not ferie and
+        # Repos rotation (non-gardiens : ancienne logique modulo, hors dimanche/férié)
+        is_repos_rotation = (not _est_gardien(emp) and not is_sunday and not ferie and
                              _est_jour_repos_rotation_from_emp(emp, date_str))
 
-        if ferie:
+        if ferie and not _est_gardien(emp) and not _est_jardinier(emp):
+            statut = "Férié"                   # standards : férié géré ici
+        elif force_statut == "Férié":          # gardien/jardinier : férié chômé payé
             statut = "Férié"
+            theorique = reel = (_duree_nuit_gardien(code) if _est_gardien(emp)
+                                else get_minutes_theoriques_jour(code, date_obj))
+        elif force_statut == "Garde":          # gardien : jour de tour (heures gardées)
+            statut = "Garde"
+        elif force_statut == "Récup":          # jardinier : récup du dimanche de tour
+            statut = "Récup"
+        elif force_statut == "Exclu":          # gardien : dimanche hors planning
+            statut = "Exclu"
+        elif force_statut == "Repos":          # gardien : repos calculé
+            statut = "Repos"
         elif jour_exclu and not has_any:
             statut = "Exclu"
         elif is_repos_rotation and not has_any:
@@ -1271,6 +1695,7 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
         result.append({
             "prno":              prno,
             "nom_prenom":        emp["nom_complet"],
+            "categorie":         emp.get("categorie") or "standard",
             "date":              date_str,
             "arr_mat":           arrivees_mat[0] if arrivees_mat else None,
             "dep_mat":           departs_mat[-1] if departs_mat  else None,
@@ -1369,32 +1794,65 @@ def get_resume_periode_avec_synthese(date_debut: str, date_fin: str) -> list[dic
             is_ferie = ds in feries
 
             is_sunday_day     = date_obj.weekday() == 6
-            is_tour_sunday_day = is_sunday_day and _est_dimanche_tour_from_emp(emp, ds)
-            is_repos_rot      = (not is_sunday_day and not is_ferie and
-                                 _est_jour_repos_rotation_from_emp(emp, ds))
+            is_repos_rot      = (not _est_gardien(emp) and not is_sunday_day
+                                 and not is_ferie
+                                 and _est_jour_repos_rotation_from_emp(emp, ds))
 
-            if code:
-                code_eff = code
-                if is_tour_sunday_day:
-                    code_eff = (";".join(
-                        s for s in code.split(";")
-                        if s.strip().lower() not in ("(di)", "(di:am)", "(di:pm)")
-                    ) or code)
+            code_eff, force_statut = _planning_jour(emp, code, date_obj, feries)
+            if code_eff:
                 theo_jour = get_minutes_theoriques_jour(code_eff, date_obj)
                 from parser import parse_code_horaire
                 parsed    = parse_code_horaire(code_eff)
                 jour_info = parsed.get(date_obj.weekday(), {})
                 jour_exclu = not jour_info.get("travaille", True)
             else:
-                code_eff   = None
                 theo_jour  = 0
                 jour_exclu = False
 
-            if is_ferie:
-                statut = "Férié"
+            # Garde : rattacher le départ du matin de fin (J+1 ou J+2)
+            pts = _ajouter_departs_nuit(
+                pts, lambda d: pts_index[prno][d], code_eff, date_obj)
+
+            # Jour d'intégration : créditer les heures avant l'heure d'effet
+            heure_effet_emp = horaire.get("heure_effet") if horaire else None
+            if heure_effet_emp and horaire.get("date_effet") == ds:
+                pts = _augmenter_jour_integration(code_eff, date_obj, pts, heure_effet_emp)
+
+            if is_ferie and not _est_gardien(emp) and not _est_jardinier(emp):
+                statut = "Férié"                     # standards : férié payé
                 nb_ferie += 1
                 total_theorique += theo_jour
                 total_reel      += theo_jour
+            elif force_statut == "Garde":
+                # Dimanche de tour : heures comptées si garde fraîche (code présent),
+                # sinon (garde continue) les heures sont portées par le samedi.
+                statut = "Garde"
+                if code_eff and pts:
+                    calc = calculer_temps_reel_plafonne(code_eff, date_obj, pts)
+                    total_theorique += calc["minutes_theoriques"]
+                    total_reel      += calc["minutes_reels"]
+                    if calc["complet"]:
+                        nb_complet += 1
+                    else:
+                        nb_incomplet += 1
+                elif code_eff:
+                    total_theorique += theo_jour
+                    nb_absent       += 1
+            elif force_statut == "Férié":
+                statut = "Férié"
+                nb_ferie += 1
+                credit = (_duree_nuit_gardien(code) if _est_gardien(emp)
+                          else get_minutes_theoriques_jour(code, date_obj))
+                total_theorique += credit
+                total_reel      += credit
+            elif force_statut == "Récup":
+                statut = "Récup"
+                nb_repos += 1
+            elif force_statut == "Exclu":
+                statut = "Exclu"
+            elif force_statut == "Repos":
+                statut = "Repos"
+                nb_repos += 1
             elif jour_exclu and not pts:
                 statut = "Exclu"
             elif is_repos_rot and not pts:
@@ -1430,6 +1888,7 @@ def get_resume_periode_avec_synthese(date_debut: str, date_fin: str) -> list[dic
         result.append({
             "prno":              prno,
             "nom_prenom":        emp["nom_complet"],
+            "categorie":         emp.get("categorie") or "standard",
             "dates":             dates_statuts,
             "theorique_label":   format_duree(total_theorique),
             "reel_label":        format_duree(total_reel),

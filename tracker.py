@@ -173,9 +173,9 @@ def traiter_scan(prno, nom_complet, type_pointage, dt_local, msg_id, raw_text, s
     heure_locale = dt_local.strftime("%H:%M:%S")
 
     # ── 1. Vérifier plage horaire valide ±1h ──
-    horaire = db.get_horaire(prno, date_local)
-    if horaire and horaire.get("code_horaire"):
-        code_h   = horaire["code_horaire"]
+    # Code effectif = tient compte du tour de garde du dimanche (horaire dédié)
+    code_h = db.get_code_effectif(prno, date_local)
+    if code_h:
         date_obj = date_cls.fromisoformat(date_local)
         if not est_dans_plage_horaire(code_h, date_obj, heure_locale, tolerance=60):
             logger.info(

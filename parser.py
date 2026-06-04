@@ -25,22 +25,39 @@ def _parse_heure(h: str) -> int:
     return int(h[:2])*60 + int(h[2:])
 
 
-def _duree_plage(debut: int, fin: int) -> int:
-    """Durée en minutes, gère chevauchement minuit."""
-    if fin > debut:
-        return fin - debut
-    return (24*60 - debut) + fin
+def _duree_plage(debut: int, fin: int, fin_offset: int = 0) -> int:
+    """Durée en minutes. fin_offset = nombre de minuits franchis :
+    0 = même jour, 1 = fin le lendemain (nuit), 2 = fin à J+2 (garde continue).
+    """
+    if fin_offset == 0 and fin < debut:
+        fin_offset = 1   # rétro-compat : fin < debut ⇒ nuit
+    return fin_offset * 1440 + (fin - debut)
+
+
+def _sur_axe(m: int, ancre: int, fin_offset: int) -> int:
+    """Place un pointage sur l'axe horaire continu d'une plage qui franchit un ou
+    plusieurs minuits : on choisit, parmi m, m+24h, … m+offset*24h, la valeur la
+    plus proche de l'ancre attendue (début pour une arrivée, fin pour un départ)."""
+    if fin_offset <= 0:
+        return m
+    cands = [m + k * 1440 for k in range(fin_offset + 1)]
+    return min(cands, key=lambda x: abs(x - ancre))
 
 
 def _parse_segment(seg: str):
     seg = seg.strip().lower()
-    m = re.match(r'^(\d{4})(lu|ma|me|je|ve|sa|di|tj)(\d{4})$', seg)
+    m = re.match(r'^(\d{4})(lu|ma|me|je|ve|sa|di|tj)(\d{4})(\+{0,2})$', seg)
     if not m:
         return None
+    debut    = _parse_heure(m.group(1))
+    fin      = _parse_heure(m.group(3))
+    # fin_offset : nombre de '+' ; à défaut, 1 si la plage franchit minuit
+    fin_offset = len(m.group(4)) if m.group(4) else (1 if fin < debut else 0)
     return {
-        "jours": JOURS.get(m.group(2), []),
-        "debut": _parse_heure(m.group(1)),
-        "fin":   _parse_heure(m.group(3)),
+        "jours":      JOURS.get(m.group(2), []),
+        "debut":      debut,
+        "fin":        fin,
+        "fin_offset": fin_offset,
     }
 
 
@@ -105,7 +122,7 @@ def parse_code_horaire(code: str) -> dict:
         if not parsed:
             continue
         for j in parsed["jours"]:
-            plage = (parsed["debut"], parsed["fin"])
+            plage = (parsed["debut"], parsed["fin"], parsed["fin_offset"])
             if is_pause:
                 jours_raw[j]["pauses"].append(plage)
             else:
@@ -144,12 +161,12 @@ def parse_code_horaire(code: str) -> dict:
 
         # Appliquer les exclusions/pauses
         plages_nettes = []
-        for td, tf in travail:
-            brut = _duree_plage(td, tf)
+        for td, tf, toff in travail:
+            brut = _duree_plage(td, tf, toff)
             pause_total = 0
             exclure = False
-            for pd, pf in pauses_effective:
-                dur_pause = _duree_plage(pd, pf)
+            for pd, pf, poff in pauses_effective:
+                dur_pause = _duree_plage(pd, pf, poff)
                 # Exclusion totale de la plage
                 if pd <= td and pf >= tf:
                     exclure = True
@@ -162,7 +179,8 @@ def parse_code_horaire(code: str) -> dict:
             if not exclure:
                 net = max(0, brut - pause_total)
                 if net > 0:
-                    plages_nettes.append({"debut": td, "fin": tf, "minutes_net": net})
+                    plages_nettes.append({"debut": td, "fin": tf,
+                                          "fin_offset": toff, "minutes_net": net})
 
         total_net = sum(p["minutes_net"] for p in plages_nettes)
 
@@ -212,7 +230,14 @@ def est_dans_plage_horaire(code: str, date_obj: date, heure_str: str,
         return False
     h_min = _heure_to_min(heure_str)
     for plage in plages:
-        if (plage["debut"] - tolerance) <= h_min <= (plage["fin"] + tolerance):
+        deb = plage["debut"] - tolerance
+        fin = plage["fin"] + tolerance
+        overnight = plage.get("fin_offset", 0) >= 1 or plage["fin"] < plage["debut"]
+        if overnight:
+            # Fenêtre qui chevauche minuit : [deb, 24h) ∪ [0h, fin]
+            if h_min >= deb or h_min <= fin:
+                return True
+        elif deb <= h_min <= fin:
             return True
     return False
 
@@ -298,14 +323,24 @@ def calculer_temps_reel_plafonne(code: str, date_obj: date,
         pd, pf          = plage["debut"], plage["fin"]
         theorique_plage = plage["minutes_net"]
 
+        # Plage qui franchit 1 ou 2 minuits (nuit, notation '+'/'++') : on raisonne
+        # sur un axe horaire continu où la fin et les pointages des matins suivants
+        # sont reportés (+24h, +48h).
+        fin_offset = plage.get("fin_offset", 0) or (1 if pf < pd else 0)
+        pf_axe     = pf + fin_offset * 1440
+
         # Fenêtre élargie : 2h avant le début et 2h après la fin
         # pour attraper les pointages proches de la plage
         fenetre_debut = pd - 120
-        fenetre_fin   = pf + 120
+        fenetre_fin   = pf_axe + 120
 
-        # Arrivées candidates : toutes dans la fenêtre
-        arrivees_candidates = [a for a in arrivees if fenetre_debut <= a <= fenetre_fin]
-        departs_candidates  = [d for d in departs  if fenetre_debut <= d <= fenetre_fin]
+        # Candidats sur l'axe continu : arrivée ancrée sur le début, départ sur la fin
+        arrivees_candidates = sorted(
+            a for a in (_sur_axe(x, pd, fin_offset) for x in arrivees)
+            if fenetre_debut <= a <= fenetre_fin)
+        departs_candidates  = sorted(
+            d for d in (_sur_axe(x, pf_axe, fin_offset) for x in departs)
+            if fenetre_debut <= d <= fenetre_fin)
 
         if not arrivees_candidates and not departs_candidates:
             plages_detail.append({
@@ -327,8 +362,8 @@ def calculer_temps_reel_plafonne(code: str, date_obj: date,
             plages_detail.append({
                 "plage_debut": _min_to_heure(pd),
                 "plage_fin":   _min_to_heure(pf),
-                "arrivee": _min_to_heure(premiere_arrivee) if premiere_arrivee else None,
-                "depart":  _min_to_heure(dernier_depart)   if dernier_depart   else None,
+                "arrivee": _min_to_heure(premiere_arrivee % 1440) if premiere_arrivee else None,
+                "depart":  _min_to_heure(dernier_depart % 1440)   if dernier_depart   else None,
                 "minutes": 0, "theorique": theorique_plage,
             })
             continue
@@ -339,7 +374,7 @@ def calculer_temps_reel_plafonne(code: str, date_obj: date,
         retard_arrivee  = max(0, premiere_arrivee - pd)
         retard_decompte = max(0, retard_arrivee - GRACE_RETARD_MIN)
         debut_compte = pd + retard_decompte
-        fin_compte   = min(dernier_depart, pf)  # pas de bonus si départ en retard
+        fin_compte   = min(dernier_depart, pf_axe)  # pas de bonus si départ en retard
 
         if fin_compte <= debut_compte:
             minutes_brut = 0
@@ -347,7 +382,8 @@ def calculer_temps_reel_plafonne(code: str, date_obj: date,
             minutes_brut = fin_compte - debut_compte
 
         # Ratio pauses
-        ratio = theorique_plage / _duree_plage(pd, pf) if _duree_plage(pd, pf) > 0 else 1
+        duree_brute = _duree_plage(pd, pf, fin_offset)
+        ratio = theorique_plage / duree_brute if duree_brute > 0 else 1
         minutes_net = int(minutes_brut * ratio)
 
         total_reel      += minutes_net
@@ -356,8 +392,8 @@ def calculer_temps_reel_plafonne(code: str, date_obj: date,
         plages_detail.append({
             "plage_debut": _min_to_heure(pd),
             "plage_fin":   _min_to_heure(pf),
-            "arrivee":     _min_to_heure(premiere_arrivee),
-            "depart":      _min_to_heure(dernier_depart),
+            "arrivee":     _min_to_heure(premiere_arrivee % 1440),
+            "depart":      _min_to_heure(dernier_depart % 1440),
             "minutes":     minutes_net,
             "theorique":   theorique_plage,
         })
