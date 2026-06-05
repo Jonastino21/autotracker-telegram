@@ -685,6 +685,20 @@ def get_dernier_pointage_type(prno: str, date_local: str) -> str | None:
         conn.close()
 
 
+def get_dernier_pointage(prno: str, date_local: str) -> dict | None:
+    """Retourne le dernier pointage (type + heure) de l'employé ce jour, ou None."""
+    conn = get_connection()
+    try:
+        row = conn.execute("""
+            SELECT type_pointage, heure_locale FROM pointages
+            WHERE prno=? AND date_local=?
+            ORDER BY heure_locale DESC LIMIT 1
+        """, (prno, date_local)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
 def insert_pointage(message_id, telegram_id, prno, date_local, heure_locale,
                     type_pointage, session, raw_text, source="telegram"):
     conn = get_connection()

@@ -21,6 +21,9 @@ TIMEZONE      = os.getenv("TIMEZONE", "Indian/Antananarivo")
 DASHBOARD_HOST= os.getenv("DASHBOARD_HOST", "0.0.0.0")
 DASHBOARD_PORT= int(os.getenv("DASHBOARD_PORT", 5000))
 EXCEL_PATH    = os.getenv("EXCEL_PATH", "presences.xlsx")
+# Anti-rebond boîtier : ignore un scan empreinte/PIN/badge du même employé
+# survenu moins de N secondes après son pointage précédent (double-déclenchement).
+SCAN_DEBOUNCE_SEC = int(os.getenv("SCAN_DEBOUNCE_SEC", 30))
 SECRET_KEY    = os.getenv("SECRET_KEY", "karoka-secret-key-change-me")
 
 # Credentials depuis .env : "rh:pass1,pdg:pass2"
@@ -719,7 +722,7 @@ def get_liaison_empreinte(fingerprint_id: int):
             SELECT le.fingerprint_id, le.prno, e.nom_complet
             FROM liaisons_empreintes le
             JOIN employes e ON le.prno = e.prno
-            WHERE le.fingerprint_id = ?
+            WHERE le.fingerprint_id = ? AND e.actif = 1
         """, (fingerprint_id,)).fetchone()
         return dict(row) if row else None
     finally:
@@ -752,7 +755,7 @@ def get_liaison_par_pin(pin_id):
             SELECT le.pin_id, le.fingerprint_id, le.prno, e.nom_complet
             FROM liaisons_empreintes le
             JOIN employes e ON le.prno = e.prno
-            WHERE le.pin_id = ?
+            WHERE le.pin_id = ? AND e.actif = 1
         """, (pin_id,)).fetchone()
         return dict(row) if row else None
     finally:
@@ -814,9 +817,24 @@ def tuya_webhook():
     if type_acces == "pin":
         scan_id = str(scan_id).strip()
     else:
-        scan_id = int(scan_id)
-    tz       = ZoneInfo(TIMEZONE)
-    dt_local = datetime.fromtimestamp(int(ts), tz=tz) if ts else datetime.now(tz)
+        try:
+            scan_id = int(scan_id)
+        except (TypeError, ValueError):
+            logger.warning("id non numérique pour type=%s : %r", type_acces, scan_id)
+            return jsonify({"ok": False, "error": "id invalide"}), 400
+
+    tz = ZoneInfo(TIMEZONE)
+    # Timestamp boîtier : epoch UNIX en secondes. On tolère les millisecondes
+    # (certains firmwares) et on retombe sur l'heure serveur si invalide.
+    dt_local = datetime.now(tz)
+    if ts:
+        try:
+            ts_int = int(ts)
+            if ts_int > 1e11:          # > ~an 5138 en secondes → c'est des ms
+                ts_int //= 1000
+            dt_local = datetime.fromtimestamp(ts_int, tz=tz)
+        except (TypeError, ValueError, OverflowError, OSError):
+            logger.warning("timestamp invalide (%r), heure serveur utilisée", ts)
 
     # ── Résoudre prno selon le type ──
     if type_acces == "pin":
@@ -835,8 +853,31 @@ def tuya_webhook():
     prno        = liaison["prno"]
     nom_complet = liaison["nom_complet"]
 
-    date_local    = dt_local.strftime("%Y-%m-%d")
-    dernier_type  = db.get_dernier_pointage_type(prno, date_local)
+    date_local = dt_local.strftime("%Y-%m-%d")
+    dernier    = db.get_dernier_pointage(prno, date_local)
+
+    # ── Anti-rebond : un lecteur empreinte/PIN/badge déclenche souvent
+    # plusieurs fois en quelques secondes ; on ignore le scan trop rapproché
+    # pour éviter un faux départ juste après l'arrivée. ──
+    if dernier:
+        try:
+            h, m, s = (int(x) for x in dernier["heure_locale"].split(":"))
+            dernier_dt = dt_local.replace(hour=h, minute=m, second=s, microsecond=0)
+            ecart = (dt_local - dernier_dt).total_seconds()
+            if 0 <= ecart < SCAN_DEBOUNCE_SEC:
+                logger.info(
+                    "%s — scan ignoré (anti-rebond %.0fs < %ds) [%s]",
+                    prno, ecart, SCAN_DEBOUNCE_SEC, type_acces
+                )
+                return jsonify({
+                    "ok": True,
+                    "results": [{"id": scan_id, "type": type_acces,
+                                 "prno": prno, "ok": False, "raison": "anti_rebond"}]
+                })
+        except (ValueError, KeyError):
+            pass
+
+    dernier_type  = dernier["type_pointage"] if dernier else None
     type_pointage = "depart" if dernier_type == "arrivee" else "arrivee"
 
     msg_id = f"esp_{type_acces}_{scan_id}_{int(dt_local.timestamp())}"
