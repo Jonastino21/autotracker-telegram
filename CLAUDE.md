@@ -53,6 +53,8 @@ Suit son code horaire. Férié = payé (théo crédité).
 - La **nuit** du dimanche/férié est assurée par le gardien que le **cycle** désigne (nuit ordinaire), pas par le gardien de tour.
 - **Repos** du cycle sans tour → `Repos`. Plus de statut `Garde`/`Exclu`/`Férié` pour les gardiens (un férié au repos = simple `Repos`, non payé). Les jours travaillés → `Complet`/`Incomplet`/`Absent` selon les pointages.
 - ⚠️ Léger recouvrement théorique de 15 min quand jour (→17h00) + nuit (16h45→) coexistent (24h30 au lieu de 24h15). Toléré.
+- **Échanges / remplacements** (`remplacements_garde`, appliqué dans `_planning_gardien` par-dessus `_planning_gardien_base`) : titulaire remplacé un jour → statut `Échange` (0h, non pénalisé) ; le remplaçant fait le service du titulaire (cumulé au sien) et en touche les heures. Échange avec rattrapage = **2 remplacements** (un par date). Saisie : Admin → onglet « Échanges de garde ».
+- Départ du petit matin (08h15) : rattaché à la garde **de la veille** (`_ajouter_departs_nuit`) et **retiré** du jour suivant (`_retirer_departs_veille`) → pas de « Fin » fantôme le lendemain.
 
 ### Jardinier (`_planning_jardinier`)
 - Horaire **standard** + **tour chaque dimanche** (travaille ses heures standard, on lève `(di)`) + **tour des fériés** (par rang, comme les gardiens).
@@ -69,6 +71,7 @@ Suit son code horaire. Férié = payé (théo crédité).
 - `pointages` : `prno`, `date_local`, `heure_locale`, `type_pointage` (arrivee/depart), `session` (matin/apm), `source` (telegram/fingerprint/badge/pin). Unique sur `(prno, date_local, type_pointage, session)`.
 - `liaisons_empreintes` : `fingerprint_id` (INTEGER), **`pin_id` (TEXT)**, `prno`. ⚠️ Le **PIN est une chaîne** pour préserver les zéros de tête (`061019` ≠ `61019`) — ne jamais le `parseInt`/`int()`.
 - `liaisons` : liaison Telegram. `jours_feries` : `date_str`, `libelle`.
+- `remplacements_garde` : `date_str`, `prno_titulaire`, `prno_remplacant`, `motif`. Unique sur `(date_str, prno_titulaire)`. Échanges de garde entre gardiens (cf. moteur gardien).
 
 ## Conventions & pièges
 

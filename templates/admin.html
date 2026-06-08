@@ -308,6 +308,7 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
       <button class="tab-admin" onclick="showSection('feries',this)" aria-selected="false">Jours fériés</button>
       <button class="tab-admin" onclick="showSection('modeles',this)" aria-selected="false">Modèles horaires</button>
       <button class="tab-admin" onclick="showSection('releves',this)" aria-selected="false">Relevés de paie</button>
+      <button class="tab-admin" onclick="showSection('remplacements',this)" aria-selected="false">Échanges de garde</button>
       <button class="tab-admin" onclick="showSection('historique',this)" aria-selected="false">Historique</button>
     </div></div>
   </div>
@@ -700,6 +701,40 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
       </div>
     </div>
 
+    <!-- ÉCHANGES / REMPLACEMENTS DE GARDE -->
+    <div class="section" id="sec-remplacements">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+        <div class="bg-white border border-black/[0.07] rounded-2xl p-[22px] shadow-[0_2px_12px_rgba(0,0,0,0.07)]">
+          <div class="text-[13.5px] font-bold mb-1.5 flex items-center gap-2 text-text-base">Enregistrer un remplacement</div>
+          <div class="text-[11.5px] text-text-muted mb-[18px]">Un gardien absent un jour donné est remplacé par un autre. Le titulaire passe en « Échange » (0h, non pénalisé), le remplaçant fait son service et en touche les heures. Un échange avec rattrapage = 2 remplacements (un par date).</div>
+          <div class="mb-[15px]">
+            <label class="block text-[10.5px] uppercase tracking-[1px] text-text-dim mb-1.5 font-semibold">Date <span class="text-[11px] text-text-muted font-normal">(yyyy/mm/dd)</span></label>
+            <input type="text" id="remplDate" placeholder="2026/06/13" maxlength="10" oninput="formatFerieDateInput(this)">
+          </div>
+          <div class="mb-[15px]">
+            <label class="block text-[10.5px] uppercase tracking-[1px] text-text-dim mb-1.5 font-semibold">Titulaire (absent ce jour)</label>
+            <select id="remplTitulaire" class="bg-main-bg border border-black/[0.07] rounded-lg py-2 px-3 text-text-base text-[13px] outline-none cursor-pointer focus:border-teal w-full"></select>
+          </div>
+          <div class="mb-[15px]">
+            <label class="block text-[10.5px] uppercase tracking-[1px] text-text-dim mb-1.5 font-semibold">Remplaçant (fait le service)</label>
+            <select id="remplRemplacant" class="bg-main-bg border border-black/[0.07] rounded-lg py-2 px-3 text-text-base text-[13px] outline-none cursor-pointer focus:border-teal w-full"></select>
+          </div>
+          <div class="mb-[15px]">
+            <label class="block text-[10.5px] uppercase tracking-[1px] text-text-dim mb-1.5 font-semibold">Motif <span class="text-[11px] text-text-muted font-normal">(optionnel)</span></label>
+            <input type="text" id="remplMotif" placeholder="ex: échange, rattrapé le 21/06">
+          </div>
+          <button class="btn btn-primary btn-full" onclick="ajouterRemplacement()">Enregistrer le remplacement</button>
+        </div>
+
+        <div class="bg-white border border-black/[0.07] rounded-2xl overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.07)]">
+          <div class="px-[22px] py-4 border-b border-black/[0.07] bg-main-bg">
+            <div class="text-[13.5px] font-bold text-text-base">Remplacements enregistrés</div>
+          </div>
+          <div class="table-wrap" id="tableRemplacements" aria-live="polite"><div class="empty-state">Chargement...</div></div>
+        </div>
+      </div>
+    </div>
+
   </div><!-- /page -->
 </div><!-- /page-body -->
 
@@ -788,6 +823,7 @@ function showSection(name, btn) {
   if (name==='modeles') renderModeles();
   if (name==='releves') { loadReleves(); initReleveJourSelector(); }
   if (name==='historique') loadHistorique();
+  if (name==='remplacements') loadRemplacements();
 }
 
 // ─── Historique des pointages ────────────────────────────────────────────────
@@ -1342,6 +1378,82 @@ async function supprimerFerie(date_str) {
   if(!await showConfirm(`Supprimer le jour férié du ${date_str} ?`, 'Supprimer'))return;
   await fetch(`/api/jours_feries/${date_str}`,{method:'DELETE'});
   loadFeries();
+}
+
+// ─── Échanges / remplacements de garde ────────────────────────────────────────
+function _fillGardienSelects() {
+  const gardiens = (allEmployes||[]).filter(e => {
+    const c = (e.categorie||'').toLowerCase();
+    return c === 'gardien' || (!c && e.dimanche_tour_ref);
+  });
+  const opts = '<option value="">— choisir —</option>' +
+    gardiens.map(e => `<option value="${e.prno}">${_escHtml(e.nom_complet||e.prno)} (${e.prno})</option>`).join('');
+  const t = document.getElementById('remplTitulaire');
+  const r = document.getElementById('remplRemplacant');
+  if (t) t.innerHTML = opts;
+  if (r) r.innerHTML = opts;
+}
+
+async function loadRemplacements() {
+  if (!allEmployes || !allEmployes.length) {
+    try { allEmployes = await fetch('/api/admin/employes').then(r=>r.json()); } catch(e) {}
+  }
+  _fillGardienSelects();
+  const body = document.getElementById('tableRemplacements');
+  try {
+    const list = await fetch('/api/remplacements').then(r=>r.json());
+    renderRemplacements(list);
+  } catch(e) { body.innerHTML = '<div class="empty-state">Erreur de chargement</div>'; }
+}
+
+function renderRemplacements(list) {
+  const body = document.getElementById('tableRemplacements');
+  if (!list || !list.length) { body.innerHTML = '<div class="empty-state">Aucun remplacement enregistré.</div>'; return; }
+  let html = '<table class="w-full text-[13px]"><thead><tr class="text-left text-text-dim border-b border-black/[0.07]">'
+    + '<th class="px-[22px] py-2.5 font-semibold">Date</th>'
+    + '<th class="px-2 py-2.5 font-semibold">Titulaire (absent)</th>'
+    + '<th class="px-2 py-2.5 font-semibold">Remplaçant</th>'
+    + '<th class="px-2 py-2.5 font-semibold">Motif</th>'
+    + '<th class="px-3 py-2.5"></th></tr></thead><tbody>';
+  list.forEach(r => {
+    const d = (r.date_str||'').replace(/-/g,'/');
+    html += '<tr class="border-t border-black/[0.05]">'
+      + `<td class="px-[22px] py-2.5 font-mono whitespace-nowrap">${d}</td>`
+      + `<td class="px-2 py-2.5">${_escHtml(r.nom_titulaire||r.prno_titulaire)} <span class="text-text-muted">(${r.prno_titulaire})</span></td>`
+      + `<td class="px-2 py-2.5">${_escHtml(r.nom_remplacant||r.prno_remplacant)} <span class="text-text-muted">(${r.prno_remplacant})</span></td>`
+      + `<td class="px-2 py-2.5 text-text-dim">${_escHtml(r.motif||'—')}</td>`
+      + `<td class="px-3 py-2.5 text-right"><button class="btn btn-ghost btn-sm" onclick="supprimerRemplacement(${r.id})">Suppr.</button></td>`
+      + '</tr>';
+  });
+  html += '</tbody></table>';
+  body.innerHTML = html;
+}
+
+async function ajouterRemplacement() {
+  const dateRaw = document.getElementById('remplDate').value.trim();
+  const tit = document.getElementById('remplTitulaire').value;
+  const rem = document.getElementById('remplRemplacant').value;
+  const motif = document.getElementById('remplMotif').value.trim();
+  if (!dateRaw || !tit || !rem) { showToast('error','Date, titulaire et remplaçant obligatoires.'); return; }
+  if (!/^\d{4}\/\d{2}\/\d{2}$/.test(dateRaw)) { showToast('error','Format de date invalide — yyyy/mm/dd'); return; }
+  if (tit === rem) { showToast('error','Titulaire et remplaçant doivent être différents.'); return; }
+  const date_str = dateRaw.replace(/\//g,'-');
+  const d = await fetch('/api/remplacements',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({date_str, prno_titulaire: tit, prno_remplacant: rem, motif})
+  }).then(r=>r.json());
+  if (d.ok) {
+    showToast('success','Remplacement enregistré.');
+    document.getElementById('remplDate').value = '';
+    document.getElementById('remplMotif').value = '';
+    loadRemplacements();
+  } else showToast('error', d.error || 'Erreur');
+}
+
+async function supprimerRemplacement(id) {
+  if (!await showConfirm('Supprimer ce remplacement ?','Supprimer')) return;
+  await fetch(`/api/remplacements/${id}`,{method:'DELETE'});
+  loadRemplacements();
 }
 
 // ─── Utilitaires ─────────────────────────────────────────────────────────────

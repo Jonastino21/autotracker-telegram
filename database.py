@@ -131,6 +131,17 @@ def init_db():
                 created_at   TEXT DEFAULT (datetime('now')),
                 UNIQUE(prno, date_str)
             );
+            CREATE TABLE IF NOT EXISTS remplacements_garde (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                date_str        TEXT NOT NULL,
+                prno_titulaire  TEXT NOT NULL,
+                prno_remplacant TEXT NOT NULL,
+                motif           TEXT,
+                created_at      TEXT DEFAULT (datetime('now')),
+                UNIQUE(date_str, prno_titulaire),
+                FOREIGN KEY(prno_titulaire)  REFERENCES employes(prno),
+                FOREIGN KEY(prno_remplacant) REFERENCES employes(prno)
+            );
         """)
         conn.commit()
         _migrate_db(conn)
@@ -182,6 +193,18 @@ def _migrate_db(conn):
             libelle     TEXT,
             clos        INTEGER DEFAULT 0,
             created_at  TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    # Table remplacements_garde (échanges de garde entre gardiens)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS remplacements_garde (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            date_str        TEXT NOT NULL,
+            prno_titulaire  TEXT NOT NULL,
+            prno_remplacant TEXT NOT NULL,
+            motif           TEXT,
+            created_at      TEXT DEFAULT (datetime('now')),
+            UNIQUE(date_str, prno_titulaire)
         )
     """)
     conn.commit()
@@ -920,14 +943,75 @@ def _est_dimanche_tour_from_emp(emp: dict, date_str: str) -> bool:
         return False
 
 
+# ─── REMPLACEMENTS / ÉCHANGES DE GARDE ───────────────────────────────────────
+# Un gardien (titulaire) absent un jour donné est remplacé par un autre (qui était
+# libre) : le titulaire passe en « Échange » (0h, non pénalisé), le remplaçant fait
+# le service du titulaire ce jour-là et en touche les heures. Se superpose au
+# planning calculé. Un échange avec rattrapage = 2 remplacements (un par date).
+
+def get_remplacements_jour(date_str: str) -> list[dict]:
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT id, date_str, prno_titulaire, prno_remplacant, motif "
+            "FROM remplacements_garde WHERE date_str=?", (date_str,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_all_remplacements(limit: int = 500) -> list[dict]:
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT r.id, r.date_str, r.prno_titulaire, r.prno_remplacant, r.motif, "
+            "       t.nom_complet AS nom_titulaire, m.nom_complet AS nom_remplacant "
+            "FROM remplacements_garde r "
+            "LEFT JOIN employes t ON t.prno = r.prno_titulaire "
+            "LEFT JOIN employes m ON m.prno = r.prno_remplacant "
+            "ORDER BY r.date_str DESC, r.id DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def ajouter_remplacement(date_str, prno_titulaire, prno_remplacant, motif=None) -> dict:
+    prno_titulaire  = (prno_titulaire or "").strip().lower()
+    prno_remplacant = (prno_remplacant or "").strip().lower()
+    if not date_str or not prno_titulaire or not prno_remplacant:
+        return {"ok": False, "error": "date, titulaire et remplaçant requis"}
+    if prno_titulaire == prno_remplacant:
+        return {"ok": False, "error": "titulaire et remplaçant doivent être différents"}
+    conn = get_connection()
+    try:
+        conn.execute(
+            "INSERT OR REPLACE INTO remplacements_garde"
+            "(date_str, prno_titulaire, prno_remplacant, motif) VALUES(?,?,?,?)",
+            (date_str, prno_titulaire, prno_remplacant, motif or None))
+        conn.commit()
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        conn.close()
+
+
+def supprimer_remplacement(rid: int) -> dict:
+    conn = get_connection()
+    try:
+        conn.execute("DELETE FROM remplacements_garde WHERE id=?", (rid,))
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
 # ── Génération dynamique du planning des gardiens ──────────────────────────────
-# Les gardiens ne suivent pas un code_horaire statique : leur planning se déduit
-# de leur cycle (2 nuits / 1 repos) + leur tour de garde dominical.
-#   - nuit normale : 16:45 → 08:15 (déduit du code de base)
-#   - tour du dimanche : garde finissant TOUJOURS lundi 08:15, début variable :
-#       • samedi travaillé  → bloc continu Sam 16:45 → Lun 08:15 (~39h30)
-#       • samedi repos      → Dim 08:00 → Lun 08:15 (~24h15)
-#   - le repos se décale de +1 jour à chaque tour (le dimanche ajoute un jour).
+# Cycle 2 nuits / 1 repos EN CONTINU (tous les jours) + tour de JOUR 08h-17h le
+# dimanche et les fériés en semaine (cf. _planning_gardien_base), le tout
+# surchargé par les remplacements ci-dessus (cf. _planning_gardien).
 
 GARDE_DEBUT_MIN = 8 * 60          # (déprécié) — ancienne prise de garde dominicale
 JOUR_TOUR_DEBUT = 8 * 60          # tour de JOUR (dimanche / férié) : 08:00
@@ -1110,8 +1194,8 @@ def _duree_nuit_gardien(code: str) -> int:
     return _duree_plage(nuit[0], nuit[1]) if nuit else 0
 
 
-def _planning_gardien(emp: dict, date_obj, code: str, feries):
-    """Génère (code_effectif|None, force_statut|None) pour un gardien.
+def _planning_gardien_base(emp: dict, date_obj, code: str, feries):
+    """Planning « théorique » d'un gardien (sans remplacements).
 
     Modèle :
       • Rotation de nuit 2/1 en CONTINU (tous les jours, dimanche et férié inclus) :
@@ -1141,6 +1225,46 @@ def _planning_gardien(emp: dict, date_obj, code: str, feries):
     if segments:
         return ";".join(segments), None
     return None, "Repos"
+
+
+def _planning_gardien(emp: dict, date_obj, code: str, feries):
+    """Planning d'un gardien, remplacements de garde appliqués par-dessus le calcul.
+
+    - Si le gardien est TITULAIRE remplacé ce jour → ('Échange', 0h, non pénalisé).
+    - Si le gardien est REMPLAÇANT ce jour → il fait le service du titulaire
+      (sa nuit / son tour), cumulé à son propre service éventuel.
+    Sinon → planning théorique normal.
+    """
+    rempl = get_remplacements_jour(date_obj.isoformat())
+    if rempl:
+        prno = emp["prno"]
+        # Titulaire absent (remplacé) → ne travaille pas
+        if any(r["prno_titulaire"] == prno for r in rempl):
+            return None, "Échange"
+        # Remplaçant → ajoute le(s) service(s) du/des titulaire(s) qu'il couvre
+        couverts = [r["prno_titulaire"] for r in rempl if r["prno_remplacant"] == prno]
+        if couverts:
+            segs = []
+            own, _ = _planning_gardien_base(emp, date_obj, code, feries)   # son propre service
+            for c in _split_segments(own):
+                if c not in segs:
+                    segs.append(c)
+            for tit_prno in couverts:
+                tit = get_employe_by_prno(tit_prno)
+                th  = get_horaire(tit_prno, date_obj.isoformat())
+                tcode = th["code_horaire"] if th else None
+                tit_eff, _ = (_planning_gardien_base(tit, date_obj, tcode, feries)
+                              if tit and tcode else (None, None))
+                for c in _split_segments(tit_eff):
+                    if c not in segs:
+                        segs.append(c)
+            return (";".join(segs), None) if segs else (None, "Repos")
+    return _planning_gardien_base(emp, date_obj, code, feries)
+
+
+def _split_segments(code):
+    """Liste des segments non vides d'un code horaire (ou [] si None)."""
+    return [s for s in (code or "").split(";") if s.strip()] if code else []
 
 
 def _planning_jour(emp: dict, code: str, date_obj, feries=None):
@@ -1585,7 +1709,10 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
         is_repos_rotation = (not _est_gardien(emp) and not is_sunday and not ferie and
                              _est_jour_repos_rotation_from_emp(emp, date_str))
 
-        if ferie and not _est_gardien(emp) and not _est_jardinier(emp):
+        if force_statut == "Échange":          # gardien remplacé : ni payé ni pénalisé
+            statut = "Échange"
+            theorique = reel = 0
+        elif ferie and not _est_gardien(emp) and not _est_jardinier(emp):
             statut = "Férié"                   # standards : férié géré ici
         elif force_statut == "Férié":          # gardien/jardinier : férié chômé payé
             statut = "Férié"
@@ -1851,7 +1978,10 @@ def get_resume_periode_avec_synthese(date_debut: str, date_fin: str) -> list[dic
             if heure_effet_emp and horaire.get("date_effet") == ds:
                 pts = _augmenter_jour_integration(code_eff, date_obj, pts, heure_effet_emp)
 
-            if is_ferie and not _est_gardien(emp) and not _est_jardinier(emp):
+            if force_statut == "Échange":            # gardien remplacé : ni payé ni pénalisé
+                statut = "Échange"
+                nb_repos += 1
+            elif is_ferie and not _est_gardien(emp) and not _est_jardinier(emp):
                 statut = "Férié"                     # standards : férié payé
                 nb_ferie += 1
                 total_theorique += theo_jour

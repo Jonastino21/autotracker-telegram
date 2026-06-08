@@ -310,6 +310,34 @@ def api_supprimer_ferie(date_str):
     return jsonify(db.supprimer_jour_ferie(date_str))
 
 
+# ─── API Remplacements / échanges de garde ────────────────────────────────────
+
+@app.route("/api/remplacements", methods=["GET"])
+@login_required
+def api_remplacements():
+    return jsonify(db.get_all_remplacements())
+
+
+@app.route("/api/remplacements", methods=["POST"])
+@login_required
+def api_ajouter_remplacement():
+    data            = request.get_json() or {}
+    date_str        = (data.get("date_str") or "").strip()
+    prno_titulaire  = (data.get("prno_titulaire") or "").strip()
+    prno_remplacant = (data.get("prno_remplacant") or "").strip()
+    motif           = (data.get("motif") or "").strip()
+    if not (date_str and prno_titulaire and prno_remplacant):
+        return jsonify({"ok": False, "error": "Date, titulaire et remplaçant obligatoires"}), 400
+    res = db.ajouter_remplacement(date_str, prno_titulaire, prno_remplacant, motif)
+    return jsonify(res), (200 if res.get("ok") else 400)
+
+
+@app.route("/api/remplacements/<int:rid>", methods=["DELETE"])
+@login_required
+def api_supprimer_remplacement(rid):
+    return jsonify(db.supprimer_remplacement(rid))
+
+
 # ─── API Admin Employés ───────────────────────────────────────────────────────
 
 @app.route("/api/admin/employes", methods=["GET"])
