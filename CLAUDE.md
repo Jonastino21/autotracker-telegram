@@ -42,16 +42,17 @@ Format d'un segment : `HHMMjjHHMM` où `jj` ∈ `lu ma me je ve sa di tj`. Sépa
 
 ## Moteur de planning — 3 catégories d'employés (`database.py`)
 
-La **catégorie** (`employes.categorie` : `standard` / `gardien` / `jardinier`) pilote la logique. `_planning_jour(emp, code, date_obj, feries)` renvoie `(code_effectif, force_statut)` ; `force_statut` ∈ `{None, Repos, Garde, Récup, Férié, Exclu}`.
+La **catégorie** (`employes.categorie` : `standard` / `gardien` / `jardinier`) pilote la logique. `_planning_jour(emp, code, date_obj, feries)` renvoie `(code_effectif, force_statut)` ; `force_statut` ∈ `{None, Repos, Récup, Férié}` (les gardiens ne renvoient plus que `None` ou `Repos`).
 
 ### Standard
 Suit son code horaire. Férié = payé (théo crédité).
 
 ### Gardien (`_planning_gardien`)
-- Cycle **2 nuits / 1 repos** (`rotation_cycle` ex. `2/3`, `rotation_ref_date`). Position = `(jours_écoulés − jours_à_part) mod cycle`.
-- **Jour « à part »** = dimanche **ou** férié en semaine : ne fait **jamais** avancer le cycle. Un férié tombant un dimanche est ignoré (c'est un dimanche).
-- **Tour du dimanche** : rotation hebdo (`dimanche_tour_ref` + `dimanche_tour_cycle` = nb gardiens). **Tour des fériés** : par **rang** (`ferie_tour_rang`), fériés en semaine pris dans l'ordre chronologique.
-- Le jour de tour → **garde** finissant **toujours le lendemain 8h15** ; début = bloc **continu** depuis la veille 16h45 (`++`) si la veille était travaillée, sinon **frais** à 8h00 (`+`). Les autres gardiens ce jour-là → `Exclu` (dimanche) ou `Férié` payé 1 nuit (férié semaine).
+- **Rotation de nuit 2 nuits / 1 repos** (`rotation_cycle` ex. `2/3`, `rotation_ref_date`), qui tourne **en continu tous les jours** (dimanche et férié inclus). Position = `(jours_écoulés) mod cycle` — **plus de « jour à part »**. Quand le cycle est en travail → **nuit `16h45 → lendemain 08h15`** (overnight auto-détecté, `fin < début`).
+- **En plus**, tour de **JOUR `08h00 → 17h00`** : le **dimanche** (rotation hebdo `dimanche_tour_ref` + `dimanche_tour_cycle` = nb gardiens) **et** les **fériés en semaine** (par **rang** `ferie_tour_rang`, fériés pris dans l'ordre chronologique). C'est **additif** : un gardien peut cumuler le jour (8-17h) **et** sa nuit (16h45→…) le même jour → code à 2 segments `1645di0815;0800di1700`.
+- La **nuit** du dimanche/férié est assurée par le gardien que le **cycle** désigne (nuit ordinaire), pas par le gardien de tour.
+- **Repos** du cycle sans tour → `Repos`. Plus de statut `Garde`/`Exclu`/`Férié` pour les gardiens (un férié au repos = simple `Repos`, non payé). Les jours travaillés → `Complet`/`Incomplet`/`Absent` selon les pointages.
+- ⚠️ Léger recouvrement théorique de 15 min quand jour (→17h00) + nuit (16h45→) coexistent (24h30 au lieu de 24h15). Toléré.
 
 ### Jardinier (`_planning_jardinier`)
 - Horaire **standard** + **tour chaque dimanche** (travaille ses heures standard, on lève `(di)`) + **tour des fériés** (par rang, comme les gardiens).

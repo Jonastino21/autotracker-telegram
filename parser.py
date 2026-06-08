@@ -260,7 +260,23 @@ def get_session_depuis_horaire(code: str, date_obj: date, heure_str: str) -> str
         return "matin" if h < 780 else "apm"
 
     if len(plages) == 1:
-        return "matin" if plages[0]["debut"] < 780 else "apm"
+        p = plages[0]
+        # Plage de nuit (franchit minuit) : un pointage du matin = fin de garde
+        # (matin), un pointage du soir = prise de garde (apm). Sinon, on évite
+        # qu'une arrivée à 08h soit étiquetée « après-midi » juste parce que la
+        # plage commence à 16h45.
+        overnight = p.get("fin_offset", 0) >= 1 or p["fin"] < p["debut"]
+        if overnight:
+            return "matin" if _heure_to_min(heure_str) < 720 else "apm"
+        return "matin" if p["debut"] < 780 else "apm"
+
+    # Cas gardien « jour + nuit » (une plage de jour 08-17h ET une plage de nuit
+    # qui franchit minuit) : le milieu d'une plage overnight est faussé (elle
+    # enjambe minuit). On découpe simplement à midi → dédoublonnage correct
+    # (08h/16h45 distincts en arrivée, 17h/08h15 distincts en départ) ET libellés
+    # cohérents. On ne touche PAS aux postes standards fractionnés (aucun overnight).
+    if any(p.get("fin_offset", 0) >= 1 or p["fin"] < p["debut"] for p in plages):
+        return "matin" if _heure_to_min(heure_str) < 720 else "apm"
 
     # Plusieurs plages : trier par heure de début
     plages_triees = sorted(plages, key=lambda p: p["debut"])

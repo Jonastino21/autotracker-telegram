@@ -223,6 +223,14 @@
   .cel-garde    { background: rgba(0,150,136,0.12);  color: #00695C;  font-weight: 700; }
   .cel-recup    { background: rgba(121,134,203,0.12); color: #3949AB;  font-weight: 600; }
 
+  /* ── Sous-tableau gardiens (vue Jour) ── */
+  .garde-subtitle { display:flex; align-items:center; gap:8px; padding:16px 22px 8px; font-size:13px; font-weight:700; color:#00695C; }
+  .garde-subtitle .gs-line { flex:1; height:1px; background:rgba(0,150,136,0.18); }
+  table.data-table.t-gardiens th { background:rgba(0,150,136,0.06); color:#00695C; }
+  .shift-tag { display:inline-block; min-width:15px; text-align:center; font-size:9px; font-weight:700; padding:0 4px; border-radius:5px; vertical-align:middle; }
+  .shift-tag.nuit { background:rgba(0,150,136,0.14); color:#00695C; }
+  .shift-tag.jour { background:rgba(255,179,0,0.18); color:#E65100; }
+
   /* Loading / spinner */
   .loading-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px; gap: 16px; color: #5A6A82; }
   .spinner { width: 32px; height: 32px; border: 3px solid rgba(0,0,0,0.07); border-top-color: #00BFA5; border-radius: 50%; animation: spin 0.8s linear infinite; }
@@ -459,7 +467,7 @@
           <div class="text-[12px] text-[#5A6A82] mt-0.5" id="tableSubtitle">Chargement...</div>
         </div>
         <label for="searchBox" class="sr-only">Rechercher un employé</label>
-        <div class="flex items-center gap-2 max-[640px]:w-full">
+        <div id="tableFilters" class="flex items-center gap-2 max-[640px]:w-full">
           <select id="filterCatDash" onchange="filterTable()"
                   class="bg-[#F0F2F8] border border-[rgba(0,0,0,0.07)] rounded-lg px-3 py-2 text-[#1A1F2E] font-sans text-[13px] outline-none focus:border-teal transition-colors">
             <option value="">Toutes catégories</option>
@@ -783,12 +791,27 @@ async function loadJour() {
   _reapplyFilter();
 }
 
+// Helpers communs aux deux tableaux du jour
+const _bcJour = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu',Repos:'badge-repos',Garde:'badge-garde',Récup:'badge-recup'}[s]||'');
+const _tJour  = v => v ? `<span class="td-time">${v.slice(0,5)}</span>` : '<span class="td-empty"></span>';
+
 function renderJourTable(data) {
   const body = document.getElementById('tableBody');
   if (!data.length) { body.innerHTML = '<div class="loading-state">📭 Aucune donnée</div>'; return; }
+  // Les gardiens (garde de nuit continue) ont leur propre tableau, sous le tableau standard.
+  const std  = data.filter(r => (r.categorie || 'standard') !== 'gardien');
+  const gard = data.filter(r => (r.categorie || 'standard') === 'gardien');
+
+  let html = '';
+  if (std.length)  html += renderJourStd(std);
+  if (gard.length) html += renderJourGardiens(gard);
+  if (!html) html = '<div class="loading-state">📭 Aucune donnée</div>';
+  body.innerHTML = html;
+}
+
+function renderJourStd(data) {
   const dur  = m => (m > 0) ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty"></span>';
-  const bc   = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu',Repos:'badge-repos',Garde:'badge-garde',Récup:'badge-recup'}[s]||'');
-  const t    = v => v ? `<span class="td-time">${v.slice(0,5)}</span>` : '<span class="td-empty"></span>';
+  const t    = _tJour;
   const vide = '<span class="td-empty"></span>';
 
   let html = `<div style="overflow-x:auto"><table class="data-table"><thead><tr>
@@ -808,7 +831,7 @@ function renderJourTable(data) {
     const rowSt   = nh ? 'opacity:0.45;background:repeating-linear-gradient(135deg,transparent,transparent 4px,rgba(0,0,0,0.03) 4px,rgba(0,0,0,0.03) 8px);' : ex ? 'opacity:0.35;' : r.ferie ? 'opacity:0.6;' : '';
     const statut  = nh
       ? '<span class="badge" style="background:rgba(0,0,0,0.06);color:#9AAABB;border:1px solid rgba(0,0,0,0.07)">Sans horaire</span>'
-      : `<span class="badge ${bc(r.statut)}">${r.statut}</span>`;
+      : `<span class="badge ${_bcJour(r.statut)}">${r.statut}</span>`;
     const show = !ex;
     html += `<tr style="${rowSt}">
       <td class="td-prno">${r.prno}</td>
@@ -824,7 +847,61 @@ function renderJourTable(data) {
     </tr>`;
   });
   html += '</tbody></table></div>';
-  body.innerHTML = html;
+  return html;
+}
+
+// Tableau dédié aux gardiens : garde de nuit continue → 1 prise / 1 fin (pas matin/apm).
+function renderJourGardiens(data) {
+  const dur  = m => (m > 0) ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty"></span>';
+  const t    = _tJour;
+  const vide = '<span class="td-empty"></span>';
+
+  let html = `<div class="garde-subtitle">🌙 Gardiens — gardes de nuit<span class="gs-line"></span></div>
+    <div style="overflow-x:auto"><table class="data-table t-gardiens"><thead><tr>
+    <th>PRNO</th><th>Nom Prénom</th>
+    <th>Prise de garde</th><th>Fin de garde</th>
+    <th>Durée</th><th style="color:#00BFA5">Contrat</th><th>Écart</th><th>Statut</th>
+  </tr></thead><tbody>`;
+
+  data.forEach(r => {
+    const nh = !r.code_horaire;
+    const ex = r.statut === 'Exclu';
+    const off = ['Repos','Exclu','Férié','Récup'].includes(r.statut);
+    // Prise/Fin par SERVICE prévu (gardes_shifts) — gère jour, nuit, ou les deux :
+    //   nuit (16h45→08h15) → prise = pointage du soir (arr_apm), fin = matin (dep_mat) ;
+    //   jour (08h→17h)     → prise = pointage du matin (arr_mat), fin = soir (dep_apm).
+    // Sans pointage correspondant → vide (aucun pointage parasite affiché).
+    const shifts = (r.gardes_shifts && r.gardes_shifts.length) ? r.gardes_shifts : null;
+    let prise, fin;
+    if (off || !shifts) {
+      prise = '<span class="td-empty"></span>'; fin = '<span class="td-empty"></span>';
+    } else {
+      const tag = (s) => shifts.length > 1
+        ? `<span class="shift-tag ${s.kind}">${s.kind==='nuit'?'N':'J'}</span> ` : '';
+      prise = shifts.map(s => tag(s) + t(s.kind==='nuit' ? r.arr_apm : r.arr_mat)).join('<br>');
+      fin   = shifts.map(s => tag(s) + t(s.kind==='nuit' ? r.dep_mat : r.dep_apm)).join('<br>');
+    }
+    const duree   = nh ? vide : (r.reel_label && r.reel_label !== '—' ? r.reel_label : dur(r.minutes_reels||0));
+    const contrat = nh ? '<span class="td-empty">N/A</span>' : (r.theorique_label|| '');
+    const ecartC  = nh ? '#9AAABB' : (r.ecart_type==='manquant'?'#EF5350':r.ecart_type==='ok'?'#4CAF50':'#9AAABB');
+    const ecart   = (nh || ex) ? vide : (r.ecart_label|| '');
+    const rowSt   = nh ? 'opacity:0.45;background:repeating-linear-gradient(135deg,transparent,transparent 4px,rgba(0,0,0,0.03) 4px,rgba(0,0,0,0.03) 8px);' : ex ? 'opacity:0.35;' : r.ferie ? 'opacity:0.6;' : '';
+    const statut  = nh
+      ? '<span class="badge" style="background:rgba(0,0,0,0.06);color:#9AAABB;border:1px solid rgba(0,0,0,0.07)">Sans horaire</span>'
+      : `<span class="badge ${_bcJour(r.statut)}">${r.statut}</span>`;
+    html += `<tr style="${rowSt}">
+      <td class="td-prno">${r.prno}</td>
+      <td class="td-name">${r.nom_prenom}</td>
+      <td>${prise}</td>
+      <td>${fin}</td>
+      <td class="td-dur">${ex ? vide : duree}</td>
+      <td class="td-dur" style="color:#00BFA5">${ex ? vide : contrat}</td>
+      <td class="td-dur" style="color:${ecartC};font-weight:600">${ecart}</td>
+      <td>${statut}</td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+  return html;
 }
 
 // ── VUE S-MOIS ────────────────────────────────────────────────────────────

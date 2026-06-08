@@ -929,7 +929,9 @@ def _est_dimanche_tour_from_emp(emp: dict, date_str: str) -> bool:
 #       • samedi repos      → Dim 08:00 → Lun 08:15 (~24h15)
 #   - le repos se décale de +1 jour à chaque tour (le dimanche ajoute un jour).
 
-GARDE_DEBUT_MIN = 8 * 60          # prise de garde le dimanche à 08:00
+GARDE_DEBUT_MIN = 8 * 60          # (déprécié) — ancienne prise de garde dominicale
+JOUR_TOUR_DEBUT = 8 * 60          # tour de JOUR (dimanche / férié) : 08:00
+JOUR_TOUR_FIN   = 17 * 60         #                                 → 17:00
 _JOURS_CODE = ["lu", "ma", "me", "je", "ve", "sa", "di"]
 
 
@@ -1037,36 +1039,6 @@ def _nb_gardiens_tour(emp: dict) -> int:
     return n if n >= 1 else 3
 
 
-def _nb_dimanches(d_ref, d_end) -> int:
-    """Nombre de dimanches dans l'intervalle [d_ref, d_end)."""
-    if d_end <= d_ref:
-        return 0
-    premier = d_ref + timedelta(days=(6 - d_ref.weekday()) % 7)  # 1er dimanche ≥ d_ref
-    if premier >= d_end:
-        return 0
-    return (d_end - premier).days // 7 + 1
-
-
-def _jour_a_part(date_obj, feries) -> bool:
-    """Jour « à part » du cycle des gardiens : dimanche, OU férié en semaine.
-    (Un férié tombant un dimanche n'a aucun effet : c'est déjà un dimanche.)"""
-    if date_obj.weekday() == 6:
-        return True
-    return date_obj.isoformat() in (feries or ())
-
-
-def _nb_jours_a_part(d_ref, d_end, feries) -> int:
-    """Nombre de jours « à part » (dimanches + fériés en semaine) dans [d_ref, d_end)."""
-    if d_end <= d_ref:
-        return 0
-    n = _nb_dimanches(d_ref, d_end)
-    for f in (feries or ()):
-        fd = date.fromisoformat(f)
-        if d_ref <= fd < d_end and fd.weekday() != 6:
-            n += 1
-    return n
-
-
 def _est_ferie_tour(emp: dict, date_obj, feries) -> bool:
     """Vrai si ce férié en semaine est le tour de garde de ce gardien.
     Rotation par rang : les fériés en semaine pris dans l'ordre chronologique,
@@ -1096,8 +1068,9 @@ def _est_tour(emp: dict, date_obj, feries) -> bool:
 def _position_cycle(emp: dict, date_obj, feries=None):
     """(position, jours_travail, cycle_total) ou None.
 
-    Les jours « à part » (dimanches + fériés en semaine) ne font jamais avancer
-    le cycle : la position se calcule sur les seuls jours ouvrés écoulés depuis la réf.
+    Le cycle 2 nuits / 1 repos avance TOUS les jours, dimanche et férié compris :
+    la nuit du dimanche/férié est une nuit ordinaire de la rotation (le tour de
+    JOUR 08h-17h est géré à part, en plus de la nuit, dans `_planning_gardien`).
     """
     rc = emp.get("rotation_cycle")
     rr = emp.get("rotation_ref_date")
@@ -1110,8 +1083,7 @@ def _position_cycle(emp: dict, date_obj, feries=None):
         return None
     if ct <= 0:
         return None
-    jours_cycle = (date_obj - ref).days - _nb_jours_a_part(ref, date_obj, feries)
-    return jours_cycle % ct, jt, ct
+    return (date_obj - ref).days % ct, jt, ct
 
 
 def _est_repos_gardien(emp: dict, date_obj, feries=None) -> bool:
@@ -1139,40 +1111,36 @@ def _duree_nuit_gardien(code: str) -> int:
 
 
 def _planning_gardien(emp: dict, date_obj, code: str, feries):
-    """Génère dynamiquement (code_effectif|None, force_statut|None) pour un gardien.
-    force_statut ∈ {None, 'Repos', 'Garde', 'Exclu'}.
-    Les jours « à part » (dimanche, férié en semaine) sont traités à l'identique."""
+    """Génère (code_effectif|None, force_statut|None) pour un gardien.
+
+    Modèle :
+      • Rotation de nuit 2/1 en CONTINU (tous les jours, dimanche et férié inclus) :
+        nuit 16h45 → lendemain 08h15 quand le cycle est en « travail ».
+      • EN PLUS, tour de JOUR 08h → 17h le dimanche (rotation hebdo) et les fériés
+        en semaine (par rang). Additif : un gardien peut cumuler jour + sa nuit.
+      • Repos du cycle sans tour → 'Repos'. Plus de statut Exclu/Garde/Férié.
+
+    force_statut ∈ {None, 'Repos'}.
+    """
     nuit = _extraire_nuit(code)
     if not nuit:
         return code, None
     deb_n, fin_n = nuit
     wd = date_obj.weekday()
+    jc = _JOURS_CODE[wd]
+    is_ferie_semaine = wd != 6 and date_obj.isoformat() in (feries or ())
 
-    # A. Jour « à part » (dimanche ou férié en semaine) : hors du cycle.
-    if _jour_a_part(date_obj, feries):
-        if _est_tour(emp, date_obj, feries):
-            eve = date_obj - timedelta(days=1)
-            # Garde fraîche si la veille n'est pas une nuit travaillée ;
-            # sinon le bloc continu (++) est porté par la veille → jour couvert.
-            if _jour_a_part(eve, feries) or _est_repos_gardien(emp, eve, feries):
-                return (f"{_min_to_hhmm(GARDE_DEBUT_MIN)}{_JOURS_CODE[wd]}"
-                        f"{_min_to_hhmm(fin_n)}+", "Garde")
-            return None, "Garde"
-        # Pas son tour : dimanche → Exclu ; férié en semaine → Férié (jour chômé)
-        if wd == 6:
-            return None, "Exclu"
-        return None, "Férié"
+    segments = []
+    # 1. Nuit selon le cycle (overnight auto-détecté : fin < début → J+1)
+    if not _est_repos_gardien(emp, date_obj, feries):
+        segments.append(f"{_min_to_hhmm(deb_n)}{jc}{_min_to_hhmm(fin_n)}")
+    # 2. Tour de JOUR (dimanche ou férié en semaine) : 08h00 → 17h00, en plus
+    if (wd == 6 or is_ferie_semaine) and _est_tour(emp, date_obj, feries):
+        segments.append(f"{_min_to_hhmm(JOUR_TOUR_DEBUT)}{jc}{_min_to_hhmm(JOUR_TOUR_FIN)}")
 
-    # B. Veille d'un jour-à-part de tour, et nuit travaillée → bloc continu (++)
-    lendemain = date_obj + timedelta(days=1)
-    if (_jour_a_part(lendemain, feries) and _est_tour(emp, lendemain, feries)
-            and not _est_repos_gardien(emp, date_obj, feries)):
-        return f"{_min_to_hhmm(deb_n)}{_JOURS_CODE[wd]}{_min_to_hhmm(fin_n)}++", None
-
-    # C. Jour ouvré : repos ou nuit selon le cycle.
-    if _est_repos_gardien(emp, date_obj, feries):
-        return None, "Repos"
-    return f"{_min_to_hhmm(deb_n)}{_JOURS_CODE[wd]}{_min_to_hhmm(fin_n)}", None
+    if segments:
+        return ";".join(segments), None
+    return None, "Repos"
 
 
 def _planning_jour(emp: dict, code: str, date_obj, feries=None):
@@ -1706,6 +1674,21 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
                     else:            # plage apm
                         dur_apm_min = (dur_apm_min or 0) + plage["minutes"]
 
+        # Gardien : services prévus du jour (jour 08-17h et/ou nuit 16h45→08h15).
+        # Permet au dashboard d'afficher la bonne prise/fin par service, et de
+        # gérer le cas « jour + nuit » le même jour (2 lignes).
+        gardes_shifts = []
+        if _est_gardien(emp) and effective_code:
+            from parser import parse_code_horaire as _pch, _min_to_heure as _mth
+            _pls = _pch(effective_code).get(date_obj.weekday(), {}).get("plages_travail", [])
+            for _p in sorted(_pls, key=lambda x: x["debut"]):
+                _overnight = _p.get("fin_offset", 0) >= 1 or _p["fin"] < _p["debut"]
+                gardes_shifts.append({
+                    "kind":  "nuit" if _overnight else "jour",
+                    "debut": _mth(_p["debut"]),
+                    "fin":   _mth(_p["fin"]),
+                })
+
         result.append({
             "prno":              prno,
             "nom_prenom":        emp["nom_complet"],
@@ -1718,6 +1701,7 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
             "dur_mat":           dur_mat_min,
             "dur_apm":           dur_apm_min,
             "dur_tot":           reel if reel > 0 else None,
+            "gardes_shifts":     gardes_shifts,
             "statut":            statut,
             "ferie":             ferie,
             "code_horaire":      code,
