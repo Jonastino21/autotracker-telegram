@@ -1451,6 +1451,31 @@ def _ajouter_departs_nuit(pts_jour: list, getter, code: str, date_obj) -> list:
     return pts_jour + extra if extra else pts_jour
 
 
+def _retirer_departs_veille(pts_jour: list, emp: dict, date_obj, feries) -> list:
+    """Symétrique de `_ajouter_departs_nuit` : retire des pointages d'AUJOURD'HUI
+    les départs du petit matin qui closent la garde de nuit de la VEILLE (déjà
+    rattachés à la veille). Sinon ils sont matchés à tort à la garde du jour
+    (« Fin de garde » fantôme le lendemain de la garde)."""
+    if not _est_gardien(emp):
+        return pts_jour
+    veille = date_obj - timedelta(days=1)
+    h = get_horaire(emp["prno"], veille.isoformat())
+    code_v = h["code_horaire"] if h else None
+    if not code_v:
+        return pts_jour
+    code_v_eff, _ = _planning_jour(emp, code_v, veille, feries)
+    if not code_v_eff:
+        return pts_jour
+    from parser import get_plages_jour, _heure_to_min
+    nuit_v = [p for p in get_plages_jour(code_v_eff, veille)
+              if p.get("fin_offset", 0) >= 1 or p["fin"] < p["debut"]]
+    if not nuit_v:
+        return pts_jour
+    seuil = max(p["fin"] for p in nuit_v) + 120   # fin de la nuit de la veille + marge
+    return [p for p in pts_jour
+            if not (p["type"] == "depart" and _heure_to_min(p["heure"]) <= seuil)]
+
+
 def _augmenter_jour_integration(code: str, date_obj, pts: list, heure_effet: str) -> list:
     """Jour d'intégration : crédite comme présentes les plages (de jour) commencées
     avant l'heure d'effet, via des pointages synthétiques (arrivée au début, départ
@@ -1519,7 +1544,9 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
         is_sunday = date_obj.weekday() == 6
         effective_code, force_statut = _planning_jour(emp, code, date_obj, feries)
 
-        # Garde : rattacher le départ du matin de fin (J+1 ou J+2)
+        # Garde : retirer le départ du matin qui clôt la garde de la VEILLE
+        # (sinon « Fin » fantôme), puis rattacher celui de fin de garde du jour.
+        pts = _retirer_departs_veille(pts, emp, date_obj, feries)
         pts = _ajouter_departs_nuit(
             pts, lambda d: _suiv.get(d, {}).get(prno, []), effective_code, date_obj)
 
@@ -1813,7 +1840,9 @@ def get_resume_periode_avec_synthese(date_debut: str, date_fin: str) -> list[dic
                 theo_jour  = 0
                 jour_exclu = False
 
-            # Garde : rattacher le départ du matin de fin (J+1 ou J+2)
+            # Garde : retirer le départ du matin qui clôt la garde de la VEILLE,
+            # puis rattacher celui de fin de garde du jour.
+            pts = _retirer_departs_veille(pts, emp, date_obj, feries)
             pts = _ajouter_departs_nuit(
                 pts, lambda d: pts_index[prno][d], code_eff, date_obj)
 
