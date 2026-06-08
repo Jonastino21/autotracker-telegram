@@ -1674,19 +1674,25 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
                     else:            # plage apm
                         dur_apm_min = (dur_apm_min or 0) + plage["minutes"]
 
-        # Gardien : services prévus du jour (jour 08-17h et/ou nuit 16h45→08h15).
-        # Permet au dashboard d'afficher la bonne prise/fin par service, et de
-        # gérer le cas « jour + nuit » le même jour (2 lignes).
+        # Gardien : services prévus du jour (jour 08-17h et/ou nuit 16h45→08h15),
+        # avec la prise/fin RÉELLES matchées à chaque plage par le calcul des
+        # heures (plages_detail) — source fiable, contrairement au bucketing
+        # matin/apm qui range mal les nuits. Gère aussi le cas « jour + nuit ».
         gardes_shifts = []
         if _est_gardien(emp) and effective_code:
             from parser import parse_code_horaire as _pch, _min_to_heure as _mth
             _pls = _pch(effective_code).get(date_obj.weekday(), {}).get("plages_travail", [])
             for _p in sorted(_pls, key=lambda x: x["debut"]):
                 _overnight = _p.get("fin_offset", 0) >= 1 or _p["fin"] < _p["debut"]
+                _deb = _mth(_p["debut"])
+                _det = next((d for d in (plages_detail or [])
+                             if d.get("plage_debut") == _deb), None)
                 gardes_shifts.append({
-                    "kind":  "nuit" if _overnight else "jour",
-                    "debut": _mth(_p["debut"]),
-                    "fin":   _mth(_p["fin"]),
+                    "kind":   "nuit" if _overnight else "jour",
+                    "debut":  _deb,
+                    "fin":    _mth(_p["fin"]),
+                    "prise":  _det.get("arrivee") if _det else None,
+                    "fin_reelle": _det.get("depart") if _det else None,
                 })
 
         result.append({

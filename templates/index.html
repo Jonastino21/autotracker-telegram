@@ -867,10 +867,9 @@ function renderJourGardiens(data) {
     const nh = !r.code_horaire;
     const ex = r.statut === 'Exclu';
     const off = ['Repos','Exclu','Férié','Récup'].includes(r.statut);
-    // Prise/Fin par SERVICE prévu (gardes_shifts) — gère jour, nuit, ou les deux :
-    //   nuit (16h45→08h15) → prise = pointage du soir (arr_apm), fin = matin (dep_mat) ;
-    //   jour (08h→17h)     → prise = pointage du matin (arr_mat), fin = soir (dep_apm).
-    // Sans pointage correspondant → vide (aucun pointage parasite affiché).
+    // Prise/Fin par SERVICE (gardes_shifts) — temps RÉELS matchés à chaque plage
+    // par le calcul des heures (fiable, cohérent avec la durée). Gère jour, nuit,
+    // ou les deux le même jour (2 lignes, badges J/N).
     const shifts = (r.gardes_shifts && r.gardes_shifts.length) ? r.gardes_shifts : null;
     let prise, fin;
     if (off || !shifts) {
@@ -878,8 +877,8 @@ function renderJourGardiens(data) {
     } else {
       const tag = (s) => shifts.length > 1
         ? `<span class="shift-tag ${s.kind}">${s.kind==='nuit'?'N':'J'}</span> ` : '';
-      prise = shifts.map(s => tag(s) + t(s.kind==='nuit' ? r.arr_apm : r.arr_mat)).join('<br>');
-      fin   = shifts.map(s => tag(s) + t(s.kind==='nuit' ? r.dep_mat : r.dep_apm)).join('<br>');
+      prise = shifts.map(s => tag(s) + t(s.prise)).join('<br>');
+      fin   = shifts.map(s => tag(s) + t(s.fin_reelle)).join('<br>');
     }
     const duree   = nh ? vide : (r.reel_label && r.reel_label !== '—' ? r.reel_label : dur(r.minutes_reels||0));
     const contrat = nh ? '<span class="td-empty">N/A</span>' : (r.theorique_label|| '');
