@@ -1202,9 +1202,12 @@ def _planning_gardien_base(emp: dict, date_obj, code: str, feries):
         nuit 16h45 → lendemain 08h15 quand le cycle est en « travail ».
       • EN PLUS, tour de JOUR 08h → 17h le dimanche (rotation hebdo) et les fériés
         en semaine (par rang). Additif : un gardien peut cumuler jour + sa nuit.
-      • Repos du cycle sans tour → 'Repos'. Plus de statut Exclu/Garde/Férié.
+      • Repos du cycle sans tour → 'Repos'.
+      • Le tour de JOUR porte un statut dédié : 'Garde' (tour de jour seul) ou
+        'Mixte' (tour de jour cumulé à la nuit du cycle le même jour). La nuit
+        seule reste un service normal (force_statut None → Complet/Absent/…).
 
-    force_statut ∈ {None, 'Repos'}.
+    force_statut ∈ {None, 'Repos', 'Garde', 'Mixte'}.
     """
     nuit = _extraire_nuit(code)
     if not nuit:
@@ -1214,17 +1217,24 @@ def _planning_gardien_base(emp: dict, date_obj, code: str, feries):
     jc = _JOURS_CODE[wd]
     is_ferie_semaine = wd != 6 and date_obj.isoformat() in (feries or ())
 
+    has_nuit = not _est_repos_gardien(emp, date_obj, feries)
+    has_jour = (wd == 6 or is_ferie_semaine) and _est_tour(emp, date_obj, feries)
+
     segments = []
     # 1. Nuit selon le cycle (overnight auto-détecté : fin < début → J+1)
-    if not _est_repos_gardien(emp, date_obj, feries):
+    if has_nuit:
         segments.append(f"{_min_to_hhmm(deb_n)}{jc}{_min_to_hhmm(fin_n)}")
     # 2. Tour de JOUR (dimanche ou férié en semaine) : 08h00 → 17h00, en plus
-    if (wd == 6 or is_ferie_semaine) and _est_tour(emp, date_obj, feries):
+    if has_jour:
         segments.append(f"{_min_to_hhmm(JOUR_TOUR_DEBUT)}{jc}{_min_to_hhmm(JOUR_TOUR_FIN)}")
 
-    if segments:
-        return ";".join(segments), None
-    return None, "Repos"
+    if not segments:
+        return None, "Repos"
+    # Tour de JOUR → statut dédié (jamais 'Absent') : 'Mixte' s'il s'ajoute à la
+    # nuit du cycle, sinon 'Garde'. La nuit seule garde le suivi présent/absent.
+    if has_jour:
+        return ";".join(segments), ("Mixte" if has_nuit else "Garde")
+    return ";".join(segments), None
 
 
 def _planning_gardien(emp: dict, date_obj, code: str, feries):
@@ -1718,8 +1728,8 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
             statut = "Férié"
             theorique = reel = (_duree_nuit_gardien(code) if _est_gardien(emp)
                                 else get_minutes_theoriques_jour(code, date_obj))
-        elif force_statut == "Garde":          # gardien : jour de tour (heures gardées)
-            statut = "Garde"
+        elif force_statut in ("Garde", "Mixte"):  # gardien : tour de JOUR (dimanche/férié)
+            statut = force_statut                  # jamais 'Absent' ; heures depuis pointages
         elif force_statut == "Récup":          # jardinier : récup du dimanche de tour
             statut = "Récup"
         elif force_statut == "Exclu":          # gardien : dimanche hors planning
@@ -1986,21 +1996,16 @@ def get_resume_periode_avec_synthese(date_debut: str, date_fin: str) -> list[dic
                 nb_ferie += 1
                 total_theorique += theo_jour
                 total_reel      += theo_jour
-            elif force_statut == "Garde":
-                # Dimanche de tour : heures comptées si garde fraîche (code présent),
-                # sinon (garde continue) les heures sont portées par le samedi.
-                statut = "Garde"
+            elif force_statut in ("Garde", "Mixte"):
+                # Tour de JOUR (dimanche/férié) : statut dédié, jamais compté Absent.
+                # Heures réelles depuis les pointages ; théorique = planning du jour.
+                statut = force_statut
                 if code_eff and pts:
                     calc = calculer_temps_reel_plafonne(code_eff, date_obj, pts)
                     total_theorique += calc["minutes_theoriques"]
                     total_reel      += calc["minutes_reels"]
-                    if calc["complet"]:
-                        nb_complet += 1
-                    else:
-                        nb_incomplet += 1
                 elif code_eff:
                     total_theorique += theo_jour
-                    nb_absent       += 1
             elif force_statut == "Férié":
                 statut = "Férié"
                 nb_ferie += 1

@@ -176,6 +176,7 @@
   .badge-exclu    { background: rgba(96,125,139,0.04); color: #607D8B;  border: 1px solid rgba(96,125,139,0.2); }
   .badge-repos    { background: rgba(33,150,243,0.08); color: #1565C0;  border: 1px solid rgba(33,150,243,0.3); }
   .badge-garde    { background: rgba(0,150,136,0.10);  color: #00695C;  border: 1px solid rgba(0,150,136,0.3);  }
+  .badge-mixte    { background: rgba(173,20,87,0.10);  color: #AD1457;  border: 1px solid rgba(173,20,87,0.3);  }
   .badge-recup    { background: rgba(121,134,203,0.12); color: #3949AB;  border: 1px solid rgba(121,134,203,0.3); }
   .badge-echange  { background: rgba(255,112,67,0.10);  color: #D84315;  border: 1px solid rgba(255,112,67,0.3); }
 
@@ -222,6 +223,7 @@
   .cel-exclu    { background: rgba(96,125,139,0.04); color: #9AAABB;  font-size: 10px;  }
   .cel-repos    { background: rgba(33,150,243,0.08); color: #1565C0;  font-weight: 600; }
   .cel-garde    { background: rgba(0,150,136,0.12);  color: #00695C;  font-weight: 700; }
+  .cel-mixte    { background: rgba(173,20,87,0.12);  color: #AD1457;  font-weight: 700; }
   .cel-recup    { background: rgba(121,134,203,0.12); color: #3949AB;  font-weight: 600; }
   .cel-echange  { background: rgba(255,112,67,0.12);  color: #D84315;  font-weight: 700; }
 
@@ -794,7 +796,7 @@ async function loadJour() {
 }
 
 // Helpers communs aux deux tableaux du jour
-const _bcJour = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu',Repos:'badge-repos',Garde:'badge-garde',Récup:'badge-recup',Échange:'badge-echange'}[s]||'');
+const _bcJour = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu',Repos:'badge-repos',Garde:'badge-garde',Mixte:'badge-mixte',Récup:'badge-recup',Échange:'badge-echange'}[s]||'');
 const _tJour  = v => v ? `<span class="td-time">${v.slice(0,5)}</span>` : '<span class="td-empty"></span>';
 
 function renderJourTable(data) {
@@ -963,11 +965,12 @@ function renderSMoisTable(data) {
       const nC  = sts.filter(x=>x==='Complet').length;
       const nI  = sts.filter(x=>x==='Incomplet').length;
       const nA  = sts.filter(x=>x==='Absent').length;
+      const nG  = sts.filter(x=>x==='Garde'||x==='Mixte').length;
       const nEx = sts.filter(x=>x==='Exclu').length;
       const nF  = sts.filter(x=>x==='Férié').length;
-      const cls = nA>0?'cel-absent':nI>0?'cel-incomplet':nC>0?'cel-complet':'cel-exclu';
+      const cls = nA>0?'cel-absent':nI>0?'cel-incomplet':nC>0?'cel-complet':nG>0?'cel-garde':'cel-exclu';
       const lbl = nEx+nF===s.length ? (nF>0?`★${nF}`:'·')
-        : [nC?`✓${nC}`:'',nI?`◑${nI}`:'',nA?`✕${nA}`:''].filter(Boolean).join(' ') || '·';
+        : [nC?`✓${nC}`:'',nI?`◑${nI}`:'',nA?`✕${nA}`:'',nG?`G${nG}`:''].filter(Boolean).join(' ') || '·';
       const datesStr = s.join(',');
       html += `<td class="${cls}" style="font-size:11px;cursor:pointer"
         onclick="openSemaine('${rid}','${emp.prno}',${i},'${datesStr}')"
@@ -1031,7 +1034,7 @@ async function openSemaine(rid, prno, semIdx, datesStr) {
   );
 
   const dur  = m => (m > 0) ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty"></span>';
-  const bc   = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu',Repos:'badge-repos',Garde:'badge-garde',Récup:'badge-recup',Échange:'badge-echange'}[s]||'');
+  const bc   = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu',Repos:'badge-repos',Garde:'badge-garde',Mixte:'badge-mixte',Récup:'badge-recup',Échange:'badge-echange'}[s]||'');
   const t    = v => v ? `<span style="font-family:'DM Mono',monospace">${v.slice(0,5)}</span>` : '<span class="td-empty"></span>';
   const vide = '<span class="td-empty"></span>';
 
@@ -1114,8 +1117,8 @@ function renderPeriodeTable(data) {
     html += `<tr data-cat="${emp.categorie||'standard'}"><td class="td-prno-col">${emp.prno}</td><td class="td-nom-col">${emp.nom_prenom}</td>`;
     dates.forEach(d => {
       const s   = (emp.dates||{})[d]||'Exclu';
-      const cls = {Complet:'cel-complet',Incomplet:'cel-incomplet',Absent:'cel-absent',Férié:'cel-ferie',Exclu:'cel-exclu',Repos:'cel-repos',Garde:'cel-garde',Récup:'cel-recup',Échange:'cel-echange'}[s]||'';
-      const lbl = {Complet:'✓',Incomplet:'◑',Absent:'✕',Férié:'★',Exclu:'·',Repos:'R',Garde:'G',Récup:'Ru',Échange:'⇄'}[s]|| '';
+      const cls = {Complet:'cel-complet',Incomplet:'cel-incomplet',Absent:'cel-absent',Férié:'cel-ferie',Exclu:'cel-exclu',Repos:'cel-repos',Garde:'cel-garde',Mixte:'cel-mixte',Récup:'cel-recup',Échange:'cel-echange'}[s]||'';
+      const lbl = {Complet:'✓',Incomplet:'◑',Absent:'✕',Férié:'★',Exclu:'·',Repos:'R',Garde:'G',Mixte:'M',Récup:'Ru',Échange:'⇄'}[s]|| '';
       const oc  = s !== 'Exclu' ? `onclick="openModal('${d}')"` : '';
       html += `<td class="${cls}" ${oc} title="${s} — ${d}">${lbl}</td>`;
     });
@@ -1180,7 +1183,7 @@ async function openModal(ds) {
     document.getElementById('mStatIncomplets').textContent = data.stats.incomplets;
     document.getElementById('mStatAbsents').textContent    = data.stats.absents;
     const dur = m => (m > 0) ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty"></span>';
-    const bc  = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu',Repos:'badge-repos',Garde:'badge-garde',Récup:'badge-recup',Échange:'badge-echange'}[s]||'');
+    const bc  = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu',Repos:'badge-repos',Garde:'badge-garde',Mixte:'badge-mixte',Récup:'badge-recup',Échange:'badge-echange'}[s]||'');
     let html = '';
     if (data.stats.ferie) html += '<div class="ferie-banner" style="margin:12px 16px 0">★ Jour férié</div>';
     html += `<div style="overflow-x:auto"><table class="data-table"><thead><tr>
