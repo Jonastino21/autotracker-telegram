@@ -1240,12 +1240,28 @@ def _planning_gardien_base(emp: dict, date_obj, code: str, feries):
     return ";".join(segments), None
 
 
+def _jour_nuit_flags(eff, fs):
+    """À partir d'un (code_effectif, force_statut) renvoyé par `_planning_gardien_base`,
+    indique si le service comporte un tour de JOUR et/ou une NUIT.
+
+    - 'Garde'  → jour seul         → (True, False)
+    - 'Mixte'  → jour + nuit       → (True, True)
+    - None + segments → nuit seule → (False, True)
+    - 'Repos'/None sans segment    → (False, False)
+    """
+    has_jour = fs in ("Garde", "Mixte")
+    has_nuit = fs == "Mixte" or (fs is None and bool(_split_segments(eff)))
+    return has_jour, has_nuit
+
+
 def _planning_gardien(emp: dict, date_obj, code: str, feries):
     """Planning d'un gardien, remplacements de garde appliqués par-dessus le calcul.
 
     - Si le gardien est TITULAIRE remplacé ce jour → ('Échange', 0h, non pénalisé).
     - Si le gardien est REMPLAÇANT ce jour → il fait le service du titulaire
-      (sa nuit / son tour), cumulé à son propre service éventuel.
+      (sa nuit / son tour), cumulé à son propre service éventuel. Le statut tient
+      compte du cumul jour/nuit : tour de JOUR + nuit (sienne ou couverte) → 'Mixte',
+      tour de JOUR seul → 'Garde', nuit seule → None (suivi présent/absent normal).
     Sinon → planning théorique normal.
     """
     rempl = get_remplacements_jour(date_obj.isoformat())
@@ -1258,7 +1274,10 @@ def _planning_gardien(emp: dict, date_obj, code: str, feries):
         couverts = [r["prno_titulaire"] for r in rempl if r["prno_remplacant"] == prno]
         if couverts:
             segs = []
-            own, _ = _planning_gardien_base(emp, date_obj, code, feries)   # son propre service
+            any_jour = any_nuit = False
+            own, own_fs = _planning_gardien_base(emp, date_obj, code, feries)  # son propre service
+            j, n = _jour_nuit_flags(own, own_fs)
+            any_jour |= j; any_nuit |= n
             for c in _split_segments(own):
                 if c not in segs:
                     segs.append(c)
@@ -1266,12 +1285,17 @@ def _planning_gardien(emp: dict, date_obj, code: str, feries):
                 tit = get_employe_by_prno(tit_prno)
                 th  = get_horaire(tit_prno, date_obj.isoformat())
                 tcode = th["code_horaire"] if th else None
-                tit_eff, _ = (_planning_gardien_base(tit, date_obj, tcode, feries)
-                              if tit and tcode else (None, None))
+                tit_eff, tit_fs = (_planning_gardien_base(tit, date_obj, tcode, feries)
+                                   if tit and tcode else (None, None))
+                j, n = _jour_nuit_flags(tit_eff, tit_fs)
+                any_jour |= j; any_nuit |= n
                 for c in _split_segments(tit_eff):
                     if c not in segs:
                         segs.append(c)
-            return (";".join(segs), None) if segs else (None, "Repos")
+            if not segs:
+                return None, "Repos"
+            fs = "Mixte" if (any_jour and any_nuit) else ("Garde" if any_jour else None)
+            return ";".join(segs), fs
     return _planning_gardien_base(emp, date_obj, code, feries)
 
 
