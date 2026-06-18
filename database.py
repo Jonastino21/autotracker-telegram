@@ -892,7 +892,10 @@ def get_resume_periode(date_debut, date_fin):
 
 
 def get_stats_jour(date_str):
-    resume = get_resume_jour(date_str)
+    # Compteurs alignés sur le tableau affiché (moteur de planning : gardiens,
+    # Garde/Mixte/Repos…). On réutilise get_resume_jour_avec_horaires pour que les
+    # cartes Complets/Incomplets/Absents correspondent exactement aux statuts montrés.
+    resume = get_resume_jour_avec_horaires(date_str)
     ferie  = is_jour_ferie(date_str)
     return {
         "total":      len(resume),

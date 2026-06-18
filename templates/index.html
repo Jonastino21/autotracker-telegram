@@ -1038,10 +1038,14 @@ async function openSemaine(rid, prno, semIdx, datesStr) {
   const t    = v => v ? `<span style="font-family:'DM Mono',monospace">${v.slice(0,5)}</span>` : '<span class="td-empty"></span>';
   const vide = '<span class="td-empty"></span>';
 
-  let html = `<div style="overflow-x:auto"><table class="data-table" style="width:100%;font-size:11px"><thead><tr>
+  // Gardien → colonnes Prise/Fin de garde (comme la vue Jour) au lieu de Mat/APM.
+  const isGard = dayResults.some(dd => dd && (dd.employes||[])
+    .some(e => e.prno === prno && (e.categorie||'standard') === 'gardien'));
+
+  let html = `<div style="overflow-x:auto"><table class="data-table ${isGard?'t-gardiens':''}" style="width:100%;font-size:11px"><thead><tr>
     <th style="padding:7px 12px">Date</th>
-    <th>Arr. Mat</th><th>Dép. Mat</th>
-    <th>Arr. APM</th><th>Dép. APM</th>
+    ${isGard ? '<th>Prise de garde</th><th>Fin de garde</th>'
+             : '<th>Arr. Mat</th><th>Dép. Mat</th><th>Arr. APM</th><th>Dép. APM</th>'}
     <th>Durée</th><th style="color:#00BFA5">Contrat</th>
     <th>Écart</th><th>Statut</th>
   </tr></thead><tbody>`;
@@ -1058,12 +1062,27 @@ async function openSemaine(rid, prno, semIdx, datesStr) {
     const contrat = nh ? vide : (emp.theorique_label|| '');
     const ecartC  = !emp ? '#9AAABB' : emp.ecart_type==='manquant'?'#EF5350':emp.ecart_type==='ok'?'#4CAF50':'#9AAABB';
     const ecart   = ex ? vide : (emp.ecart_label|| '');
+
+    let cols;
+    if (isGard) {
+      const off    = ['Repos','Exclu','Férié','Récup','Échange'].includes(statut);
+      const shifts = (emp && emp.gardes_shifts && emp.gardes_shifts.length) ? emp.gardes_shifts : null;
+      let prise = vide, fin = vide;
+      if (!off && shifts) {
+        const tag = s => shifts.length > 1
+          ? `<span class="shift-tag ${s.kind}">${s.kind==='nuit'?'N':'J'}</span> ` : '';
+        prise = shifts.map(s => tag(s) + t(s.prise)).join('<br>');
+        fin   = shifts.map(s => tag(s) + t(s.fin_reelle)).join('<br>');
+      }
+      cols = `<td>${prise}</td><td>${fin}</td>`;
+    } else {
+      cols = `<td>${ex?vide:t(emp.arr_mat)}</td><td>${ex?vide:t(emp.dep_mat)}</td>`
+           + `<td>${ex?vide:t(emp.arr_apm)}</td><td>${ex?vide:t(emp.dep_apm)}</td>`;
+    }
+
     html += `<tr style="${rowSt}" onclick="openModal('${ds}')" title="Voir détail complet">
       <td style="padding:7px 12px;font-family:'DM Mono',monospace;color:#00BFA5;font-weight:600;cursor:pointer">${formatDateCourt(ds)}</td>
-      <td>${ex?vide:t(emp.arr_mat)}</td>
-      <td>${ex?vide:t(emp.dep_mat)}</td>
-      <td>${ex?vide:t(emp.arr_apm)}</td>
-      <td>${ex?vide:t(emp.dep_apm)}</td>
+      ${cols}
       <td class="td-dur">${ex?vide:duree}</td>
       <td class="td-dur" style="color:#00BFA5">${ex?vide:contrat}</td>
       <td class="td-dur" style="color:${ecartC};font-weight:600">${ecart}</td>
@@ -1182,38 +1201,16 @@ async function openModal(ds) {
     document.getElementById('mStatComplets').textContent   = data.stats.complets;
     document.getElementById('mStatIncomplets').textContent = data.stats.incomplets;
     document.getElementById('mStatAbsents').textContent    = data.stats.absents;
-    const dur = m => (m > 0) ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '<span class="td-empty"></span>';
-    const bc  = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu',Repos:'badge-repos',Garde:'badge-garde',Mixte:'badge-mixte',Récup:'badge-recup',Échange:'badge-echange'}[s]||'');
     let html = '';
     if (data.stats.ferie) html += '<div class="ferie-banner" style="margin:12px 16px 0">★ Jour férié</div>';
-    html += `<div style="overflow-x:auto"><table class="data-table"><thead><tr>
-      <th>PRNO</th><th>Nom Prénom</th>
-      <th>Arr. Mat</th><th>Dép. Mat</th>
-      <th>Arr. APM</th><th>Dép. APM</th>
-      <th>Durée</th><th style="color:#00BFA5">Contrat</th><th>Écart</th><th>Statut</th>
-    </tr></thead><tbody>`;
-    const tM   = v => v ? `<span class="td-time">${v.slice(0,5)}</span>` : '<span class="td-empty"></span>';
-    const vM   = '<span class="td-empty"></span>';
-    (data.employes||[]).forEach(r => {
-      const nh  = !r.code_horaire;
-      const ex  = r.statut === 'Exclu';
-      const duree  = nh ? vM : (r.reel_label && r.reel_label !== '—' ? r.reel_label : dur(r.minutes_reels||0));
-      const ec  = nh ? '#9AAABB' : (r.ecart_type==='manquant'?'#EF5350':r.ecart_type==='ok'?'#4CAF50':'#9AAABB');
-      const rst = nh ? 'opacity:0.45;background:repeating-linear-gradient(135deg,transparent,transparent 4px,rgba(0,0,0,0.03) 4px,rgba(0,0,0,0.03) 8px);' : ex ? 'opacity:0.35;' : r.ferie ? 'opacity:0.6;' : '';
-      const show = !ex;
-      html += `<tr style="${rst}">
-        <td class="td-prno">${r.prno}</td><td class="td-name">${r.nom_prenom}</td>
-        <td>${show ? tM(r.arr_mat) : vM}</td>
-        <td>${show ? tM(r.dep_mat) : vM}</td>
-        <td>${show ? tM(r.arr_apm) : vM}</td>
-        <td>${show ? tM(r.dep_apm) : vM}</td>
-        <td class="td-dur">${ex||nh ? vM : duree}</td>
-        <td class="td-dur" style="color:#00BFA5">${ex||nh ? vM : (r.theorique_label|| '')}</td>
-        <td class="td-dur" style="color:${ec};font-weight:600">${ex||nh ? vM : (r.ecart_label|| '')}</td>
-        <td>${nh?'<span class="badge" style="background:rgba(0,0,0,0.06);color:#9AAABB;border:1px solid rgba(0,0,0,0.07)">Sans horaire</span>':`<span class="badge ${bc(r.statut)}">${r.statut}</span>`}</td>
-      </tr>`;
-    });
-    html += '</tbody></table></div>';
+    // Même séparation que la vue Jour : gardiens (en-têtes Prise/Fin de garde)
+    // distincts des standards (Arr./Dép. Mat/APM).
+    const rows = data.employes || [];
+    const std  = rows.filter(r => (r.categorie || 'standard') !== 'gardien');
+    const gard = rows.filter(r => (r.categorie || 'standard') === 'gardien');
+    if (std.length)  html += renderJourStd(std);
+    if (gard.length) html += renderJourGardiens(gard);
+    if (!rows.length) html += '<div class="loading-state">📭 Aucune donnée</div>';
     document.getElementById('modalBody').innerHTML = html;
   } catch(e) { document.getElementById('modalBody').innerHTML='<div class="loading-state">Erreur</div>'; }
 }
