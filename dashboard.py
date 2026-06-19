@@ -205,6 +205,154 @@ def help_page():
     return render_template("help.html", username=session.get("username",""))
 
 
+# ─── Maintenance (page « secrète », non listée dans la navigation) ──────────────
+# Accès via login_required uniquement (cookie de session local ou JWT).
+# URL : /maintenance.html
+
+import maintenance_core as mc
+
+
+def _regen_excel_async(dates):
+    """Régénère l'Excel pour les dates touchées, en arrière-plan."""
+    def _job():
+        try:
+            import exporter
+            for d in sorted(set(dates)):
+                exporter.generate_excel(d)
+        except Exception as e:
+            logger.warning("Maintenance : Excel non régénéré : %s", e)
+    if dates:
+        threading.Thread(target=_job, daemon=True).start()
+
+
+@app.route("/maintenance.html")
+@app.route("/maintenance")
+@login_required
+def maintenance_page():
+    return render_template("maintenance.html", username=session.get("username", ""))
+
+
+@app.route("/api/maintenance/employes")
+@login_required
+def api_maint_employes():
+    return jsonify(db.get_all_employes(actifs_only=False))
+
+
+@app.route("/api/maintenance/jour")
+@login_required
+def api_maint_jour():
+    ds = request.args.get("date", get_today())
+    return jsonify({
+        "date": ds,
+        "ferie": db.is_jour_ferie(ds),
+        "employes": db.get_resume_jour_avec_horaires(ds),
+    })
+
+
+@app.route("/api/maintenance/employe_periode")
+@login_required
+def api_maint_employe_periode():
+    prno = (request.args.get("prno") or "").strip().lower()
+    d1 = mc.norm_date(request.args.get("debut"))
+    d2 = mc.norm_date(request.args.get("fin")) or d1
+    if not prno or not d1:
+        return jsonify({"error": "prno et debut obligatoires"}), 400
+    cur, fin = date.fromisoformat(d1), date.fromisoformat(d2)
+    jours = []
+    while cur <= fin:
+        di = cur.isoformat()
+        r = next((x for x in db.get_resume_jour_avec_horaires(di) if x["prno"] == prno), None)
+        if r:
+            jours.append({**r, "date": di})
+        cur += timedelta(days=1)
+    return jsonify({"prno": prno, "debut": d1, "fin": d2, "jours": jours})
+
+
+@app.route("/api/maintenance/planning")
+@login_required
+def api_maint_planning():
+    prno = (request.args.get("prno") or "").strip().lower()
+    d = mc.norm_date(request.args.get("date"))
+    if not prno or not d:
+        return jsonify({"error": "prno et date obligatoires"}), 400
+    events, code = mc.evenements_planning(prno, d)
+    return jsonify({"prno": prno, "date": d, "code": code, "events": events})
+
+
+@app.route("/api/maintenance/pointages")
+@login_required
+def api_maint_pointages():
+    prno = (request.args.get("prno") or "").strip().lower()
+    d = mc.norm_date(request.args.get("date"))
+    if not prno or not d:
+        return jsonify({"error": "prno et date obligatoires"}), 400
+    return jsonify(mc.pointages_jour_employe(prno, d))
+
+
+@app.route("/api/maintenance/pointage", methods=["POST"])
+@login_required
+def api_maint_ajouter_pointage():
+    data = request.get_json(force=True) or {}
+    prno = (data.get("prno") or "").strip().lower()
+    d = mc.norm_date(data.get("date"))
+    h = mc.norm_heure(data.get("heure"))
+    type_pointage = "depart" if str(data.get("type", "")).startswith("d") else "arrivee"
+    lieu = (data.get("lieu") or mc.LIEU_DEFAUT).strip()
+    if not prno or not d or not h:
+        return jsonify({"ok": False, "error": "prno, date et heure valides obligatoires"}), 400
+    if not db.get_employe_by_prno(prno):
+        return jsonify({"ok": False, "error": "employé inconnu"}), 400
+    session_in = (data.get("session") or "auto").lower()
+    if session_in in ("matin", "apm"):
+        sess = session_in
+    else:
+        sess = mc.session_auto(prno, d, h)
+    res = mc.inserer_pointage(prno, d, h, type_pointage, sess, source=lieu, remplacer=True)
+    _regen_excel_async([d])
+    emit_admin_update("admin_employes_updated")
+    return jsonify({"ok": True, "resultat": res, "prno": prno, "date": d,
+                    "heure": h, "type": type_pointage, "session": sess})
+
+
+@app.route("/api/maintenance/remplir", methods=["POST"])
+@login_required
+def api_maint_remplir():
+    data = request.get_json(force=True) or {}
+    prno = (data.get("prno") or "").strip().lower()
+    d1 = mc.norm_date(data.get("date"))
+    d2 = mc.norm_date(data.get("date_fin")) or d1
+    lieu = (data.get("lieu") or mc.LIEU_DEFAUT).strip()
+    if not prno or not d1:
+        return jsonify({"ok": False, "error": "prno et date obligatoires"}), 400
+    if not db.get_employe_by_prno(prno):
+        return jsonify({"ok": False, "error": "employé inconnu"}), 400
+    if d2 < d1:
+        return jsonify({"ok": False, "error": "date_fin antérieure à date"}), 400
+    if d2 == d1:
+        r = mc.remplir_jour(prno, d1, lieu, remplacer=True)
+    else:
+        r = mc.remplir_plage(prno, d1, d2, lieu, remplacer=True)
+    if not r.get("ok"):
+        return jsonify({"ok": False, "error": "aucun service prévu sur la période",
+                        "details": r.get("details", [])}), 400
+    _regen_excel_async(r["touche"])
+    emit_admin_update("admin_employes_updated")
+    return jsonify({"ok": True, **r})
+
+
+@app.route("/api/maintenance/pointage", methods=["DELETE"])
+@login_required
+def api_maint_supprimer_pointage():
+    data = request.get_json(force=True) or {}
+    ids = data.get("ids") or ([data["id"]] if data.get("id") else [])
+    d = mc.norm_date(data.get("date"))
+    n = mc.supprimer_ids(ids)
+    if d:
+        _regen_excel_async([d])
+    emit_admin_update("admin_employes_updated")
+    return jsonify({"ok": True, "supprimes": n})
+
+
 # ─── API Présences ────────────────────────────────────────────────────────────
 
 @app.route("/api/stats")

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KAROKA | Maintenance</title>
+<link rel="icon" type="image/png" href="{{ url_for('static', filename='assets/logo.png') }}">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, sans-serif; }
+  .card { background:#fff; border:1px solid #e2e8f0; border-radius:14px; }
+  .badge { font-size:11px; padding:2px 8px; border-radius:999px; font-weight:600; }
+  .b-Absent{background:#FEE2E2;color:#B91C1C}.b-Incomplet{background:#FEF3C7;color:#92400E}
+  .b-Complet{background:#DCFCE7;color:#166534}.b-Repos{background:#E0E7FF;color:#3730A3}
+  .b-Exclu{background:#F1F5F9;color:#64748B}.b-Ferie,.b-Férié{background:#F3E8FF;color:#7E22CE}
+  .b-Garde,.b-Mixte{background:#CCFBF1;color:#0F766E}.b-Récup,.b-Echange,.b-Échange{background:#FFE4E6;color:#9F1239}
+  input,select{border:1px solid #cbd5e1;border-radius:9px;padding:7px 10px;font-size:14px;background:#fff}
+  input:focus,select:focus{outline:2px solid #99f6e4;border-color:#14b8a6}
+  .btn{border-radius:9px;padding:8px 14px;font-size:14px;font-weight:600;cursor:pointer;border:none}
+  .btn-primary{background:#0F766E;color:#fff}.btn-primary:hover{background:#115E59}
+  .btn-ghost{background:#F1F5F9;color:#334155}.btn-ghost:hover{background:#E2E8F0}
+  .btn-danger{background:#DC2626;color:#fff}.btn-danger:hover{background:#B91C1C}
+  th,td{text-align:left;padding:7px 10px;font-size:13px}
+  thead th{color:#64748B;font-weight:600;border-bottom:1px solid #e2e8f0;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+  tbody tr:hover{background:#F8FAFC}
+  .lbl{font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;display:block}
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen">
+
+<div class="max-w-5xl mx-auto px-4 py-6">
+
+  <!-- En-tête -->
+  <div class="flex items-center justify-between mb-5">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-900">🛠️ Maintenance des pointages</h1>
+      <p class="text-sm text-slate-500">Correction manuelle — réservé à l'administrateur ({{ username }})</p>
+    </div>
+    <a href="/" class="btn btn-ghost no-underline">← Tableau de bord</a>
+  </div>
+
+  <div id="toast" class="hidden fixed top-4 right-4 z-50 px-4 py-3 rounded-lg text-white text-sm font-medium shadow-lg"></div>
+
+  <!-- Barre commune : employé + lieu -->
+  <div class="card p-4 mb-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div>
+      <label class="lbl">Employé</label>
+      <select id="emp" class="w-full"></select>
+    </div>
+    <div>
+      <label class="lbl">Lieu / source (colonne « source »)</label>
+      <input id="lieu" class="w-full" value="Siège KAROKA" placeholder="ex. Siège KAROKA">
+    </div>
+  </div>
+
+  <!-- 1. Inspecter une journée -->
+  <section class="card p-4 mb-5">
+    <h2 class="font-bold text-slate-900 mb-3">1 · Inspecter une journée</h2>
+    <div class="flex flex-wrap items-end gap-3 mb-3">
+      <div><label class="lbl">Date</label><input type="date" id="insp-date"></div>
+      <div><label class="lbl">Filtre statut</label>
+        <select id="insp-filtre">
+          <option value="">Tous</option><option>Absent</option><option>Incomplet</option>
+          <option>Complet</option><option>Repos</option><option>Exclu</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="chargerJour()">Charger</button>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full"><thead><tr>
+        <th>Statut</th><th>PRNO</th><th>Nom</th><th>Matin</th><th>Après-midi</th><th>Théo</th><th>Réel</th>
+      </tr></thead><tbody id="insp-body"><tr><td colspan="7" class="text-slate-400">—</td></tr></tbody></table>
+    </div>
+  </section>
+
+  <!-- 2. Remplir d'après le planning -->
+  <section class="card p-4 mb-5">
+    <h2 class="font-bold text-slate-900 mb-1">2 · Remplir d'après le planning</h2>
+    <p class="text-xs text-slate-500 mb-3">Crée les pointages prévus (arrivées/départs) selon l'horaire de l'employé.
+       Pour ceux qui travaillent ailleurs sans badge, ou pour réparer une absence due à l'appli. Une plage = un jour par jour.</p>
+    <div class="flex flex-wrap items-end gap-3 mb-3">
+      <div><label class="lbl">Du</label><input type="date" id="rmp-d1"></div>
+      <div><label class="lbl">Au (optionnel)</label><input type="date" id="rmp-d2"></div>
+      <button class="btn btn-ghost" onclick="apercuPlanning()">Aperçu (1er jour)</button>
+      <button class="btn btn-primary" onclick="remplirPlanning()">Remplir</button>
+    </div>
+    <div id="rmp-apercu" class="text-sm text-slate-600"></div>
+  </section>
+
+  <!-- 3. Pointage manuel -->
+  <section class="card p-4 mb-5">
+    <h2 class="font-bold text-slate-900 mb-3">3 · Ajouter / corriger un pointage</h2>
+    <div class="flex flex-wrap items-end gap-3">
+      <div><label class="lbl">Date</label><input type="date" id="pt-date"></div>
+      <div><label class="lbl">Heure</label><input type="time" id="pt-heure"></div>
+      <div><label class="lbl">Type</label>
+        <select id="pt-type"><option value="arrivee">Arrivée</option><option value="depart">Départ</option></select></div>
+      <div><label class="lbl">Session</label>
+        <select id="pt-session"><option value="auto">Auto</option><option value="matin">Matin</option><option value="apm">Après-midi</option></select></div>
+      <button class="btn btn-primary" onclick="ajouterPointage()">Enregistrer</button>
+    </div>
+    <p class="text-xs text-slate-500 mt-2">Ré-enregistrer le même créneau le corrige (pas besoin de supprimer avant).</p>
+  </section>
+
+  <!-- 4. Supprimer -->
+  <section class="card p-4 mb-10">
+    <h2 class="font-bold text-slate-900 mb-3">4 · Supprimer des pointages</h2>
+    <div class="flex flex-wrap items-end gap-3 mb-3">
+      <div><label class="lbl">Date</label><input type="date" id="del-date"></div>
+      <button class="btn btn-ghost" onclick="chargerPointages()">Lister</button>
+      <button class="btn btn-danger" onclick="supprimerSelection()">Supprimer la sélection</button>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full"><thead><tr>
+        <th></th><th>ID</th><th>Heure</th><th>Type</th><th>Session</th><th>Source</th>
+      </tr></thead><tbody id="del-body"><tr><td colspan="6" class="text-slate-400">—</td></tr></tbody></table>
+    </div>
+  </section>
+
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const auj = new Date().toISOString().slice(0,10);
+["insp-date","rmp-d1","pt-date","del-date"].forEach(id => $(id).value = auj);
+
+function toast(msg, ok=true){
+  const t = $("toast");
+  t.textContent = msg;
+  t.className = "fixed top-4 right-4 z-50 px-4 py-3 rounded-lg text-white text-sm font-medium shadow-lg " + (ok?"bg-teal-700":"bg-red-600");
+  t.classList.remove("hidden");
+  setTimeout(()=>t.classList.add("hidden"), 3500);
+}
+async function api(url, opts){
+  const r = await fetch(url, Object.assign({headers:{"Content-Type":"application/json"}}, opts||{}));
+  let data = {};
+  try { data = await r.json(); } catch(e){}
+  if(!r.ok){ throw new Error(data.error || ("Erreur "+r.status)); }
+  return data;
+}
+const prno = () => $("emp").value;
+const lieu = () => $("lieu").value.trim() || "Siège KAROKA";
+const hhmm = h => (h||"").slice(0,5) || "—";
+
+// Liste des employés
+api("/api/maintenance/employes").then(emps=>{
+  $("emp").innerHTML = emps.map(e=>`<option value="${e.prno}">${e.prno} — ${e.nom_complet} (${e.categorie||'standard'})</option>`).join("");
+}).catch(e=>toast(e.message,false));
+
+// 1 · Inspecter une journée
+async function chargerJour(){
+  try{
+    const d = $("insp-date").value, f = $("insp-filtre").value.toLowerCase();
+    const data = await api(`/api/maintenance/jour?date=${d}`);
+    let rows = data.employes.sort((a,b)=>(a.statut+a.nom_prenom).localeCompare(b.statut+b.nom_prenom));
+    if(f) rows = rows.filter(r=>r.statut.toLowerCase().includes(f));
+    $("insp-body").innerHTML = rows.map(r=>`
+      <tr class="cursor-pointer" onclick="selectEmp('${r.prno}')">
+        <td><span class="badge b-${r.statut}">${r.statut}</span></td>
+        <td class="font-mono">${r.prno}</td><td>${r.nom_prenom}</td>
+        <td>${hhmm(r.arr_mat)} – ${hhmm(r.dep_mat)}</td>
+        <td>${hhmm(r.arr_apm)} – ${hhmm(r.dep_apm)}</td>
+        <td>${r.theorique_label||'—'}</td><td>${r.reel_label||'—'}</td>
+      </tr>`).join("") || `<tr><td colspan="7" class="text-slate-400">Aucun</td></tr>`;
+  }catch(e){ toast(e.message,false); }
+}
+function selectEmp(p){ $("emp").value = p; toast("Employé sélectionné : "+p); }
+
+// 2 · Remplir d'après le planning
+async function apercuPlanning(){
+  try{
+    const data = await api(`/api/maintenance/planning?prno=${prno()}&date=${$("rmp-d1").value}`);
+    if(!data.events.length){ $("rmp-apercu").innerHTML = `<span class="text-amber-700">Aucun service prévu ce jour (repos/exclu).</span>`; return; }
+    $("rmp-apercu").innerHTML = `<b>Code :</b> <span class="font-mono">${data.code}</span> — `+
+      data.events.map(e=>`${e.date} ${hhmm(e.heure)} <b>${e.type}</b>`).join(" · ");
+  }catch(e){ toast(e.message,false); }
+}
+async function remplirPlanning(){
+  const d2 = $("rmp-d2").value;
+  if(!confirm("Remplir d'après le planning ? Les créneaux existants seront corrigés.")) return;
+  try{
+    const data = await api("/api/maintenance/remplir", {method:"POST", body:JSON.stringify({
+      prno:prno(), date:$("rmp-d1").value, date_fin:d2||null, lieu:lieu()})});
+    toast(`✓ ${data.details.length} pointage(s) sur ${data.touche.length} jour(s).`);
+    $("rmp-apercu").innerHTML = data.details.map(e=>`${e.date} ${hhmm(e.heure)} ${e.type} [${e.session}] → ${e.res}`).join("<br>");
+    chargerJour();
+  }catch(e){ toast(e.message,false); }
+}
+
+// 3 · Pointage manuel
+async function ajouterPointage(){
+  try{
+    const data = await api("/api/maintenance/pointage", {method:"POST", body:JSON.stringify({
+      prno:prno(), date:$("pt-date").value, heure:$("pt-heure").value,
+      type:$("pt-type").value, session:$("pt-session").value, lieu:lieu()})});
+    toast(`✓ ${data.resultat} — ${data.type} ${hhmm(data.heure)} [${data.session}]`);
+    chargerJour();
+  }catch(e){ toast(e.message,false); }
+}
+
+// 4 · Supprimer
+async function chargerPointages(){
+  try{
+    const pts = await api(`/api/maintenance/pointages?prno=${prno()}&date=${$("del-date").value}`);
+    $("del-body").innerHTML = pts.map(p=>`
+      <tr><td><input type="checkbox" class="del-cb" value="${p.id}"></td>
+        <td class="font-mono">${p.id}</td><td>${hhmm(p.heure_locale)}</td>
+        <td>${p.type_pointage}</td><td>${p.session}</td><td>${p.source}</td></tr>`).join("")
+      || `<tr><td colspan="6" class="text-slate-400">Aucun pointage ce jour</td></tr>`;
+  }catch(e){ toast(e.message,false); }
+}
+async function supprimerSelection(){
+  const ids = [...document.querySelectorAll(".del-cb:checked")].map(c=>+c.value);
+  if(!ids.length){ toast("Rien de sélectionné.",false); return; }
+  if(!confirm(`Supprimer ${ids.length} pointage(s) ?`)) return;
+  try{
+    const data = await api("/api/maintenance/pointage", {method:"DELETE", body:JSON.stringify({ids, date:$("del-date").value})});
+    toast(`✓ ${data.supprimes} supprimé(s).`);
+    chargerPointages(); chargerJour();
+  }catch(e){ toast(e.message,false); }
+}
+
+chargerJour();
+</script>
+</body>
+</html>
