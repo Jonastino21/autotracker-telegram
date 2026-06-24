@@ -25,6 +25,24 @@ TIMEZONE      = os.getenv("TIMEZONE", "Indian/Antananarivo")
 POLL_INTERVAL = int(os.getenv("POLL_INTERVAL_SEC", "120"))
 
 PID_FILE = "tracker.pid"
+PID_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tracker.pid")
+
+
+def _pid_is_our_tracker(pid: int) -> bool:
+    """True seulement si le PID correspond vraiment à une instance vivante de ce tracker."""
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False          # process mort → lock périmé
+    except PermissionError:
+        pass                  # vivant mais pas à nous → on vérifie l'identité
+    # garde-fou anti-recyclage de PID
+    try:
+        with open(f"/proc/{pid}/cmdline", "rb") as f:
+            cmdline = f.read().decode(errors="ignore")
+    except (FileNotFoundError, ProcessLookupError):
+        return False
+    return "tracker.py" in cmdline
 
 
 def _acquire_pid_lock():
@@ -33,15 +51,19 @@ def _acquire_pid_lock():
         try:
             with open(PID_FILE) as f:
                 pid = int(f.read().strip())
-            os.kill(pid, 0)  # Vérifie si le processus existe encore
+        except (ValueError, OSError):
+            pid = None
+        if pid is not None and _pid_is_our_tracker(pid):
             print(f"ERREUR : une instance du tracker tourne déjà (PID {pid}). Arrêt.", file=sys.stderr)
             sys.exit(1)
-        except (ProcessLookupError, ValueError):
-            pass  # Processus mort ou PID invalide → on peut démarrer
+        # sinon : lock périmé → on le supprime et on continue
+        try:
+            os.remove(PID_FILE)
+        except OSError:
+            pass
     with open(PID_FILE, "w") as f:
         f.write(str(os.getpid()))
     atexit.register(_release_pid_lock)
-
 
 def _release_pid_lock():
     try:
