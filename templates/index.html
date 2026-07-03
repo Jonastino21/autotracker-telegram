@@ -234,6 +234,14 @@
   .shift-tag { display:inline-block; min-width:15px; text-align:center; font-size:9px; font-weight:700; padding:0 4px; border-radius:5px; vertical-align:middle; }
   .shift-tag.nuit { background:rgba(0,150,136,0.14); color:#00695C; }
   .shift-tag.jour { background:rgba(255,179,0,0.18); color:#E65100; }
+  .pin-indicator {
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:24px; height:16px; margin-left:7px; padding:0 5px;
+    border-radius:5px; border:1px solid rgba(245,158,11,0.34);
+    background:rgba(245,158,11,0.10); color:#B45309;
+    font-family:'DM Sans',sans-serif; font-size:9px; font-weight:800;
+    letter-spacing:0.4px; vertical-align:middle;
+  }
 
   /* Loading / spinner */
   .loading-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px; gap: 16px; color: #5A6A82; }
@@ -798,6 +806,7 @@ async function loadJour() {
 // Helpers communs aux deux tableaux du jour
 const _bcJour = s => ({Complet:'badge-complet',Incomplet:'badge-incomplet',Absent:'badge-absent',Férié:'badge-ferie',Exclu:'badge-exclu',Repos:'badge-repos',Garde:'badge-garde',Mixte:'badge-mixte',Récup:'badge-recup',Échange:'badge-echange'}[s]||'');
 const _tJour  = v => v ? `<span class="td-time">${v.slice(0,5)}</span>` : '<span class="td-empty"></span>';
+const _pinJour = r => r.has_pin_pointage ? '<span class="pin-indicator" title="Pointage par code PIN ce jour">PIN</span>' : '';
 
 function renderJourTable(data) {
   const body = document.getElementById('tableBody');
@@ -839,7 +848,7 @@ function renderJourStd(data) {
     const show = !ex;
     html += `<tr style="${rowSt}">
       <td class="td-prno">${r.prno}</td>
-      <td class="td-name">${r.nom_prenom}</td>
+      <td class="td-name">${r.nom_prenom}${_pinJour(r)}</td>
       <td>${show ? t(r.arr_mat) : vide}</td>
       <td>${show ? t(r.dep_mat) : vide}</td>
       <td>${show ? t(r.arr_apm) : vide}</td>
@@ -894,7 +903,7 @@ function renderJourGardiens(data) {
       : `<span class="badge ${_bcJour(r.statut)}">${r.statut}</span>`;
     html += `<tr style="${rowSt}">
       <td class="td-prno">${r.prno}</td>
-      <td class="td-name">${r.nom_prenom}</td>
+      <td class="td-name">${r.nom_prenom}${_pinJour(r)}</td>
       <td>${prise}</td>
       <td>${fin}</td>
       <td class="td-dur">${ex ? vide : duree}</td>

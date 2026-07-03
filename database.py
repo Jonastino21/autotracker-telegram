@@ -1578,7 +1578,7 @@ def get_pointages_bruts_jour(date_str: str) -> dict:
     conn = get_connection()
     try:
         rows = conn.execute("""
-            SELECT prno, type_pointage, heure_locale
+            SELECT prno, type_pointage, heure_locale, COALESCE(source,'telegram') AS source
             FROM pointages WHERE date_local=?
             ORDER BY heure_locale
         """, (date_str,)).fetchall()
@@ -1589,7 +1589,11 @@ def get_pointages_bruts_jour(date_str: str) -> dict:
         prno = r["prno"]
         if prno not in result:
             result[prno] = []
-        result[prno].append({"type": r["type_pointage"], "heure": r["heure_locale"]})
+        result[prno].append({
+            "type": r["type_pointage"],
+            "heure": r["heure_locale"],
+            "source": r["source"],
+        })
     return result
 
 
@@ -1686,6 +1690,7 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
         code    = horaire["code_horaire"] if horaire else None
         date_effet_emp = horaire.get("date_effet") if horaire else None
         pts     = pointages.get(prno, [])
+        has_pin_pointage = any((p.get("source") or "").lower() == "pin" for p in pts)
 
         # Avant la date d'effet → employé pas encore en poste, jour exclu
         if date_effet_emp and date_str < date_effet_emp:
@@ -1698,6 +1703,7 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
                 "arr_mat": None, "dep_mat": None,
                 "arr_apm": None, "dep_apm": None,
                 "minutes_reels": 0, "ferie": False,
+                "has_pin_pointage": has_pin_pointage,
             })
             continue
 
@@ -1710,6 +1716,7 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
         pts = _retirer_departs_veille(pts, emp, date_obj, feries)
         pts = _ajouter_departs_nuit(
             pts, lambda d: _suiv.get(d, {}).get(prno, []), effective_code, date_obj)
+        has_pin_pointage = any((p.get("source") or "").lower() == "pin" for p in pts)
 
         # Jour d'intégration : créditer les heures avant l'heure d'effet
         heure_effet_emp = horaire.get("heure_effet") if horaire else None
@@ -1906,6 +1913,7 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
             "has_session_apm":   has_session_apm,
             "minutes_theoriques": theorique,
             "minutes_reels":     reel,
+            "has_pin_pointage":   has_pin_pointage,
             "theorique_label":   format_duree(theorique) if theorique else "—",
             "reel_label":        format_duree(reel) if reel else "—",
             "ecart_label":       ecart["label"],
