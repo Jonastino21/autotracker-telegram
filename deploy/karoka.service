@@ -1,0 +1,17 @@
+[Unit]
+Description=KAROKA Présences (bot Telegram + dashboard)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=karoka
+WorkingDirectory=/opt/karoka
+ExecStart=/opt/karoka/venv/bin/python tracker.py
+# Redémarre toujours (plantage, coupure réseau), 5 s après
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
