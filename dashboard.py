@@ -9,7 +9,7 @@ from datetime import date, timedelta, datetime
 from functools import wraps
 from zoneinfo import ZoneInfo
 
-from flask import Flask, render_template, jsonify, request, send_file, redirect, url_for, session
+from flask import Flask, render_template, jsonify, request, send_file, redirect, url_for, session, g
 from flask_socketio import SocketIO
 from dotenv import load_dotenv
 import database as db
@@ -37,6 +37,36 @@ def _parse_credentials():
     return creds
 
 CREDENTIALS = _parse_credentials()
+
+
+# Comptes « responsable de branche » : lecture seule, limités à une branche.
+# Format .env : "resp_ka:motdepasse:KA,resp_hutamac:motdepasse:HUTAMAC"
+def _parse_branch_credentials():
+    raw = os.getenv("BRANCH_CREDENTIALS", "")
+    creds = {}
+    for pair in raw.split(","):
+        parts = pair.strip().split(":", 2)
+        if len(parts) == 3 and all(x.strip() for x in parts):
+            creds[parts[0].strip()] = (parts[1].strip(), parts[2].strip().upper())
+    return creds
+
+BRANCH_CREDENTIALS = _parse_branch_credentials()
+
+# Routes accessibles à un responsable (tout le reste lui est refusé).
+RESPONSABLE_ENDPOINTS = {
+    "index", "help_page", "api_stats", "api_jour", "api_periode", "api_historique",
+    "api_detail_jour", "api_jour_horaires", "api_get_releves", "api_releve_actif",
+    "api_jours_feries",
+}
+
+
+def _authentifier(u, p):
+    """Retourne (role, branche) ou None. role : 'admin' | 'responsable'."""
+    if u in CREDENTIALS and CREDENTIALS[u] == p:
+        return "admin", None
+    if u in BRANCH_CREDENTIALS and BRANCH_CREDENTIALS[u][0] == p:
+        return "responsable", BRANCH_CREDENTIALS[u][1]
+    return None
 
 app           = Flask(__name__)
 CORS(app, origins="*", supports_credentials=False)
@@ -78,27 +108,65 @@ def get_today():
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
+        role = branche = None
         # Vérification JWT (frontend Netlify)
         auth = request.headers.get('Authorization', '')
         if auth.startswith('Bearer '):
             token = auth[7:]
             try:
-                pyjwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-                return f(*args, **kwargs)
+                claims = pyjwt.decode(token, JWT_SECRET, algorithms=["HS256"])
             except pyjwt.ExpiredSignatureError:
                 return jsonify({"error": "Session expirée"}), 401
             except pyjwt.InvalidTokenError:
                 return jsonify({"error": "Token invalide"}), 401
-
+            role    = "responsable" if claims.get("role") == "responsable" else "admin"
+            branche = claims.get("branche")
         # Vérification session Flask (accès direct local)
-        if session.get("logged_in"):
-            return f(*args, **kwargs)
+        elif session.get("logged_in"):
+            role    = session.get("role", "admin")
+            branche = session.get("branche")
 
-        # Ni l'un ni l'autre
-        if request.path.startswith('/api/'):
-            return jsonify({"error": "Non autorisé"}), 401
-        return redirect(url_for("login", next=request.url))
+        if role is None:
+            if request.path.startswith('/api/'):
+                return jsonify({"error": "Non autorisé"}), 401
+            return redirect(url_for("login", next=request.url))
+
+        g.role, g.branche = role, branche
+        if role == "responsable":
+            if not branche:
+                return jsonify({"error": "Compte sans branche"}), 403
+            if request.endpoint not in RESPONSABLE_ENDPOINTS:
+                if request.path.startswith('/api/'):
+                    return jsonify({"error": "Accès réservé à l'administrateur"}), 403
+                return redirect(url_for("index"))
+        return f(*args, **kwargs)
     return decorated
+
+
+def _branche_filtre():
+    """Branche à appliquer : imposée au responsable, facultative (?branche=) pour l'admin."""
+    if getattr(g, "role", "admin") == "responsable":
+        return g.branche
+    b = (request.args.get("branche") or "").strip()
+    return b.upper() or None
+
+
+def _filtrer_branche(rows):
+    b = _branche_filtre()
+    if not b:
+        return rows
+    prnos = db.get_prnos_branche(b)
+    return [r for r in rows if r.get("prno") in prnos]
+
+
+def _stats_depuis(resume, date_str):
+    return {
+        "total":      len(resume),
+        "complets":   sum(1 for r in resume if r["statut"] == "Complet"),
+        "incomplets": sum(1 for r in resume if r["statut"] == "Incomplet"),
+        "absents":    sum(1 for r in resume if r["statut"] == "Absent"),
+        "ferie":      db.is_jour_ferie(date_str),
+    }
 
 
 def _periode_dates(periode, ref_date=None):
@@ -153,9 +221,11 @@ def login():
     if request.method == "POST":
         u = request.form.get("username","").strip()
         p = request.form.get("password","").strip()
-        if CREDENTIALS.get(u) == p:
+        auth = _authentifier(u, p)
+        if auth:
             session["logged_in"] = True
             session["username"]  = u
+            session["role"], session["branche"] = auth
             next_url = request.args.get("next") or url_for("index")
             return redirect(next_url)
         error = "Identifiants incorrects."
@@ -172,15 +242,18 @@ def api_login():
     data = request.get_json(force=True) or {}
     u = data.get("username", "").strip()
     p = data.get("password", "").strip()
-    if CREDENTIALS.get(u) == p:
+    auth = _authentifier(u, p)
+    if auth:
+        role, branche = auth
         payload = {
             "sub": u,
-            "role": u,
+            "role": "responsable" if role == "responsable" else u,
+            "branche": branche,
             "iat": _dt.datetime.utcnow(),
             "exp": _dt.datetime.utcnow() + _dt.timedelta(hours=12),
         }
         token = pyjwt.encode(payload, JWT_SECRET, algorithm="HS256")
-        return jsonify({"token": token, "role": u})
+        return jsonify({"token": token, "role": payload["role"], "branche": branche})
     return jsonify({"error": "Identifiants incorrects."}), 401
 
 # ─── Pages HTML ───────────────────────────────────────────────────────────────
@@ -190,13 +263,16 @@ def api_login():
 def index():
     date_param = request.args.get("date", get_today())
     return render_template("index.html", date_param=date_param, today=get_today(),
-                           username=session.get("username",""))
+                           username=session.get("username",""),
+                           role=g.role, branche=g.branche or "",
+                           branches=db.get_branches())
 
 
 @app.route("/admin")
 @login_required
 def admin():
-    return render_template("admin.html", username=session.get("username",""))
+    return render_template("admin.html", username=session.get("username",""),
+                           branches=db.get_branches())
 
 
 @app.route("/help")
@@ -358,13 +434,17 @@ def api_maint_supprimer_pointage():
 @app.route("/api/stats")
 @login_required
 def api_stats():
-    return jsonify(db.get_stats_jour(request.args.get("date", get_today())))
+    date_str = request.args.get("date", get_today())
+    if not _branche_filtre():
+        return jsonify(db.get_stats_jour(date_str))
+    resume = _filtrer_branche(db.get_resume_jour_avec_horaires(date_str))
+    return jsonify(_stats_depuis(resume, date_str))
 
 
 @app.route("/api/jour")
 @login_required
 def api_jour():
-    return jsonify(db.get_resume_jour(request.args.get("date", get_today())))
+    return jsonify(_filtrer_branche(db.get_resume_jour(request.args.get("date", get_today()))))
 
 
 @app.route("/api/periode")
@@ -388,27 +468,30 @@ def api_periode():
         "date_debut": d1,
         "date_fin":   d2,
         "releve_id":  releve_id,
-        "employes":   db.get_resume_periode_avec_synthese(d1, d2),
+        "employes":   _filtrer_branche(db.get_resume_periode_avec_synthese(d1, d2)),
     })
 
 
 @app.route("/api/historique")
 @login_required
 def api_historique():
-    return jsonify(db.get_historique(
+    rows = db.get_historique(
         limit     = int(request.args.get("limit", 200)),
         date_str  = request.args.get("date") or None,
         prno      = request.args.get("prno") or None,
         source    = request.args.get("source") or None,
         recherche = request.args.get("q") or None,
-    ))
+    )
+    return jsonify(_filtrer_branche(rows))
 
 
 @app.route("/api/detail_jour")
 @login_required
 def api_detail_jour():
     ds = request.args.get("date", get_today())
-    return jsonify({"date":ds,"stats":db.get_stats_jour(ds),"employes":db.get_resume_jour_avec_horaires(ds)})
+    employes = _filtrer_branche(db.get_resume_jour_avec_horaires(ds))
+    stats = _stats_depuis(employes, ds) if _branche_filtre() else db.get_stats_jour(ds)
+    return jsonify({"date":ds,"stats":stats,"employes":employes})
 
 
 @app.route("/api/download_excel")
@@ -511,10 +594,11 @@ def api_ajouter_employe():
     prno           = (data.get("prno")        or "").strip()
     nom            = (data.get("nom_complet") or "").strip()
     categorie      = (data.get("categorie")   or "standard").strip()
+    branche        = data.get("branche")
     fingerprint_id = data.get("fingerprint_id")
     pin_id         = data.get("pin_id")
 
-    result = db.ajouter_employe(prno, nom, categorie)
+    result = db.ajouter_employe(prno, nom, categorie, branche)
     if result["ok"]:
         if fingerprint_id:
             lier_empreinte(int(fingerprint_id), prno)
@@ -531,7 +615,8 @@ def api_modifier_employe(prno):
     nouveau_prno = data.get("prno")
     nouveau_nom  = data.get("nom_complet")
     categorie    = data.get("categorie")
-    result = db.modifier_employe(prno, nouveau_prno, nouveau_nom, categorie)
+    branche      = data.get("branche")
+    result = db.modifier_employe(prno, nouveau_prno, nouveau_nom, categorie, branche)
     if result["ok"]:
         emit_admin_update("admin_employes_updated")
     return jsonify(result), (200 if result["ok"] else 400)
@@ -818,7 +903,7 @@ def api_valider_horaire():
 def api_jour_horaires():
     """Vue journalière enrichie avec heures théoriques et écarts."""
     date_str = request.args.get("date", get_today())
-    return jsonify(db.get_resume_jour_avec_horaires(date_str))
+    return jsonify(_filtrer_branche(db.get_resume_jour_avec_horaires(date_str)))
 
 
 @app.route("/api/admin/renvoi_lien/<prno>", methods=["POST"])

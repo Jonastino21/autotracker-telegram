@@ -64,6 +64,12 @@ Suit son code horaire. Férié = payé (théo crédité).
 ### Heure d'effet (jour d'intégration)
 `horaires.heure_effet` (HH:MM) : le **jour de la date d'effet**, les plages commencées **avant** l'heure d'effet sont créditées présentes jusqu'à l'heure d'effet (arrivée non captable car personne ajoutée en cours de journée), la suite est suivie par pointage (`_augmenter_jour_integration`). Ne joue **que** ce jour-là.
 
+## Branches & comptes responsables
+- `employes.branche` (`KA` par défaut, ex. `HUTAMAC`) : choisie à la création/modification d'un employé (admin). Helpers `db.get_branches()` / `db.get_prnos_branche()`.
+- Comptes **admin** = `RH_CREDENTIALS` (accès total, filtre facultatif `?branche=` sur le dashboard). Comptes **responsable** = `BRANCH_CREDENTIALS` (`user:pass:BRANCHE`) : lecture seule, résultats filtrés sur leur branche (`_filtrer_branche`).
+- `login_required` pose `g.role` / `g.branche` (session ou JWT). Un responsable n'accède qu'aux endpoints de `RESPONSABLE_ENDPOINTS` (liste blanche, refus par défaut) : tout nouvel endpoint de lecture à lui ouvrir doit y être ajouté **et** filtrer par branche.
+- ⚠️ SocketIO n'est pas authentifié (événements `nouveau_pointage` diffusés à tous).
+
 ## Données (tables clés)
 
 - `employes` (PK `prno` minuscule) : `nom_complet`, `categorie`, `rotation_cycle`, `rotation_ref_date`, `dimanche_tour_ref`, `dimanche_tour_cycle`, `ferie_tour_rang`, …

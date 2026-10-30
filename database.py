@@ -171,7 +171,7 @@ def _migrate_db(conn):
     except Exception:
         pass
     for col in ("rotation_cycle", "rotation_ref_date", "dimanche_tour_ref",
-                "dimanche_tour_cycle", "categorie", "ferie_tour_rang"):
+                "dimanche_tour_cycle", "categorie", "ferie_tour_rang", "branche"):
         try:
             conn.execute(f"ALTER TABLE employes ADD COLUMN {col} TEXT")
             conn.commit()
@@ -383,22 +383,56 @@ def import_csv_employes(csv_path):
     return result
 
 
-def ajouter_employe(prno, nom_complet, categorie=None):
+BRANCHE_DEFAUT = "KA"
+
+
+def _norm_branche(branche):
+    return (branche or "").strip().upper() or BRANCHE_DEFAUT
+
+
+def get_branches():
+    """Liste des branches existantes (toujours KA en premier)."""
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT DISTINCT branche FROM employes WHERE branche IS NOT NULL AND branche<>''"
+        ).fetchall()
+    finally:
+        conn.close()
+    noms = {r[0] for r in rows} | {BRANCHE_DEFAUT}
+    return sorted(noms, key=lambda b: (b != BRANCHE_DEFAUT, b))
+
+
+def get_prnos_branche(branche):
+    """Ensemble des PRNO d'une branche (employés sans branche = KA)."""
+    b = _norm_branche(branche)
+    conn = get_connection()
+    try:
+        return {r[0] for r in conn.execute(
+            "SELECT prno FROM employes WHERE UPPER(COALESCE(NULLIF(branche,''),?))=?",
+            (BRANCHE_DEFAUT, b))}
+    finally:
+        conn.close()
+
+
+def ajouter_employe(prno, nom_complet, categorie=None, branche=None):
     prno = prno.strip().lower()
     nom_complet = nom_complet.strip()
     categorie = (categorie or "standard").strip().lower() or "standard"
+    branche = _norm_branche(branche)
     if not prno or not nom_complet:
         return {"ok": False, "error": "PRNO et nom obligatoires"}
     conn = get_connection()
     try:
         conn.execute("""
-            INSERT INTO employes(prno, nom_complet, email, categorie)
-            VALUES(?,?,?,?)
+            INSERT INTO employes(prno, nom_complet, email, categorie, branche)
+            VALUES(?,?,?,?,?)
             ON CONFLICT(prno) DO UPDATE SET
                 nom_complet=excluded.nom_complet,
                 categorie=excluded.categorie,
+                branche=excluded.branche,
                 updated_at=datetime('now')
-        """, (prno, nom_complet, f"{prno}.karoka@gmail.com", categorie))
+        """, (prno, nom_complet, f"{prno}.karoka@gmail.com", categorie, branche))
         conn.commit()
         return {"ok": True, "prno": prno, "nom_complet": nom_complet}
     except Exception as e:
@@ -407,7 +441,7 @@ def ajouter_employe(prno, nom_complet, categorie=None):
         conn.close()
 
 
-def modifier_employe(prno, nouveau_prno=None, nouveau_nom=None, categorie=None):
+def modifier_employe(prno, nouveau_prno=None, nouveau_nom=None, categorie=None, branche=None):
     """Modifie le nom, la catégorie et/ou renomme le PRNO d'un employé.
     Le renommage du PRNO se répercute sur toutes les tables liées."""
     prno = (prno or "").strip().lower()
@@ -434,6 +468,12 @@ def modifier_employe(prno, nouveau_prno=None, nouveau_nom=None, categorie=None):
             conn.execute(
                 "UPDATE employes SET categorie=?, updated_at=datetime('now') WHERE prno=?",
                 (cat, prno))
+
+        # 1c. Branche
+        if branche is not None:
+            conn.execute(
+                "UPDATE employes SET branche=?, updated_at=datetime('now') WHERE prno=?",
+                (_norm_branche(branche), prno))
 
         # 2. Renommage du PRNO (répercuté sur toutes les tables liées)
         new = (nouveau_prno or "").strip().lower()

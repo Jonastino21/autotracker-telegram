@@ -343,6 +343,13 @@ textarea { resize:vertical; min-height:70px; font-family:'DM Mono',monospace; fo
             <div class="text-[11px] text-text-muted mt-0.5">« Gardien » : cycle/garde (rotation + fériés). « Jardinier » : standard + tour du dimanche + récup le mercredi.</div>
           </div>
           <div class="mb-[15px]">
+            <label class="block text-[10.5px] uppercase tracking-[1px] text-text-dim mb-1.5 font-semibold">Branche</label>
+            <select id="inputBranche">
+              {% for b in branches %}<option value="{{ b }}">{{ b }}</option>{% endfor %}
+            </select>
+            <div class="text-[11px] text-text-muted mt-0.5">Le responsable d'une branche ne voit que les employés de sa branche.</div>
+          </div>
+          <div class="mb-[15px]">
             <label class="block text-[10.5px] uppercase tracking-[1px] text-text-dim mb-1.5 font-semibold">Code horaire</label>
             <div class="modeles-grid flex flex-wrap gap-1.5 mb-2.5" id="modelesRapides">
               <div class="modele-chip" onclick="appliquerModeleRapide('0800tj1200;1400tj1700;(1000tj1010);(1600tj1610);(di)')">Standard 40h</div>
@@ -1154,11 +1161,12 @@ async function ajouterEmploye() {
   const fingerprintId = document.getElementById('inputFingerprint')?.value?.trim();
   const pinId = document.getElementById('inputPin')?.value?.trim();
   const categorie = document.getElementById('inputCategorie')?.value || 'standard';
+  const branche = document.getElementById('inputBranche')?.value || 'KA';
 
   const r1 = await fetch('/api/admin/employes',{
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({
-      prno, nom_complet:nom, categorie,
+      prno, nom_complet:nom, categorie, branche,
       ...(fingerprintId ? {fingerprint_id: parseInt(fingerprintId)} : {}),
       ...(pinId        ? {pin_id:         pinId}                   : {})
     })
@@ -2014,6 +2022,13 @@ async function supprimerReleve(id) {
       </select>
     </div>
 
+    <div class="form-group" style="margin-top:14px">
+      <label>Branche</label>
+      <select id="editBranche">
+        {% for b in branches %}<option value="{{ b }}">{{ b }}</option>{% endfor %}
+      </select>
+    </div>
+
     <div style="display:flex;gap:8px;margin-top:18px">
       <button class="btn btn-primary btn-full" onclick="sauvegarderEditEmp()">Enregistrer</button>
       <button class="btn btn-ghost" onclick="fermerModalEditEmp()">Annuler</button>
@@ -2208,7 +2223,7 @@ document.addEventListener('click', e => {
     _menuPrno = null;
     if (!emp) return;
     switch (action) {
-      case 'editer':     ouvrirModalEditEmp(emp.prno, emp.nom_complet, emp.categorie); break;
+      case 'editer':     ouvrirModalEditEmp(emp.prno, emp.nom_complet, emp.categorie, emp.branche); break;
       case 'horaire':    ouvrirModifHoraire(emp.prno, _lastHorMap[emp.prno] || ''); break;
       case 'rotation':   ouvrirModalRotation(emp.prno, emp.nom_complet, emp.rotation_cycle||'', emp.rotation_ref_date||'', emp.dimanche_tour_ref||'', emp.dimanche_tour_cycle||'', emp.ferie_tour_rang||'', emp.categorie||''); break;
       case 'tg_renvoi':  renvoiLien(emp.prno, emp.nom_complet); break;
@@ -2248,11 +2263,12 @@ async function delierTelegram(prno) {
 // ── Rotation ──
 // ── Édition infos employé (PRNO, nom) ──
 let _editPrno = '';
-function ouvrirModalEditEmp(prno, nom, categorie) {
+function ouvrirModalEditEmp(prno, nom, categorie, branche) {
   _editPrno = prno;
   document.getElementById('editPrno').value = prno || '';
   document.getElementById('editNom').value  = nom  || '';
   document.getElementById('editCategorie').value = ['gardien','jardinier'].includes((categorie||'').toLowerCase()) ? categorie.toLowerCase() : 'standard';
+  document.getElementById('editBranche').value = (branche || 'KA').toUpperCase();
   document.getElementById('modalEditEmp').classList.add('open');
   setTimeout(() => document.getElementById('editNom').focus(), 100);
 }
@@ -2263,6 +2279,7 @@ async function sauvegarderEditEmp() {
   const prno = document.getElementById('editPrno').value.trim().toLowerCase();
   const nom  = document.getElementById('editNom').value.trim();
   const categorie = document.getElementById('editCategorie').value || 'standard';
+  const branche = document.getElementById('editBranche').value || 'KA';
   if (!prno) { showToast('error','PRNO obligatoire'); return; }
   if (!nom)  { showToast('error','Nom obligatoire');  return; }
   if (!/^[a-z0-9_.-]+$/.test(prno)) {
@@ -2270,7 +2287,7 @@ async function sauvegarderEditEmp() {
   }
   const r = await fetch(`/api/admin/employes/${encodeURIComponent(_editPrno)}`, {
     method:'PUT', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ prno, nom_complet: nom, categorie })
+    body: JSON.stringify({ prno, nom_complet: nom, categorie, branche })
   });
   const d = await r.json();
   if (d.ok) { fermerModalEditEmp(); loadEmployes(); showToast('success','Employé mis à jour'); }

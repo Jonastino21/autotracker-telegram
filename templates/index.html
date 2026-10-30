@@ -319,6 +319,7 @@
       <span class="text-[15px] w-5 text-center flex-shrink-0" aria-hidden="true">◉</span>
       <span class="max-[900px]:hidden">Tableau de bord</span>
     </a>
+    {% if role != 'responsable' %}
     <div class="text-[9px] font-bold tracking-[1.8px] uppercase text-[#7B8BA8] px-3.5 pt-3.5 pb-1.5 opacity-70 max-[900px]:hidden" aria-hidden="true">Liaison</div>
     <a href="/admin" aria-label="Administration"
        class="flex items-center gap-2.5 px-3.5 py-2.5 rounded-[10px] text-[13px] font-medium text-[#7B8BA8] no-underline transition-all duration-200 hover:text-white hover:bg-white/[0.07]
@@ -326,6 +327,7 @@
       <span class="text-[15px] w-5 text-center flex-shrink-0" aria-hidden="true">◎</span>
       <span class="max-[900px]:hidden">Administration</span>
     </a>
+    {% endif %}
   </nav>
 
   <!-- Footer sidebar -->
@@ -411,10 +413,12 @@
       </div>
 
       <!-- Export Excel -->
+      {% if role != 'responsable' %}
       <a href="/api/download_excel"
          class="bg-gradient-to-br from-[#2E7D32] to-[#43A047] text-white border-none rounded-[12px] px-4 py-2 text-[12px] font-semibold font-sans cursor-pointer no-underline shadow-[0_2px_8px_rgba(46,125,50,0.3)] transition-opacity hover:opacity-[0.88] whitespace-nowrap text-center flex-shrink-0">
         Exporter Excel
       </a>
+      {% endif %}
 
     </div><!-- /ligne 2 -->
   </div>
@@ -480,6 +484,15 @@
         </div>
         <label for="searchBox" class="sr-only">Rechercher un employé</label>
         <div id="tableFilters" class="flex items-center gap-2 max-[640px]:w-full">
+          {% if role == 'responsable' %}
+          <span class="bg-[#E0F7F4] text-[#00897B] rounded-lg px-3 py-2 text-[12px] font-bold whitespace-nowrap">Branche {{ branche }}</span>
+          {% else %}
+          <select id="filterBrancheDash" onchange="changerBranche(this.value)"
+                  class="bg-[#F0F2F8] border border-[rgba(0,0,0,0.07)] rounded-lg px-3 py-2 text-[#1A1F2E] font-sans text-[13px] outline-none focus:border-teal transition-colors">
+            <option value="">Toutes branches</option>
+            {% for b in branches %}<option value="{{ b }}">{{ b }}</option>{% endfor %}
+          </select>
+          {% endif %}
           <select id="filterCatDash" onchange="filterTable()"
                   class="bg-[#F0F2F8] border border-[rgba(0,0,0,0.07)] rounded-lg px-3 py-2 text-[#1A1F2E] font-sans text-[13px] outline-none focus:border-teal transition-colors">
             <option value="">Toutes catégories</option>
@@ -559,6 +572,26 @@
 
 
 <script>
+// ── Filtre de branche (admin) : ajouté à tous les appels /api/ de lecture ─────
+let brancheSel = '';
+try { brancheSel = localStorage.getItem('brancheSel') || ''; } catch(e) {}
+const _fetchOrig = window.fetch.bind(window);
+window.fetch = (url, opts) => {
+  if (brancheSel && typeof url === 'string' && url.startsWith('/api/') && !url.startsWith('/api/admin')) {
+    url += (url.includes('?') ? '&' : '?') + 'branche=' + encodeURIComponent(brancheSel);
+  }
+  return _fetchOrig(url, opts);
+};
+function changerBranche(b) {
+  brancheSel = b;
+  try { localStorage.setItem('brancheSel', b); } catch(e) {}
+  loadStats(); loadData();
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const sel = document.getElementById('filterBrancheDash');
+  if (sel) sel.value = brancheSel;
+});
+
 // ── Toast notifications ────────────────────────────────────────────────────
 function showToast(type, message) {
   const c = document.getElementById('toastContainer');
