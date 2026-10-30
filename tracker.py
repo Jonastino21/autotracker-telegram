@@ -36,6 +36,8 @@ def _pid_is_our_tracker(pid: int) -> bool:
         return False          # process mort → lock périmé
     except PermissionError:
         pass                  # vivant mais pas à nous → on vérifie l'identité
+    except OSError:
+        return False          # Windows : PID inexistant (WinError 87) → lock périmé
     # garde-fou anti-recyclage de PID
     try:
         with open(f"/proc/{pid}/cmdline", "rb") as f:
