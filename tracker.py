@@ -1,5 +1,6 @@
 import atexit
 import logging
+import logging.handlers
 import os
 import sys
 import threading
@@ -82,7 +83,8 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
     handlers=[
-        logging.FileHandler("tracker.log", encoding="utf-8"),
+        logging.handlers.RotatingFileHandler(
+            "tracker.log", maxBytes=5_000_000, backupCount=5, encoding="utf-8"),
         logging.StreamHandler(sys.stdout),
     ],
 )
