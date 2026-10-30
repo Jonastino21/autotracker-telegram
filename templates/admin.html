@@ -1173,6 +1173,7 @@ async function ajouterEmploye() {
   });
   const d1 = await r1.json();
   if (!d1.ok) { showToast('error',`${d1.error}`); return; }
+  if (d1.avertissement) showToast('error', `Employé créé mais : ${d1.avertissement}`);
 
   const heureEffet = document.getElementById('inputHeureEffet')?.value || '';
   if (code) {

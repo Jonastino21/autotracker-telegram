@@ -281,6 +281,19 @@ def get_meta(key, default=None):
         conn.close()
 
 
+def get_suivi_debut():
+    """Date ISO avant laquelle les jours sont ignorés (statut « Exclu », pas d'Absent).
+    None = pas de limite."""
+    return get_meta("suivi_debut") or None
+
+
+def set_suivi_debut(date_str):
+    """Fixe (ou efface avec None/'') le début global du suivi. Ne supprime aucune donnée."""
+    if date_str:
+        date.fromisoformat(date_str)          # valide le format yyyy-mm-dd
+    set_meta("suivi_debut", date_str or "")
+
+
 def set_meta(key, value):
     conn = get_connection()
     try:
@@ -1716,6 +1729,7 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
     feries    = get_jours_feries_set()
     ferie     = date_str in feries
     date_obj  = date_cls.fromisoformat(date_str)
+    suivi_debut = get_suivi_debut()
     # Départs des matins suivants (J+1, J+2) pour rattraper les gardes de nuit / 24h+
     pts_j1 = get_pointages_bruts_jour((date_obj + timedelta(days=1)).isoformat())
     pts_j2 = get_pointages_bruts_jour((date_obj + timedelta(days=2)).isoformat())
@@ -1732,8 +1746,8 @@ def get_resume_jour_avec_horaires(date_str: str) -> list[dict]:
         pts     = pointages.get(prno, [])
         has_pin_pointage = any((p.get("source") or "").lower() == "pin" for p in pts)
 
-        # Avant la date d'effet → employé pas encore en poste, jour exclu
-        if date_effet_emp and date_str < date_effet_emp:
+        # Avant la date d'effet (ou le début global du suivi) → jour exclu
+        if (date_effet_emp and date_str < date_effet_emp) or (suivi_debut and date_str < suivi_debut):
             result.append({
                 "prno": prno, "nom_prenom": emp["nom_complet"],
                 "categorie": emp.get("categorie") or "standard",
@@ -1977,6 +1991,7 @@ def get_resume_periode_avec_synthese(date_debut: str, date_fin: str) -> list[dic
     start  = date_cls.fromisoformat(date_debut)
     end    = date_cls.fromisoformat(date_fin)
     feries = get_jours_feries_set()
+    suivi_debut = get_suivi_debut()
 
     # Générer toutes les dates (lundi-dimanche selon horaire)
     all_dates = []
@@ -2024,8 +2039,8 @@ def get_resume_periode_avec_synthese(date_debut: str, date_fin: str) -> list[dic
         nb_repos        = 0
 
         for ds in all_dates:
-            # Avant la date d'effet → employé pas encore en poste
-            if date_effet_emp and ds < date_effet_emp:
+            # Avant la date d'effet (ou le début global du suivi) → jour exclu
+            if (date_effet_emp and ds < date_effet_emp) or (suivi_debut and ds < suivi_debut):
                 dates_statuts[ds] = "Exclu"
                 continue
             # Récupérer l'horaire pour ce jour précis (prend en compte les exceptions)

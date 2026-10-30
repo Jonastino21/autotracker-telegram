@@ -513,6 +513,27 @@ def api_health():
     })
 
 
+# ─── Début du suivi (jours antérieurs ignorés, rien n'est supprimé) ──────────
+
+@app.route("/api/admin/suivi_debut", methods=["GET"])
+@login_required
+def api_get_suivi_debut():
+    return jsonify({"suivi_debut": db.get_suivi_debut()})
+
+
+@app.route("/api/admin/suivi_debut", methods=["PUT"])
+@login_required
+def api_set_suivi_debut():
+    """Body : {"suivi_debut": "yyyy-mm-dd"} ; vide/null = pas de limite."""
+    valeur = ((request.get_json(silent=True) or {}).get("suivi_debut") or "").strip().replace("/", "-")
+    try:
+        db.set_suivi_debut(valeur or None)
+    except ValueError:
+        return jsonify({"ok": False, "error": "Date invalide (yyyy-mm-dd)"}), 400
+    emit_admin_update("admin_employes_updated")
+    return jsonify({"ok": True, "suivi_debut": db.get_suivi_debut()})
+
+
 # ─── API Jours fériés ─────────────────────────────────────────────────────────
 
 @app.route("/api/jours_feries", methods=["GET"])
@@ -600,10 +621,20 @@ def api_ajouter_employe():
 
     result = db.ajouter_employe(prno, nom, categorie, branche)
     if result["ok"]:
+        avertissements = []
         if fingerprint_id:
-            lier_empreinte(int(fingerprint_id), prno)
+            try:
+                r = lier_empreinte(int(fingerprint_id), prno)
+            except (TypeError, ValueError):
+                r = {"ok": False, "error": "ID d'empreinte invalide"}
+            if not r["ok"]:
+                avertissements.append(r["error"])
         if pin_id:
-            lier_pin(pin_id, prno)
+            r = lier_pin(pin_id, prno)
+            if not r["ok"]:
+                avertissements.append(r["error"])
+        if avertissements:
+            result["avertissement"] = " ".join(avertissements)
         emit_admin_update("admin_employes_updated")
     return jsonify(result), (200 if result["ok"] else 400)
 
@@ -971,6 +1002,14 @@ def _init_liaisons_empreintes():
             ON liaisons_empreintes(fingerprint_id)
             WHERE fingerprint_id IS NOT NULL
         """)
+        # Une seule ligne (empreinte + PIN) par employé : le code en dépend.
+        try:
+            conn.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_lem_prno
+                ON liaisons_empreintes(prno)
+            """)
+        except Exception as e:
+            logger.warning("Index unique prno non créé (doublons ?) : %s", e)
         conn.commit()
     finally:
         conn.close()
@@ -991,15 +1030,28 @@ def get_liaison_empreinte(fingerprint_id: int):
 
 
 def lier_empreinte(fingerprint_id: int, prno: str):
+    """Lie (ou remplace) l'ID d'empreinte d'un employé. Une ligne par employé :
+    si l'employé a déjà une ligne (autre empreinte et/ou PIN) on met à jour son
+    fingerprint_id, sinon on insère. Refuse un ID déjà utilisé par un autre employé."""
+    prno = prno.strip().lower()
     conn = db.get_connection()
     try:
-        conn.execute("""
-            INSERT INTO liaisons_empreintes(fingerprint_id, prno)
-            VALUES(?, ?)
-            ON CONFLICT(fingerprint_id) DO UPDATE SET
-                prno = excluded.prno,
-                enregistre_le = datetime('now')
-        """, (fingerprint_id, prno.strip().lower()))
+        autre = conn.execute(
+            "SELECT prno FROM liaisons_empreintes WHERE fingerprint_id=?",
+            (fingerprint_id,)).fetchone()
+        if autre and autre["prno"] != prno:
+            return {"ok": False, "error":
+                    f"L'empreinte #{fingerprint_id} est déjà liée à « {autre['prno']} ». "
+                    "Supprimez d'abord cette liaison."}
+        if conn.execute("SELECT 1 FROM liaisons_empreintes WHERE prno=?", (prno,)).fetchone():
+            conn.execute("""
+                UPDATE liaisons_empreintes
+                SET fingerprint_id=?, enregistre_le=datetime('now') WHERE prno=?
+            """, (fingerprint_id, prno))
+        else:
+            conn.execute(
+                "INSERT INTO liaisons_empreintes(fingerprint_id, prno) VALUES(?, ?)",
+                (fingerprint_id, prno))
         conn.commit()
         return {"ok": True}
     except Exception as e:
@@ -1027,6 +1079,11 @@ def lier_pin(pin_id, prno: str):
     pin_id = str(pin_id).strip()          # PIN = chaîne (préserve les zéros de tête)
     conn = db.get_connection()
     try:
+        autre = conn.execute(
+            "SELECT prno FROM liaisons_empreintes WHERE pin_id=?", (pin_id,)).fetchone()
+        if autre and autre["prno"] != prno.strip().lower():
+            return {"ok": False, "error":
+                    f"Ce PIN est déjà utilisé par « {autre['prno']} »."}
         # Si l'employé a déjà une ligne → UPDATE pin_id
         # Sinon → INSERT nouvelle ligne
         existing = conn.execute(
@@ -1191,6 +1248,9 @@ def api_supprimer_empreinte(fingerprint_id):
     """Supprime la liaison d'une empreinte."""
     conn = db.get_connection()
     try:
+        # Si un PIN est rattaché à la ligne, on ne supprime que l'empreinte.
+        conn.execute("UPDATE liaisons_empreintes SET fingerprint_id=NULL "
+                     "WHERE fingerprint_id=? AND pin_id IS NOT NULL", (fingerprint_id,))
         conn.execute("DELETE FROM liaisons_empreintes WHERE fingerprint_id=?", (fingerprint_id,))
         conn.commit()
         return jsonify({"ok": True})
@@ -1207,22 +1267,14 @@ def api_lier_empreinte_employe(prno):
     fingerprint_id = data.get("fingerprint_id")
     if not fingerprint_id:
         return jsonify({"ok": False, "error": "fingerprint_id obligatoire"}), 400
-    # S'assurer que l'employé a une ligne dans liaisons_empreintes
-    conn = db.get_connection()
     try:
-        conn.execute("""
-            INSERT INTO liaisons_empreintes(fingerprint_id, prno)
-            VALUES(?, ?)
-            ON CONFLICT(fingerprint_id) DO UPDATE SET
-                prno = excluded.prno,
-                enregistre_le = datetime('now')
-        """, (int(fingerprint_id), prno.strip().lower()))
-        conn.commit()
-        return jsonify({"ok": True})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
-    finally:
-        conn.close()
+        fingerprint_id = int(fingerprint_id)
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "fingerprint_id invalide"}), 400
+    result = lier_empreinte(fingerprint_id, prno)
+    if result["ok"]:
+        emit_admin_update("admin_employes_updated")
+    return jsonify(result), (200 if result["ok"] else 400)
 
 
 @app.route("/api/admin/employes/<prno>/pin", methods=["PUT"])
