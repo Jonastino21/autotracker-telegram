@@ -6,8 +6,8 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=karoka
-WorkingDirectory=/opt/karoka
-ExecStart=/opt/karoka/venv/bin/python tracker.py
+WorkingDirectory=/opt/karoka/app
+ExecStart=/opt/karoka/app/venv/bin/python tracker.py
 # Redémarre toujours (plantage, coupure réseau), 5 s après
 Restart=always
 RestartSec=5

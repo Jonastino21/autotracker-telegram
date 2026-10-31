@@ -3,9 +3,9 @@
 ## Installation (une fois)
 ```bash
 sudo useradd -r -m -s /bin/bash karoka
-sudo git clone https://github.com/Jonastino21/autotracker-telegram.git /opt/karoka
+sudo git clone https://github.com/Jonastino21/autotracker-telegram.git /opt/karoka/app
 sudo chown -R karoka:karoka /opt/karoka
-cd /opt/karoka
+cd /opt/karoka/app
 sudo -u karoka python3 -m venv venv
 sudo -u karoka venv/bin/pip install -r requirements.txt
 ```
@@ -24,14 +24,14 @@ journalctl -u karoka -f            # logs en direct
 
 ## Mise à jour
 ```bash
-cd /opt/karoka && sudo -u karoka git pull && sudo systemctl restart karoka
+cd /opt/karoka/app && sudo -u karoka git pull && sudo systemctl restart karoka
 ```
 
 ## Sauvegardes
 ```bash
 sudo apt install sqlite3
-sudo chmod +x /opt/karoka/deploy/backup.sh
-( sudo crontab -l 2>/dev/null; echo "0 2 * * * /opt/karoka/deploy/backup.sh" ) | sudo crontab -
+sudo chmod +x /opt/karoka/app/deploy/backup.sh
+( sudo crontab -l 2>/dev/null; echo "0 2 * * * /opt/karoka/app/deploy/backup.sh" ) | sudo crontab -
 ```
 Copies dans `/var/backups/karoka` (30 jours). Copier régulièrement ce dossier sur une autre machine.
 
