@@ -12,6 +12,16 @@ ExecStart=/opt/karoka/venv/bin/python tracker.py
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
+# Serveur partagé : plafonner la mémoire (usage normal ≈ 85 Mo). Si le plafond est
+# dépassé, seul CE service est tué puis relancé ; les autres services ne sont pas touchés.
+MemoryHigh=300M
+MemoryMax=450M
+MemorySwapMax=0
+OOMScoreAdjust=500
+# Durcissement
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target
