@@ -1,0 +1,20 @@
+[Unit]
+Description=Tunnel Cloudflare KAROKA (presences)
+After=network-online.target karoka.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=karoka
+# Binaire autonome (pas de dépôt apt ajouté) ; jeton dans un fichier à droits restreints
+ExecStart=/opt/karoka/bin/cloudflared tunnel --no-autoupdate run --token-file /opt/karoka/cloudflared.token
+Restart=always
+RestartSec=5
+MemoryMax=150M
+OOMScoreAdjust=500
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
